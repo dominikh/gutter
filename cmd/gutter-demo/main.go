@@ -40,8 +40,8 @@ func run(w *app.Window) error {
 	})
 	cons1 := &render.Constrained{}
 	cons2 := &render.Constrained{}
-	cons1.SetConstraints(render.Constraints{Min: f32.Pt(200, 100), Max: f32.Pt(200, 100)})
-	cons2.SetConstraints(render.Constraints{Min: f32.Pt(100, 100), Max: f32.Pt(100, 100)})
+	cons1.SetExtraConstraints(render.Constraints{Min: f32.Pt(200, 100), Max: f32.Pt(200, 100)})
+	cons2.SetExtraConstraints(render.Constraints{Min: f32.Pt(100, 100), Max: f32.Pt(100, 100)})
 	clip1 := &render.Clip{}
 	clip2 := &render.Clip{}
 	clip1.SetChild(fc1)
@@ -67,7 +67,7 @@ func run(w *app.Window) error {
 			c := fc1.Color()
 			c.R++
 			fc1.SetColor(c)
-			fc1.MarkForRepaint()
+			fc1.MarkNeedsPaint()
 
 			cs := render.Constraints{
 				Min: f32.FPt(e.Size),

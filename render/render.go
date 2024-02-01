@@ -32,6 +32,7 @@ var _ Parent = (*ManyChildren)(nil)
 // TODO RTL support (see https://api.flutter.dev/flutter/dart-ui/TextDirection.html)
 // TODO should we handle nil children?
 // TODO split repaint and relayout marking, to make use of parentUsesSize
+// TODO dry layout/intrinsic dimensions/https://github.com/flutter/flutter/issues/48679
 
 // OPT if we could call op.Ops directly, then we wouldn't have to repaint parents, because their cached ops
 //   would still be calling the repainted ops of the child. However, Gio makes us go through macros, and
@@ -41,7 +42,7 @@ type Object interface {
 	// Layout lays out the object.
 	//
 	// Don't call Object.Layout directly. Use [Renderer.Layout] instead.
-	Layout(r *Renderer, cs Constraints)
+	Layout(r *Renderer)
 	// Paint paints the object at the specified offset.
 	//
 	// Don't call Object.Paint directly. Use [Renderer.Paint] instead.
@@ -49,15 +50,22 @@ type Object interface {
 	Size() f32.Point
 
 	SetParent(parent Object)
+	Constraints() Constraints
+	// Should only be called by this package.
+	SetConstraints(cs Constraints)
 
 	// Mark the object as needing to repaint.
-	MarkForRepaint()
+	MarkNeedsPaint()
 	NeedRepaint() bool
 	ClearRepaint()
 
-	MarkForRelayout()
+	MarkNeedsLayout()
 	NeedRelayout() bool
 	ClearRelayout()
+}
+
+type SizedByParenter interface {
+	SizedByParent() bool
 }
 
 type Parent interface {
@@ -145,10 +153,19 @@ func (c *ManyChildren) VisitChildren(yield func(Object) bool) {
 
 type Box struct {
 	// The size computed by the last call to Layout.
-	size     f32.Point
-	repaint  bool
-	relayout bool
-	parent   Object
+	size        f32.Point
+	repaint     bool
+	relayout    bool
+	parent      Object
+	constraints Constraints
+}
+
+func (b *Box) Constraints() Constraints {
+	return b.constraints
+}
+
+func (b *Box) SetConstraints(cs Constraints) {
+	b.constraints = cs
 }
 
 // SetSize stores the computed size sz.
@@ -161,10 +178,10 @@ func (b *Box) Size() f32.Point {
 	return b.size
 }
 
-func (b *Box) MarkForRepaint() {
+func (b *Box) MarkNeedsPaint() {
 	b.repaint = true
 	if b.parent != nil {
-		b.parent.MarkForRepaint()
+		b.parent.MarkNeedsPaint()
 	}
 }
 
@@ -176,10 +193,12 @@ func (b *Box) ClearRepaint() {
 	b.repaint = false
 }
 
-func (b *Box) MarkForRelayout() {
+func (b *Box) MarkNeedsLayout() {
 	b.relayout = true
 	if b.parent != nil {
-		b.parent.MarkForRelayout()
+		if obj2, ok := b.parent.(SizedByParenter); !ok || !obj2.SizedByParent() {
+			b.parent.MarkNeedsLayout()
+		}
 	}
 }
 
@@ -199,7 +218,6 @@ func (b *Box) SetParent(parent Object) {
 type Clip struct {
 	Box
 	SingleChild
-	child Object
 }
 
 func (w *Clip) SetChild(child Object) {
@@ -209,8 +227,8 @@ func (w *Clip) SetChild(child Object) {
 }
 
 // Layout implements RenderObject.
-func (w *Clip) Layout(r *Renderer, cs Constraints) {
-	r.Layout(w.child, cs)
+func (w *Clip) Layout(r *Renderer) {
+	r.Layout(w.child, w.constraints)
 	w.SetSize(w.child.Size())
 }
 
@@ -234,7 +252,7 @@ type FillColor struct {
 func (fc *FillColor) SetColor(c color.NRGBA) {
 	if fc.color != c {
 		fc.color = c
-		fc.MarkForRepaint()
+		fc.MarkNeedsPaint()
 	}
 }
 
@@ -243,8 +261,12 @@ func (fc *FillColor) Color() color.NRGBA {
 }
 
 // Layout implements RenderObject.
-func (c *FillColor) Layout(_ *Renderer, cs Constraints) {
-	c.SetSize(cs.Min)
+func (c *FillColor) Layout(_ *Renderer) {
+	c.SetSize(c.constraints.Min)
+}
+
+func (c *FillColor) SizedByParent() bool {
+	return true
 }
 
 // Paint implements RenderObject.
@@ -267,7 +289,7 @@ type Padding struct {
 func (p *Padding) SetInset(ins Inset) {
 	if p.inset != ins {
 		p.inset = ins
-		p.MarkForRelayout()
+		p.MarkNeedsLayout()
 	}
 }
 
@@ -281,7 +303,8 @@ func (p *Padding) SetChild(child Object) {
 }
 
 // Layout implements RenderObject.
-func (p *Padding) Layout(r *Renderer, cs Constraints) {
+func (p *Padding) Layout(r *Renderer) {
+	cs := p.constraints
 	if p.child == nil {
 		p.SetSize(cs.Constrain(f32.Pt(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom)))
 		return
@@ -307,23 +330,24 @@ func (p *Padding) Paint(r *Renderer, ops *op.Ops, offset f32.Point) {
 type Constrained struct {
 	Box
 	SingleChild
-	constraints Constraints
+	extraConstraints Constraints
 }
 
-func (c *Constrained) SetConstraints(cs Constraints) {
-	if c.constraints != cs {
-		c.constraints = cs
-		c.MarkForRelayout()
+func (c *Constrained) SetExtraConstraints(cs Constraints) {
+	if c.extraConstraints != cs {
+		c.extraConstraints = cs
+		c.MarkNeedsLayout()
 	}
 }
 
-func (c *Constrained) Constraints() Constraints {
-	return c.constraints
+func (c *Constrained) ExtraConstraints() Constraints {
+	return c.extraConstraints
 }
 
 // Layout implements Object.
-func (c *Constrained) Layout(r *Renderer, cs Constraints) {
-	r.Layout(c.child, c.constraints.Enforce(cs))
+func (c *Constrained) Layout(r *Renderer) {
+	cs := c.extraConstraints.Enforce(c.constraints)
+	r.Layout(c.child, cs)
 	c.size = c.child.Size()
 }
 
@@ -379,18 +403,30 @@ func (r *Renderer) Paint(obj Object, offset f32.Point) op.CallOp {
 }
 
 func (r *Renderer) Layout(obj Object, cs Constraints) {
-	log.Printf("laying out (%[1]T)(%[1]p)", obj)
+	log.Printf("laying out (%[1]T)(%[1]p), cs: %s", obj, cs)
 	if cs.Min.X > cs.Max.X || cs.Min.Y > cs.Max.Y || cs.Min.X < 0 || cs.Min.Y < 0 {
 		panic(fmt.Sprintf("constraints %v are malformed", cs))
 	}
+	if obj2, ok := obj.(SizedByParenter); ok && obj2.SizedByParent() {
+		if obj.Constraints() == cs {
+			log.Printf("\t SizedByParent and able to reuse old layout")
+			return
+		}
+	}
+	if !obj.NeedRelayout() && obj.Constraints() == cs {
+		log.Printf("\t not marked for relayout and constraints didn't change, reusing old layout")
+		return
+	}
+	obj.ClearRelayout()
 	oldSz := obj.Size()
-	obj.Layout(r, cs)
+	obj.SetConstraints(cs)
+	obj.Layout(r)
 	sz := obj.Size()
 	if sz.X < cs.Min.X || sz.X > cs.Max.X || sz.Y < cs.Min.Y || sz.Y > cs.Max.Y {
 		panic(fmt.Sprintf("(%[1]T)(%[1]p).Layout violated constraints %v by computing size %v", obj, cs, sz))
 	}
 	if sz != oldSz {
-		obj.MarkForRepaint()
+		obj.MarkNeedsPaint()
 	}
 }
 

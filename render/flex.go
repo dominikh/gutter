@@ -15,7 +15,8 @@ type Row struct {
 }
 
 // Layout implements Object.
-func (row *Row) Layout(r *Renderer, cs Constraints) {
+func (row *Row) Layout(r *Renderer) {
+	cs := row.constraints
 	inCs := cs
 	inCs.Min.X = 0
 	off := float32(0)
