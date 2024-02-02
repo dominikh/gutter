@@ -28,9 +28,9 @@ func (w *Clip) SetChild(child Object) {
 }
 
 // Layout implements RenderObject.
-func (w *Clip) Layout(r *Renderer) {
+func (w *Clip) Layout(r *Renderer) f32.Point {
 	r.Layout(w.child, w.Handle().Constraints(), true)
-	w.Handle().SetSize(w.child.Handle().Size())
+	return w.child.Handle().Size()
 }
 
 // Paint implements RenderObject.
@@ -65,8 +65,8 @@ func (fc *FillColor) Color() color.NRGBA {
 }
 
 // Layout implements RenderObject.
-func (c *FillColor) Layout(_ *Renderer) {
-	c.Handle().SetSize(c.Handle().Constraints().Min)
+func (c *FillColor) Layout(_ *Renderer) f32.Point {
+	return c.Handle().Constraints().Min
 }
 
 func (c *FillColor) SizedByParent() {}
@@ -104,11 +104,10 @@ func (p *Padding) SetChild(child Object) {
 }
 
 // Layout implements RenderObject.
-func (p *Padding) Layout(r *Renderer) {
+func (p *Padding) Layout(r *Renderer) f32.Point {
 	cs := p.Handle().Constraints()
 	if p.child == nil {
-		p.Handle().SetSize(cs.Constrain(f32.Pt(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom)))
-		return
+		return cs.Constrain(f32.Pt(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom))
 	}
 	horiz := p.inset.Left + p.inset.Right
 	vert := p.inset.Top + p.inset.Bottom
@@ -120,7 +119,7 @@ func (p *Padding) Layout(r *Renderer) {
 	r.Layout(p.child, innerCs, true)
 	p.relChildOffset = f32.Pt(p.inset.Left, p.inset.Top)
 	childSz := p.child.Handle().Size()
-	p.Handle().SetSize(cs.Constrain(childSz.Add(f32.Pt(horiz, vert))))
+	return cs.Constrain(childSz.Add(f32.Pt(horiz, vert)))
 }
 
 // Paint implements RenderObject.
@@ -147,10 +146,10 @@ func (c *Constrained) ExtraConstraints() Constraints {
 }
 
 // Layout implements Object.
-func (c *Constrained) Layout(r *Renderer) {
+func (c *Constrained) Layout(r *Renderer) f32.Point {
 	cs := c.extraConstraints.Enforce(c.Handle().Constraints())
 	r.Layout(c.child, cs, true)
-	c.Handle().SetSize(c.child.Handle().Size())
+	return c.child.Handle().Size()
 }
 
 // Paint implements Object.
@@ -171,7 +170,7 @@ type Row struct {
 }
 
 // Layout implements Object.
-func (row *Row) Layout(r *Renderer) {
+func (row *Row) Layout(r *Renderer) f32.Point {
 	cs := row.Handle().Constraints()
 	inCs := cs
 	inCs.Min.X = 0
@@ -187,7 +186,7 @@ func (row *Row) Layout(r *Renderer) {
 			height = sz.Y
 		}
 	}
-	row.Handle().SetSize(f32.Pt(cs.Max.X, height))
+	return f32.Pt(cs.Max.X, height)
 }
 
 func (row *Row) AddChild(child Object) {

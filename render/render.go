@@ -35,7 +35,6 @@ type ObjectHandle struct {
 }
 
 func (h *ObjectHandle) Size() f32.Point          { return h.size }
-func (h *ObjectHandle) SetSize(sz f32.Point)     { h.size = sz }
 func (h *ObjectHandle) Constraints() Constraints { return h.constraints }
 func (h *ObjectHandle) MarkNeedsPaint() {
 	if h.needsPaint {
@@ -80,7 +79,7 @@ type Object interface {
 	// Layout lays out the object.
 	//
 	// Don't call Object.Layout directly. Use [Renderer.Layout] instead.
-	Layout(r *Renderer)
+	Layout(r *Renderer) (size f32.Point)
 	// Paint paints the object at the specified offset.
 	//
 	// Don't call Object.Paint directly. Use [Renderer.Paint] instead.
@@ -210,12 +209,17 @@ func (r *Renderer) Render(root Object, ops *op.Ops, cs Constraints, offset f32.P
 	root.Paint(r, ops)
 }
 
+func layoutAndUpdateHandle(r *Renderer, obj Object) {
+	sz := obj.Layout(r)
+	obj.Handle().needsLayout = false
+	obj.Handle().size = sz
+	obj.Handle().MarkNeedsPaint()
+}
+
 func (r *Renderer) flushLayout() {
 	for _, node := range r.needsLayout {
 		if node.Handle().needsLayout {
-			node.Layout(r)
-			node.Handle().needsLayout = false
-			node.Handle().MarkNeedsPaint()
+			layoutAndUpdateHandle(r, node)
 		}
 	}
 	clear(r.needsLayout)
@@ -259,10 +263,6 @@ func (r *Renderer) Paint(obj Object) op.CallOp {
 func isType[T any](obj any) bool {
 	_, ok := obj.(T)
 	return ok
-}
-
-func (r *Renderer) LayoutNoFrills(obj Object) {
-	obj.Layout(r)
 }
 
 func (r *Renderer) Layout(obj Object, cs Constraints, parentUsesSize bool) {
@@ -313,10 +313,8 @@ func (r *Renderer) Layout(obj Object, cs Constraints, parentUsesSize bool) {
 		obj.VisitChildren(cleanRelayoutBoundary)
 	}
 	obj.Handle().relayoutBoundary = relayoutBoundary
-	obj.Layout(r)
+	layoutAndUpdateHandle(r, obj)
 	// XXX markNeedsSemanticsUpdate
-	obj.Handle().needsLayout = false
-	obj.Handle().MarkNeedsPaint()
 
 	sz := obj.Handle().Size()
 	if sz.X < cs.Min.X || sz.X > cs.Max.X || sz.Y < cs.Min.Y || sz.Y > cs.Max.Y {
