@@ -30,7 +30,6 @@ import (
 
 type ObjectHandle struct {
 	renderer         *Renderer
-	object           Object
 	size             f32.Point
 	needsPaint       bool
 	needsLayout      bool
@@ -41,18 +40,21 @@ type ObjectHandle struct {
 
 func (h *ObjectHandle) Size() f32.Point          { return h.size }
 func (h *ObjectHandle) Constraints() Constraints { return h.constraints }
-func (h *ObjectHandle) MarkNeedsPaint() {
+
+func MarkNeedsPaint(obj Object) {
+	h := obj.Handle()
 	if h.needsPaint {
 		return
 	}
 	h.needsPaint = true
 	if h.parent != nil {
-		h.parent.Handle().MarkNeedsPaint()
+		h.parent.MarkNeedsPaint()
 	} else {
 		// owner.requestVisualUpdate() // XXX
 	}
 }
-func (h *ObjectHandle) MarkNeedsLayout() {
+func MarkNeedsLayout(obj Object) {
+	h := obj.Handle()
 	if h.needsLayout {
 		return
 	}
@@ -63,21 +65,22 @@ func (h *ObjectHandle) MarkNeedsLayout() {
 			// _relayoutBoundary is cleaned by an ancestor in RenderObject.layout.
 			// Conservatively mark everything dirty until it reaches the closest
 			// known relayout boundary.
-			h.parent.Handle().MarkNeedsLayout()
+			h.parent.MarkNeedsLayout()
 		}
 		return
 	}
-	if h.relayoutBoundary != h.object {
+	if h.relayoutBoundary != obj {
 		if h.parent == nil {
-			panic(fmt.Sprintf("%[1]T(%[1]p) isn't a relayout boundary but also doesn't have a parent", h.object))
+			panic(fmt.Sprintf("%[1]T(%[1]p) isn't a relayout boundary but also doesn't have a parent", obj))
 		}
-		h.parent.Handle().MarkNeedsLayout()
+		h.parent.MarkNeedsLayout()
 	} else {
 		h.needsLayout = true
-		h.renderer.needsLayout = append(h.renderer.needsLayout, h.object)
+		h.renderer.needsLayout = append(h.renderer.needsLayout, obj)
 		// owner.requestVisualUpdate() // XXX
 	}
 }
+
 func (h *ObjectHandle) SetParent(parent Object) { h.parent = parent }
 
 type Object interface {
@@ -90,6 +93,8 @@ type Object interface {
 	// Don't call Object.Paint directly. Use [Renderer.Paint] instead.
 	Paint(r *Renderer, ops *op.Ops)
 
+	MarkNeedsLayout()
+	MarkNeedsPaint()
 	VisitChildren(yield func(Object) bool)
 	Handle() *ObjectHandle
 }
@@ -204,8 +209,9 @@ func (r *Renderer) Initialize(root Object) {
 }
 
 func (r *Renderer) Render(root Object, ops *op.Ops, cs Constraints, offset f32.Point) {
-	if !root.Handle().needsLayout && root.Handle().constraints != cs {
-		root.Handle().MarkNeedsLayout()
+	h := root.Handle()
+	if !h.needsLayout && h.constraints != cs {
+		root.MarkNeedsLayout()
 	}
 	root.Handle().constraints = cs
 
@@ -218,7 +224,7 @@ func layoutAndUpdateHandle(r *Renderer, obj Object) {
 	sz := obj.Layout(r)
 	obj.Handle().needsLayout = false
 	obj.Handle().size = sz
-	obj.Handle().MarkNeedsPaint()
+	obj.MarkNeedsPaint()
 }
 
 func (r *Renderer) flushLayout() {
@@ -335,5 +341,4 @@ func NewRenderer() *Renderer {
 
 func (r *Renderer) Register(obj Object) {
 	obj.Handle().renderer = r
-	obj.Handle().object = obj
 }
