@@ -15,6 +15,18 @@ var _ Object = (*Padding)(nil)
 var _ Object = (*Constrained)(nil)
 var _ Object = (*Row)(nil)
 
+func (obj *Clip) MarkNeedsPaint()        { MarkNeedsPaint(obj) }
+func (obj *FillColor) MarkNeedsPaint()   { MarkNeedsPaint(obj) }
+func (obj *Padding) MarkNeedsPaint()     { MarkNeedsPaint(obj) }
+func (obj *Constrained) MarkNeedsPaint() { MarkNeedsPaint(obj) }
+func (obj *Row) MarkNeedsPaint()         { MarkNeedsPaint(obj) }
+
+func (obj *Clip) MarkNeedsLayout()        { MarkNeedsLayout(obj) }
+func (obj *FillColor) MarkNeedsLayout()   { MarkNeedsLayout(obj) }
+func (obj *Padding) MarkNeedsLayout()     { MarkNeedsLayout(obj) }
+func (obj *Constrained) MarkNeedsLayout() { MarkNeedsLayout(obj) }
+func (obj *Row) MarkNeedsLayout()         { MarkNeedsLayout(obj) }
+
 // Clip prevents its child from painting outside its bounds.
 type Clip struct {
 	Box
@@ -56,7 +68,7 @@ func (*FillColor) VisitChildren(yield func(Object) bool) {}
 func (fc *FillColor) SetColor(c color.NRGBA) {
 	if fc.color != c {
 		fc.color = c
-		fc.Handle().MarkNeedsPaint()
+		fc.MarkNeedsPaint()
 	}
 }
 
@@ -90,7 +102,7 @@ type Padding struct {
 func (p *Padding) SetInset(ins Inset) {
 	if p.inset != ins {
 		p.inset = ins
-		p.Handle().MarkNeedsLayout()
+		p.MarkNeedsLayout()
 	}
 }
 
@@ -137,7 +149,7 @@ type Constrained struct {
 func (c *Constrained) SetExtraConstraints(cs Constraints) {
 	if c.extraConstraints != cs {
 		c.extraConstraints = cs
-		c.Handle().MarkNeedsLayout()
+		c.MarkNeedsLayout()
 	}
 }
 
