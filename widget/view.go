@@ -4,32 +4,32 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-var _ RenderObjectWidget = (*RawView)(nil)
+var _ RenderObjectWidget = (*View)(nil)
 var _ RenderObjectElement = (*rawViewElement)(nil)
 
-func NewView(root Widget) *RawView {
-	return &RawView{
+func NewView(root Widget) *View {
+	return &View{
 		Child: root,
 	}
 }
 
-type RawView struct {
+type View struct {
 	Child Widget
 }
 
 // CreateElement implements RenderObjectWidget.
-func (w *RawView) CreateElement() Element {
+func (w *View) CreateElement() Element {
 	return newRawViewElement(w)
 }
 
 // CreateRenderObject implements RenderObjectWidget.
-func (w *RawView) CreateRenderObject(ctx BuildContext) render.Object {
+func (w *View) CreateRenderObject(ctx BuildContext) render.Object {
 	// XXX
 	return render.NewView()
 }
 
 // Key implements RenderObjectWidget.
-func (v *RawView) Key() any {
+func (v *View) Key() any {
 	// XXX implement this correctly
 
 	// TODO use "the view" as the key. maybe the app.Window?
@@ -38,7 +38,7 @@ func (v *RawView) Key() any {
 }
 
 // UpdateRenderObject implements RenderObjectWidget.
-func (*RawView) UpdateRenderObject(ctx BuildContext, obj render.Object) {}
+func (*View) UpdateRenderObject(ctx BuildContext, obj render.Object) {}
 
 type rawViewElement struct {
 	SingleChildRenderObjectElement
@@ -48,7 +48,7 @@ type rawViewElement struct {
 	parentPipelineOwner *render.PipelineOwner
 }
 
-func newRawViewElement(view *RawView) *rawViewElement {
+func newRawViewElement(view *View) *rawViewElement {
 	var el rawViewElement
 	el.widget = view
 	el.pipelineOwner = render.NewPipelineOwner()
@@ -68,7 +68,7 @@ func (el *rawViewElement) MoveRenderObjectChild(child render.Object, oldSlot, ne
 }
 
 func (el *rawViewElement) updateChild() {
-	child := el.widget.(*RawView).Child
+	child := el.widget.(*View).Child
 	el.ChildElement = el.UpdateChild(el.ChildElement, child, nil)
 }
 
