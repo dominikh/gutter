@@ -70,10 +70,3 @@ func (v *View) Layout() f32.Point {
 		return v.constraints().Min
 	}
 }
-
-// func (v *View) CompositeFrame() {
-// 	builder := ui.SceneBuilder()
-// 	scene := layer.buildScene(builder)
-// 	v.view.render(scene, v.size)
-// 	scene.dispose()
-// }

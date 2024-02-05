@@ -94,17 +94,10 @@ func (o *PipelineOwner) FlushPaint(ops *op.Ops) {
 
 	for _, node := range dirtyNodes {
 		h := node.Handle()
-		if (h.needsPaint /* || h.needsCompositedLayerUpdate */) && h.owner == o {
-			// if h.layerHandle.layer.attached {
+		if (h.needsPaint) && h.owner == o {
 			if h.needsPaint {
-				o.renderer.Paint(node) // .Add(ops)
-				// PaintingContext.repaintCompositedChild(node)
-			} else {
-				// PaintingContext.updateLayerProperties(node)
+				o.renderer.Paint(node)
 			}
-			// } else {
-			// 	// node.skippedPaintingOnLayer()
-			// }
 		}
 	}
 
@@ -149,7 +142,7 @@ func Attach(obj Object, owner *PipelineOwner) {
 		h.needsCompositingBitsUpdate = false
 		// obj.MarkNeedsCompositingBitsUpdate()
 	}
-	if h.needsPaint /* && h.layerHandle.layer != nil */ {
+	if h.needsPaint {
 		// Don't enter this block if we've never painted at all;
 		// scheduleInitialPaint() will handle it
 		h.needsPaint = false

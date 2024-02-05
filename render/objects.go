@@ -15,8 +15,6 @@ var _ ObjectWithChild = (*Padding)(nil)
 var _ ObjectWithChild = (*Constrained)(nil)
 var _ ObjectWithChildren = (*Row)(nil)
 
-// var _ Object = (*Proxy)(nil)
-
 func (obj *Clip) MarkNeedsPaint()        { MarkNeedsPaint(obj) }
 func (obj *FillColor) MarkNeedsPaint()   { MarkNeedsPaint(obj) }
 func (obj *Padding) MarkNeedsPaint()     { MarkNeedsPaint(obj) }
@@ -225,42 +223,3 @@ func (row *Row) Paint(r *Renderer, ops *op.Ops) {
 		stack.Pop()
 	}
 }
-
-// type Proxy struct {
-// 	Child Object
-// }
-
-// func (p *Proxy) SetChild(child Object) {
-// 	child.Handle().SetParent(p)
-// 	p.Child = child
-// }
-
-// // Handle implements Object.
-// func (p *Proxy) Handle() *ObjectHandle {
-// 	return p.Child.Handle()
-// }
-
-// // Layout implements Object.
-// func (p *Proxy) Layout() (size f32.Point) {
-// 	return p.Child.Layout()
-// }
-
-// // MarkNeedsLayout implements Object.
-// func (p *Proxy) MarkNeedsLayout() {
-// 	p.Child.MarkNeedsLayout()
-// }
-
-// // MarkNeedsPaint implements Object.
-// func (p *Proxy) MarkNeedsPaint() {
-// 	p.Child.MarkNeedsPaint()
-// }
-
-// // Paint implements Object.
-// func (p *Proxy) Paint(r *Renderer, ops *op.Ops) {
-// 	p.Child.Paint(r, ops)
-// }
-
-// // VisitChildren implements Object.
-// func (p *Proxy) VisitChildren(yield func(Object) bool) {
-// 	p.Child.VisitChildren(yield)
-// }
