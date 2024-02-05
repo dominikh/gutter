@@ -45,10 +45,9 @@ func run2(w *app.Window) error {
 		},
 	}
 
-	wview := widget.NewView(root)
-
 	// This is basically runApp
-	po := render.TopPipelineOwner
+	po := render.NewPipelineOwner()
+	wview := widget.NewView(root, po)
 	r := render.NewRenderer()
 	var bo widget.BuildOwner
 	rootElem := (&widget.RootWidget{wview}).Attach(&bo, nil)

@@ -8,19 +8,21 @@ import (
 var _ RenderObjectWidget = (*View)(nil)
 var _ RenderObjectElement = (*rawViewElement)(nil)
 
-func NewView(root Widget) *View {
+func NewView(root Widget, po *render.PipelineOwner) *View {
 	return &View{
-		Child: root,
+		PipelineOwner: po,
+		Child:         root,
 	}
 }
 
 type View struct {
-	Child Widget
+	PipelineOwner *render.PipelineOwner
+	Child         Widget
 }
 
 // CreateElement implements RenderObjectWidget.
 func (w *View) CreateElement() Element {
-	return newRawViewElement(w)
+	return newRawViewElement(w, w.PipelineOwner)
 }
 
 // CreateRenderObject implements RenderObjectWidget.
@@ -49,9 +51,10 @@ type rawViewElement struct {
 	parentPipelineOwner *render.PipelineOwner
 }
 
-func newRawViewElement(view *View) *rawViewElement {
+func newRawViewElement(view *View, po *render.PipelineOwner) *rawViewElement {
 	var el rawViewElement
 	el.widget = view
+	el.parentPipelineOwner = po
 	el.pipelineOwner = render.NewPipelineOwner()
 	return &el
 }
@@ -73,15 +76,11 @@ func (el *rawViewElement) updateChild() {
 	el.ChildElement = el.UpdateChild(el.ChildElement, child, nil)
 }
 
-func (el *rawViewElement) attachView(parentPipelineOwner *render.PipelineOwner) {
-	if parentPipelineOwner == nil {
-		parentPipelineOwner = render.TopPipelineOwner
-	}
-	parentPipelineOwner.AdoptChild(el.effectivePipelineOwner())
+func (el *rawViewElement) attachView() {
+	el.parentPipelineOwner.AdoptChild(el.effectivePipelineOwner())
 	// XXX get the actual window size
 	sz := f32.Pt(400, 400)
 	el.renderObject.(*render.View).SetConfiguration(render.Constraints{sz, sz})
-	el.parentPipelineOwner = parentPipelineOwner
 }
 
 func (el *rawViewElement) detachView() {
@@ -106,7 +105,7 @@ func (el *rawViewElement) Activate() {
 	ElementActivate(el)
 	el.Root = el.renderObject
 	el.effectivePipelineOwner().SetRootNode(el.renderObject)
-	el.attachView(nil)
+	el.attachView()
 }
 
 func (el *rawViewElement) Deactivate() {
@@ -133,7 +132,7 @@ func (el *rawViewElement) Mount(parent Element, newSlot any) {
 	RenderObjectElementMount(el, parent, newSlot)
 	el.Root = el.renderObject
 	el.effectivePipelineOwner().SetRootNode(el.renderObject)
-	el.attachView(nil)
+	el.attachView()
 	el.updateChild()
 	el.renderObject.(*render.View).PrepareInitialFrame()
 }
