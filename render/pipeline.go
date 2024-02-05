@@ -9,16 +9,12 @@ import (
 type PipelineOwner struct {
 	rootNode                          Object
 	children                          map[*PipelineOwner]struct{}
-	manifold                          PipelineManifold
+	rb                                *RendererBinding
 	nodesNeedingPaint                 []Object
 	nodesNeedingLayout                []Object
 	nodesNeedingCompositingBitsUpdate []Object
 	shouldMergeDirtyNodes             bool
 	onNeedVisualUpdate                func()
-}
-
-type PipelineManifold interface {
-	RequestVisualUpdate()
 }
 
 func NewPipelineOwner() *PipelineOwner {
@@ -45,9 +41,7 @@ func (o *PipelineOwner) RequestVisualUpdate() {
 	if o.onNeedVisualUpdate != nil {
 		o.onNeedVisualUpdate()
 	} else {
-		if o.manifold != nil {
-			o.manifold.RequestVisualUpdate()
-		}
+		o.rb.RequestVisualUpdate()
 	}
 }
 
@@ -161,15 +155,15 @@ func (o *PipelineOwner) FlushCompositingBits() {
 	}
 }
 
-func (o *PipelineOwner) Attach(manifold PipelineManifold) {
-	o.manifold = manifold
+func (o *PipelineOwner) Attach(rb *RendererBinding) {
+	o.rb = rb
 	for child := range o.children {
-		child.Attach(manifold)
+		child.Attach(rb)
 	}
 }
 
 func (o *PipelineOwner) Detach() {
-	o.manifold = nil
+	o.rb = nil
 	for child := range o.children {
 		child.Detach()
 	}
@@ -177,16 +171,12 @@ func (o *PipelineOwner) Detach() {
 
 func (o *PipelineOwner) AdoptChild(child *PipelineOwner) {
 	o.children[child] = struct{}{}
-	if o.manifold != nil {
-		child.Attach(o.manifold)
-	}
+	child.Attach(o.rb)
 }
 
 func (o *PipelineOwner) DropChild(child *PipelineOwner) {
 	delete(o.children, child)
-	if o.manifold != nil {
-		child.Detach()
-	}
+	child.Detach()
 }
 
 func (o *PipelineOwner) VisitChildren(yield func(*PipelineOwner) bool) {
