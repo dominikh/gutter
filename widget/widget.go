@@ -19,16 +19,16 @@ var _ render.Object = (*renderColoredBox)(nil)
 var _ render.ObjectWithChild = (*renderColoredBox)(nil)
 
 type Padding struct {
-	Padding     render.Inset
-	ChildWidget Widget
+	Padding render.Inset
+	Child   Widget
 }
 
 // XXX
 func (*Padding) Key() any    { return nil }
 func (*ColoredBox) Key() any { return nil }
 
-func (p *Padding) Child() Widget {
-	return p.ChildWidget
+func (p *Padding) GetChild() Widget {
+	return p.Child
 }
 
 func (p *Padding) CreateRenderObject(ctx BuildContext) render.Object {
@@ -47,12 +47,12 @@ func (p *Padding) CreateElement() Element {
 }
 
 type ColoredBox struct {
-	Color       color.NRGBA
-	ChildWidget Widget
+	Color color.NRGBA
+	Child Widget
 }
 
-func (c *ColoredBox) Child() Widget {
-	return c.ChildWidget
+func (c *ColoredBox) GetChild() Widget {
+	return c.Child
 }
 
 func (c *ColoredBox) CreateRenderObject(ctx BuildContext) render.Object {
@@ -129,7 +129,7 @@ type SingleChildRenderObjectElement struct {
 	ChildElement Element
 }
 
-func (el *SingleChildRenderObjectElement) Child() Element {
+func (el *SingleChildRenderObjectElement) GetChild() Element {
 	return el.ChildElement
 }
 
@@ -140,7 +140,7 @@ func (el *SingleChildRenderObjectElement) SetChild(child Element) {
 
 func (el *SingleChildRenderObjectElement) Update(newWidget Widget) {
 	SingleChildRenderObjectElementUpdate(el, newWidget.(RenderObjectWidget))
-	el.ChildElement = el.UpdateChild(el.ChildElement, el.widget.(SingleChildWidget).Child(), nil)
+	el.ChildElement = el.UpdateChild(el.ChildElement, el.widget.(SingleChildWidget).GetChild(), nil)
 }
 
 func (el *SingleChildRenderObjectElement) ForgetChild(child Element) {
@@ -173,7 +173,7 @@ func (el *SingleChildRenderObjectElement) AttachRenderObject(slot any) {
 
 func (el *SingleChildRenderObjectElement) Mount(parent Element, slot any) {
 	RenderObjectElementMount(el, parent, slot)
-	el.ChildElement = el.UpdateChild(el.ChildElement, el.widget.(SingleChildWidget).Child(), nil)
+	el.ChildElement = el.UpdateChild(el.ChildElement, el.widget.(SingleChildWidget).GetChild(), nil)
 }
 
 func (el *SingleChildRenderObjectElement) Unmount() {
@@ -201,7 +201,7 @@ var _ SingleChildWidget = (*SizedBox)(nil)
 
 type SizedBox struct {
 	Width, Height float32
-	ChildWidget   Widget
+	Child         Widget
 }
 
 // CreateRenderObject implements RenderObjectWidget.
@@ -229,7 +229,7 @@ func (box *SizedBox) Key() any {
 	return nil
 }
 
-// Child implements SingleChildWidget.
-func (box *SizedBox) Child() Widget {
-	return box.ChildWidget
+// GetChild implements SingleChildWidget.
+func (box *SizedBox) GetChild() Widget {
+	return box.Child
 }

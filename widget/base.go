@@ -624,17 +624,17 @@ func RenderObjectElementUpdate(el Element, newWidget RenderObjectWidget) {
 func SingleChildRenderObjectElementUpdate(el SingleChildElement, newWidget RenderObjectWidget) {
 	RenderObjectElementUpdate(el, newWidget)
 
-	el.SetChild(el.UpdateChild(el.Child(), el.Handle().widget.(SingleChildWidget).Child(), nil))
+	el.SetChild(el.UpdateChild(el.GetChild(), el.Handle().widget.(SingleChildWidget).GetChild(), nil))
 }
 
 type SingleChildWidget interface {
 	Widget
-	Child() Widget
+	GetChild() Widget
 }
 
 type SingleChildElement interface {
 	Element
-	Child() Element
+	GetChild() Element
 	SetChild(child Element)
 }
 
