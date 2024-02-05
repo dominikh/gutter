@@ -10,14 +10,11 @@ import (
 	"gioui.org/op"
 )
 
-var _ PipelineManifold = (*RendererBinding)(nil)
-
 // XXX Flutter uses a singleton… we really don't want to
 var TheRendererBinding = NewRendererBinding()
 
 type RendererBinding struct {
 	rootPipelineOwner *PipelineOwner
-	manifold          PipelineManifold
 	renderer          *Renderer
 
 	views map[*View]struct{}
@@ -29,8 +26,7 @@ func NewRendererBinding() *RendererBinding {
 		views:             make(map[*View]struct{}),
 		renderer:          NewRenderer(),
 	}
-	rb.manifold = rb
-	rb.rootPipelineOwner.Attach(rb.manifold)
+	rb.rootPipelineOwner.Attach(rb)
 	return rb
 	// XXX
 	// addPersistentFrameCallback(_handlePersistentFrameCallback);
