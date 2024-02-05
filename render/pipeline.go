@@ -7,6 +7,7 @@ import (
 )
 
 type PipelineOwner struct {
+	renderer                          *Renderer
 	rootNode                          Object
 	nodesNeedingPaint                 []Object
 	nodesNeedingLayout                []Object
@@ -16,7 +17,9 @@ type PipelineOwner struct {
 }
 
 func NewPipelineOwner() *PipelineOwner {
-	return &PipelineOwner{}
+	return &PipelineOwner{
+		renderer: NewRenderer(),
+	}
 }
 
 func (o *PipelineOwner) RootNode() Object { return o.rootNode }
@@ -93,7 +96,7 @@ func layoutWithoutResize(obj Object) {
 // / scene is composited with up-to-date display lists for every render object.
 // /
 // / See [RendererBinding] for an example of how this function is used.
-func (o *PipelineOwner) FlushPaint(r *Renderer, ops *op.Ops) {
+func (o *PipelineOwner) FlushPaint(ops *op.Ops) {
 	dirtyNodes := o.nodesNeedingPaint
 	// OPT(dh): avoid this alloc, probably via double buffering
 	o.nodesNeedingPaint = nil
@@ -108,7 +111,7 @@ func (o *PipelineOwner) FlushPaint(r *Renderer, ops *op.Ops) {
 		if (h.needsPaint /* || h.needsCompositedLayerUpdate */) && h.owner == o {
 			// if h.layerHandle.layer.attached {
 			if h.needsPaint {
-				r.Paint(node) // .Add(ops)
+				o.renderer.Paint(node) // .Add(ops)
 				// PaintingContext.repaintCompositedChild(node)
 			} else {
 				// PaintingContext.updateLayerProperties(node)
@@ -120,7 +123,7 @@ func (o *PipelineOwner) FlushPaint(r *Renderer, ops *op.Ops) {
 	}
 
 	if o.rootNode != nil {
-		r.Paint(o.rootNode).Add(ops)
+		o.renderer.Paint(o.rootNode).Add(ops)
 	}
 }
 

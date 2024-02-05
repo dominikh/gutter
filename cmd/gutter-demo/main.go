@@ -48,7 +48,6 @@ func run2(w *app.Window) error {
 	// This is basically runApp
 	po := render.NewPipelineOwner()
 	wview := widget.NewView(root, po)
-	r := render.NewRenderer()
 	var bo widget.BuildOwner
 	rootElem := (&widget.RootWidget{wview}).Attach(&bo, nil)
 
@@ -69,7 +68,7 @@ func run2(w *app.Window) error {
 			bo.BuildScope(rootElem, nil)
 			po.FlushLayout()
 			po.FlushCompositingBits()
-			po.FlushPaint(r, &ops)
+			po.FlushPaint(&ops)
 			bo.FinalizeTree()
 			e.Frame(&ops)
 		}
