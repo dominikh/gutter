@@ -109,9 +109,6 @@ func MarkNeedsLayout(obj Object) {
 	if h.relayoutBoundary == nil {
 		h.needsLayout = true
 		if h.parent != nil {
-			// _relayoutBoundary is cleaned by an ancestor in RenderObject.layout.
-			// Conservatively mark everything dirty until it reaches the closest
-			// known relayout boundary.
 			h.parent.MarkNeedsLayout()
 		}
 		return

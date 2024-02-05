@@ -246,7 +246,6 @@ func ElementMount(el Element, parent Element, newSlot any) {
 	if parent != nil {
 		// Only assign ownership if the parent is non-null. If parent is null
 		// (the root node), the owner should have already been assigned.
-		// See RootRenderObjectElement.assignOwner().
 		h.owner = parent.Handle().owner
 	}
 }
@@ -397,7 +396,7 @@ func sortElements(els []Element) {
 		if diff != 0 {
 			return diff
 		}
-		// If the `dirty` values are not equal, sort with non-dirty elements being
+		// If the dirty values are not equal, sort with non-dirty elements being
 		// less than dirty elements.
 		isBDirty := bh.dirty
 		if ah.dirty != isBDirty {
@@ -407,7 +406,7 @@ func sortElements(els []Element) {
 				return 1
 			}
 		}
-		// Otherwise, `depth`s and `dirty`s are equal.
+		// Otherwise, depths and dirtys are equal.
 		return 0
 	})
 }
@@ -551,47 +550,6 @@ func ElementActivate(el Element) {
 	// }
 }
 
-// Update the given child with the given new configuration.
-//
-// This method is the core of the widgets system. It is called each time we
-// are to add, update, or remove a child based on an updated configuration.
-//
-// The `newSlot` argument specifies the new value for this element's [slot].
-//
-// If the `child` is null, and the `newWidget` is not null, then we have a new
-// child for which we need to create an [Element], configured with `newWidget`.
-//
-// If the `newWidget` is null, and the `child` is not null, then we need to
-// remove it because it no longer has a configuration.
-//
-// If neither are null, then we need to update the `child`'s configuration to
-// be the new configuration given by `newWidget`. If `newWidget` can be given
-// to the existing child (as determined by [Widget.canUpdate]), then it is so
-// given. Otherwise, the old child needs to be disposed and a new child
-// created for the new configuration.
-//
-// If both are null, then we don't have a child and won't have a child, so we
-// do nothing.
-//
-// The [updateChild] method returns the new child, if it had to create one,
-// or the child that was passed in, if it just had to update the child, or
-// null, if it removed the child and did not replace it.
-//
-// The following table summarizes the above:
-//
-// |                     | **newWidget == null**  | **newWidget != null**   |
-// | :-----------------: | :--------------------- | :---------------------- |
-// |  **child == null**  |  Returns null.         |  Returns new [Element]. |
-// |  **child != null**  |  Old child is removed, returns null. | Old child updated if possible, returns child or new [Element]. |
-//
-// The `newSlot` argument is used only if `newWidget` is not null. If `child`
-// is null (or if the old child cannot be updated), then the `newSlot` is
-// given to the new [Element] that is created for the child, via
-// [inflateWidget]. If `child` is not null (and the old child _can_ be
-// updated), then the `newSlot` is given to [updateSlotForChild] to update
-// its slot, in case it has moved around since it was last built.
-//
-// See the [RenderObjectElement] documentation for more information on slots.
 func ElementUpdateChild(el, child Element, newWidget Widget, newSlot any) Element {
 	if newWidget == nil {
 		if child != nil {
@@ -603,9 +561,6 @@ func ElementUpdateChild(el, child Element, newWidget Widget, newSlot any) Elemen
 	var newChild Element
 	if child != nil {
 		if child.Handle().widget == newWidget {
-			// We don't insert a timeline event here, because otherwise it's
-			// confusing that widgets that "don't update" (because they didn't
-			// change) get "charged" on the timeline.
 			if child.Handle().slot != newSlot {
 				updateSlotForChild(el, child, newSlot)
 			}
@@ -627,11 +582,6 @@ func ElementUpdateChild(el, child Element, newWidget Widget, newSlot any) Elemen
 	return newChild
 }
 
-// Change the slot that the given child occupies in its parent.
-//
-// Called by [MultiChildRenderObjectElement], and other [RenderObjectElement]
-// subclasses that have multiple children, when child moves from one position
-// to another in this element's child list.
 func updateSlotForChild(el, child Element, newSlot any) {
 	var visit func(element Element)
 	visit = func(element Element) {

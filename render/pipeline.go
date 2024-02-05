@@ -47,13 +47,6 @@ func (o *PipelineOwner) enableMutationsToDirtySubtrees(fn func()) {
 	o.shouldMergeDirtyNodes = true
 }
 
-// Update the layout information for all dirty render objects.
-//
-// This function is one of the core stages of the rendering pipeline. Layout
-// information is cleaned prior to painting so that render objects will
-// appear on screen in their up-to-date locations.
-//
-// See [RendererBinding] for an example of how this function is used.
 func (o *PipelineOwner) FlushLayout() {
 	for len(o.nodesNeedingLayout) != 0 {
 		dirtyNodes := o.nodesNeedingLayout
@@ -89,13 +82,6 @@ func layoutWithoutResize(obj Object) {
 	obj.MarkNeedsPaint()
 }
 
-// / Update the display lists for all render objects.
-// /
-// / This function is one of the core stages of the rendering pipeline.
-// / Painting occurs after layout and before the scene is recomposited so that
-// / scene is composited with up-to-date display lists for every render object.
-// /
-// / See [RendererBinding] for an example of how this function is used.
 func (o *PipelineOwner) FlushPaint(ops *op.Ops) {
 	dirtyNodes := o.nodesNeedingPaint
 	// OPT(dh): avoid this alloc, probably via double buffering
