@@ -6,7 +6,6 @@
 package widget
 
 import (
-	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/render"
 )
 
@@ -75,6 +74,10 @@ func newViewElement(view *View, po *render.PipelineOwner) *viewElement {
 	return &el
 }
 
+func (el *viewElement) SetConfiguration(cs render.ViewConfiguration) {
+	el.renderObject.(*render.View).SetConfiguration(cs)
+}
+
 func (el *viewElement) ForgetChild(child Element) {
 	el.ChildElement = nil
 }
@@ -88,15 +91,6 @@ func (el *viewElement) updateChild() {
 	el.ChildElement = el.UpdateChild(el.ChildElement, child, nil)
 }
 
-func (el *viewElement) attachView() {
-	// XXX get the actual window size
-	sz := f32.Pt(400, 400)
-	el.renderObject.(*render.View).SetConfiguration(render.Constraints{Min: sz, Max: sz})
-}
-
-// XXX lol, get rid of this global state
-// var AllRenderViews map[*render.View]struct{}
-
 func (el *viewElement) PerformRebuild() {
 	RenderObjectElementPerformRebuild(el)
 	el.updateChild()
@@ -106,7 +100,6 @@ func (el *viewElement) Activate() {
 	ElementActivate(el)
 	el.Root = el.renderObject
 	el.pipelineOwner.SetRootNode(el.renderObject)
-	el.attachView()
 }
 
 func (el *viewElement) Deactivate() {
@@ -132,7 +125,6 @@ func (el *viewElement) Mount(parent Element, newSlot any) {
 	RenderObjectElementMount(el, parent, newSlot)
 	el.Root = el.renderObject
 	el.pipelineOwner.SetRootNode(el.renderObject)
-	el.attachView()
 	el.updateChild()
 	el.renderObject.(*render.View).PrepareInitialFrame()
 }
