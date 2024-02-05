@@ -1,7 +1,6 @@
 package widget
 
 import (
-	"fmt"
 	"image/color"
 
 	"gioui.org/op"
@@ -98,7 +97,6 @@ func (c *renderColoredBox) SetChild(child render.Object) {
 
 func (c *renderColoredBox) Paint(r *render.Renderer, ops *op.Ops) {
 	sz := c.Size()
-	fmt.Println("!!!", sz)
 	if sz != f32.Pt(0, 0) {
 		paint.FillShape(ops, c.color, render.FRect{Max: sz}.Op(ops))
 	}

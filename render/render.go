@@ -23,7 +23,7 @@ import (
 //   would still be calling the repainted ops of the child. However, Gio makes us go through macros, and
 //   macros record both the start and end PC, and we can't expect those to remain the same.
 
-// TODO rename Layout to PerformLayout and Paint to PerformLayout
+// TODO rename Layout to PerformLayout and Paint to PerformPaint
 
 type Object interface {
 	// Layout lays out the object.
@@ -57,7 +57,7 @@ type ObjectWithChildren interface {
 }
 
 type SizedByParenter interface {
-	// Sentinel value that indicates that the object is sized by the parent.
+	// Marker method that indicates that the object is sized by the parent.
 	SizedByParent()
 }
 
@@ -66,10 +66,7 @@ type Disposable interface {
 }
 
 type ObjectHandle struct {
-	// renderer                   *Renderer
-	size f32.Point
-	// XXX needsPaint is supposed to start as true when the handle is allocated. of course we don't have
-	// constructors, so can we work around that? is it even necessary, or will attaching to a view be enough?
+	size                       f32.Point
 	needsPaint                 bool
 	needsLayout                bool
 	needsCompositingBitsUpdate bool
@@ -127,7 +124,7 @@ func MarkNeedsLayout(obj Object) {
 	} else {
 		h.needsLayout = true
 		h.owner.nodesNeedingLayout = append(h.owner.nodesNeedingLayout, obj)
-		// owner.requestVisualUpdate() // XXX
+		h.owner.RequestVisualUpdate()
 	}
 }
 
@@ -234,12 +231,6 @@ type cachedOps struct {
 	call op.CallOp
 }
 
-// func (r *Renderer) Initialize(root Object) {
-// 	root.Handle().relayoutBoundary = root
-// 	r.needsLayout = append(r.needsLayout, root)
-// 	r.needsPaint = append(r.needsPaint, root)
-// }
-
 func (r *Renderer) Paint(obj Object) op.CallOp {
 	var ops *op.Ops
 	if obj.Handle().needsPaint {
@@ -269,10 +260,6 @@ func isType[T any](obj any) bool {
 }
 
 func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
-	defer func() {
-		fmt.Printf("--> %T %v -> %v\n", obj, cs, OUT)
-	}()
-
 	if cs.Min.X > cs.Max.X || cs.Min.Y > cs.Max.Y || cs.Min.X < 0 || cs.Min.Y < 0 {
 		panic(fmt.Sprintf("constraints %v are malformed", cs))
 	}
@@ -325,8 +312,6 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
 	obj.Handle().size = obj.Layout()
 	h.needsLayout = false
 	obj.MarkNeedsPaint()
-
-	// XXX uh, are we ever setting the size?
 
 	sz := obj.Handle().Size()
 	if sz.X < cs.Min.X || sz.X > cs.Max.X || sz.Y < cs.Min.Y || sz.Y > cs.Max.Y {
