@@ -49,10 +49,12 @@ func run2(w *app.Window) error {
 		},
 	}
 
+	wview := widget.NewView(root)
+
 	// This is basically runApp
-	wb := widget.TheWidgetsBinding
-	root = wb.WrapWithDefaultView(root)
-	wb.AttachRootWidget(root)
+	rb := render.TheRendererBinding
+	var bo widget.BuildOwner
+	rootElem := (&widget.RootWidget{Child: wview}).Attach(&bo, nil)
 
 	var ops op.Ops
 	for {
@@ -60,7 +62,7 @@ func run2(w *app.Window) error {
 		case system.DestroyEvent:
 			return e.Err
 		case system.FrameEvent:
-			ops.Reset()
+			// wview.DrawFrame(e)
 
 			// cs := render.Constraints{
 			// 	Min: f32.FPt(e.Size),
@@ -68,9 +70,9 @@ func run2(w *app.Window) error {
 			// }
 
 			// XXX we need to get the current constraints into the view
-			wb.DrawFrame(&ops)
-
-			// op.InvalidateOp{}.Add(&ops)
+			bo.BuildScope(rootElem, nil)
+			rb.DrawFrame(&ops)
+			bo.FinalizeTree()
 			e.Frame(&ops)
 		}
 	}
