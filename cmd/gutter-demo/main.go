@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 
+	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
 
@@ -57,12 +58,11 @@ func run2(w *app.Window) error {
 		case system.DestroyEvent:
 			return e.Err
 		case system.FrameEvent:
-			// wview.DrawFrame(e)
-
-			// cs := render.Constraints{
-			// 	Min: f32.FPt(e.Size),
-			// 	Max: f32.FPt(e.Size),
-			// }
+			cs := render.ViewConfiguration{
+				Min: f32.FPt(e.Size),
+				Max: f32.FPt(e.Size),
+			}
+			rootElem.SetConfiguration(cs)
 
 			// XXX we need to get the current constraints into the view
 			bo.BuildScope(rootElem, nil)

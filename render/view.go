@@ -39,13 +39,6 @@ func (v *View) SetConfiguration(value ViewConfiguration) {
 		return
 	}
 	v.configuration = value
-	// if _rootTransform == nil {
-	// 	// [prepareInitialFrame] has not been called yet, nothing to do for now.
-	// 	return
-	// }
-	// if (oldConfiguration?.toMatrix() != configuration.toMatrix()) {
-	//   replaceRootLayer(_updateMatricesAndCreateNewRootLayer());
-	// }
 	v.MarkNeedsLayout()
 }
 
@@ -61,7 +54,6 @@ func (v *View) constraints() Constraints {
 func (v *View) Layout() f32.Point {
 	sizedByChild := !v.constraints().Tight()
 	if v.Child != nil {
-		// panic(v.constraints.Max.String())
 		Layout(v.Child, v.constraints(), sizedByChild)
 	}
 	if sizedByChild && v.Child != nil {
