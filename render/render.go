@@ -23,16 +23,64 @@ import (
 //   would still be calling the repainted ops of the child. However, Gio makes us go through macros, and
 //   macros record both the start and end PC, and we can't expect those to remain the same.
 
-type ObjectHandle struct {
-	renderer         *Renderer
-	size             f32.Point
-	needsPaint       bool
-	needsLayout      bool
-	parent           Object
-	constraints      Constraints
-	relayoutBoundary Object
+// TODO rename Layout to PerformLayout and Paint to PerformLayout
+
+type Object interface {
+	// Layout lays out the object.
+	//
+	// Don't call Object.Layout directly. Use [Layout] instead.
+	Layout() (size f32.Point)
+	// Paint paints the object at the specified offset.
+	//
+	// Don't call Object.Paint directly. Use [Renderer.Paint] instead.
+	Paint(r *Renderer, ops *op.Ops)
+
+	MarkNeedsLayout()
+	MarkNeedsPaint()
+	VisitChildren(yield func(Object) bool)
+	Handle() *ObjectHandle
 }
 
+type Attacher interface {
+	Attach(owner *PipelineOwner)
+	Detach()
+}
+
+type ObjectWithChild interface {
+	Object
+	SetChild(child Object)
+}
+
+type ObjectWithChildren interface {
+	Object
+	InsertChild(child Object, after Object)
+}
+
+type SizedByParenter interface {
+	// Sentinel value that indicates that the object is sized by the parent.
+	SizedByParent()
+}
+
+type Disposable interface {
+	Dispose()
+}
+
+type ObjectHandle struct {
+	// renderer                   *Renderer
+	size f32.Point
+	// XXX needsPaint is supposed to start as true when the handle is allocated. of course we don't have
+	// constructors, so can we work around that? is it even necessary, or will attaching to a view be enough?
+	needsPaint                 bool
+	needsLayout                bool
+	needsCompositingBitsUpdate bool
+	parent                     Object
+	constraints                Constraints
+	relayoutBoundary           Object
+	depth                      int
+	owner                      *PipelineOwner
+}
+
+func (h *ObjectHandle) Handle() *ObjectHandle    { return h }
 func (h *ObjectHandle) Size() f32.Point          { return h.size }
 func (h *ObjectHandle) Constraints() Constraints { return h.constraints }
 
@@ -42,10 +90,17 @@ func MarkNeedsPaint(obj Object) {
 		return
 	}
 	h.needsPaint = true
-	if h.parent != nil {
+	if false /* && isRepaintBoundary(obj) && h.wasRepaintBoundary */ {
+		if h.owner != nil {
+			h.owner.nodesNeedingPaint = append(h.owner.nodesNeedingPaint, obj)
+			h.owner.RequestVisualUpdate()
+		}
+	} else if h.parent != nil {
 		h.parent.MarkNeedsPaint()
 	} else {
-		// owner.requestVisualUpdate() // XXX
+		if h.owner != nil {
+			h.owner.RequestVisualUpdate()
+		}
 	}
 }
 func MarkNeedsLayout(obj Object) {
@@ -71,33 +126,12 @@ func MarkNeedsLayout(obj Object) {
 		h.parent.MarkNeedsLayout()
 	} else {
 		h.needsLayout = true
-		h.renderer.needsLayout = append(h.renderer.needsLayout, obj)
+		h.owner.nodesNeedingLayout = append(h.owner.nodesNeedingLayout, obj)
 		// owner.requestVisualUpdate() // XXX
 	}
 }
 
 func (h *ObjectHandle) SetParent(parent Object) { h.parent = parent }
-
-type Object interface {
-	// Layout lays out the object.
-	//
-	// Don't call Object.Layout directly. Use [Renderer.Layout] instead.
-	Layout(r *Renderer) (size f32.Point)
-	// Paint paints the object at the specified offset.
-	//
-	// Don't call Object.Paint directly. Use [Renderer.Paint] instead.
-	Paint(r *Renderer, ops *op.Ops)
-
-	MarkNeedsLayout()
-	MarkNeedsPaint()
-	VisitChildren(yield func(Object) bool)
-	Handle() *ObjectHandle
-}
-
-type SizedByParenter interface {
-	// Sentinel value that indicates that the object is sized by the parent.
-	SizedByParent()
-}
 
 type Constraints struct {
 	Min, Max f32.Point
@@ -159,13 +193,17 @@ func FormatTree(root Object) string {
 }
 
 type SingleChild struct {
-	child Object
+	Child Object
 }
 
 func (c *SingleChild) VisitChildren(yield func(Object) bool) {
-	if c.child != nil {
-		yield(c.child)
+	if c.Child != nil {
+		yield(c.Child)
 	}
+}
+
+func (c *SingleChild) SetChild(child Object) {
+	c.Child = child
 }
 
 type ManyChildren struct {
@@ -180,16 +218,15 @@ func (c *ManyChildren) VisitChildren(yield func(Object) bool) {
 	}
 }
 
-type Box struct {
-	handle ObjectHandle
+func (c *ManyChildren) InsertChild(child Object, after Object) {
+	panic("not implemented") // XXX
 }
 
-func (b *Box) Handle() *ObjectHandle { return &b.handle }
-
 type Renderer struct {
-	ops         map[Object]cachedOps
-	needsLayout []Object
-	needsPaint  []Object
+	// XXX delete from map when objects disappear
+	ops map[Object]cachedOps
+	// needsLayout []Object
+	// needsPaint  []Object
 }
 
 type cachedOps struct {
@@ -197,51 +234,11 @@ type cachedOps struct {
 	call op.CallOp
 }
 
-func (r *Renderer) Initialize(root Object) {
-	root.Handle().relayoutBoundary = root
-	r.needsLayout = append(r.needsLayout, root)
-	r.needsPaint = append(r.needsPaint, root)
-}
-
-func (r *Renderer) Render(root Object, ops *op.Ops, cs Constraints, offset f32.Point) {
-	h := root.Handle()
-	if !h.needsLayout && h.constraints != cs {
-		root.MarkNeedsLayout()
-	}
-	root.Handle().constraints = cs
-
-	r.flushLayout()
-	r.flushPaint()
-	root.Paint(r, ops)
-}
-
-func layoutAndUpdateHandle(r *Renderer, obj Object) {
-	sz := obj.Layout(r)
-	obj.Handle().needsLayout = false
-	obj.Handle().size = sz
-	obj.MarkNeedsPaint()
-}
-
-func (r *Renderer) flushLayout() {
-	for _, node := range r.needsLayout {
-		if node.Handle().needsLayout {
-			layoutAndUpdateHandle(r, node)
-		}
-	}
-	clear(r.needsLayout)
-	r.needsLayout = r.needsLayout[:0]
-}
-
-func (r *Renderer) flushPaint() {
-	for _, node := range r.needsPaint {
-		if !node.Handle().needsPaint {
-			panic(fmt.Sprintf("node %[1]T(%[1]p) was repainted unexpectedly", node, node))
-		}
-		r.Paint(node)
-	}
-	clear(r.needsPaint)
-	r.needsPaint = r.needsPaint[:0]
-}
+// func (r *Renderer) Initialize(root Object) {
+// 	root.Handle().relayoutBoundary = root
+// 	r.needsLayout = append(r.needsLayout, root)
+// 	r.needsPaint = append(r.needsPaint, root)
+// }
 
 func (r *Renderer) Paint(obj Object) op.CallOp {
 	var ops *op.Ops
@@ -271,61 +268,72 @@ func isType[T any](obj any) bool {
 	return ok
 }
 
-func (r *Renderer) Layout(obj Object, cs Constraints, parentUsesSize bool) {
+func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
+	defer func() {
+		fmt.Printf("--> %T %v -> %v\n", obj, cs, OUT)
+	}()
+
 	if cs.Min.X > cs.Max.X || cs.Min.Y > cs.Max.Y || cs.Min.X < 0 || cs.Min.Y < 0 {
 		panic(fmt.Sprintf("constraints %v are malformed", cs))
 	}
 
+	h := obj.Handle()
 	var relayoutBoundary Object
 	if !parentUsesSize || isType[SizedByParenter](obj) || cs.Tight() {
 		// We're the relayout boundary
 		relayoutBoundary = obj
 	} else {
-		relayoutBoundary = obj.Handle().parent.Handle().relayoutBoundary
+		relayoutBoundary = h.parent.Handle().relayoutBoundary
 	}
 
-	if !obj.Handle().needsLayout && cs == obj.Handle().constraints {
-		if relayoutBoundary != obj.Handle().relayoutBoundary {
-			obj.Handle().relayoutBoundary = relayoutBoundary
+	if !h.needsLayout && cs == h.constraints {
+		if relayoutBoundary != h.relayoutBoundary {
+			h.relayoutBoundary = relayoutBoundary
 			var propagateRelayoutBoundary func(child Object) bool
 			propagateRelayoutBoundary = func(child Object) bool {
-				if child.Handle().relayoutBoundary == child {
+				childh := child.Handle()
+				if childh.relayoutBoundary == child {
 					return true
 				}
-				parentRelayoutBoundary := child.Handle().parent.Handle().relayoutBoundary
-				if parentRelayoutBoundary != child.Handle().relayoutBoundary {
-					child.Handle().relayoutBoundary = parentRelayoutBoundary
+				parentRelayoutBoundary := childh.parent.Handle().relayoutBoundary
+				if parentRelayoutBoundary != childh.relayoutBoundary {
+					childh.relayoutBoundary = parentRelayoutBoundary
 					child.VisitChildren(propagateRelayoutBoundary)
 				}
 				return true
 			}
 			obj.VisitChildren(propagateRelayoutBoundary)
 		}
-		return
+		return obj.Handle().size
 	}
-	obj.Handle().constraints = cs
-	if obj.Handle().relayoutBoundary != nil && relayoutBoundary != obj.Handle().relayoutBoundary {
+	h.constraints = cs
+	if h.relayoutBoundary != nil && relayoutBoundary != h.relayoutBoundary {
 		// The local relayout boundary has changed, must notify children in case
 		// they also need updating. Otherwise, they will be confused about what
 		// their actual relayout boundary is later.
 		var cleanRelayoutBoundary func(child Object) bool
 		cleanRelayoutBoundary = func(child Object) bool {
-			if child.Handle().relayoutBoundary != child {
-				child.Handle().relayoutBoundary = nil
+			childh := child.Handle()
+			if childh.relayoutBoundary != child {
+				childh.relayoutBoundary = nil
 				child.VisitChildren(cleanRelayoutBoundary)
 			}
 			return true
 		}
 		obj.VisitChildren(cleanRelayoutBoundary)
 	}
-	obj.Handle().relayoutBoundary = relayoutBoundary
-	layoutAndUpdateHandle(r, obj)
-	// XXX markNeedsSemanticsUpdate
+	obj.Handle().size = obj.Layout()
+	h.needsLayout = false
+	obj.MarkNeedsPaint()
+
+	// XXX uh, are we ever setting the size?
 
 	sz := obj.Handle().Size()
 	if sz.X < cs.Min.X || sz.X > cs.Max.X || sz.Y < cs.Min.Y || sz.Y > cs.Max.Y {
 		panic(fmt.Sprintf("(%[1]T)(%[1]p).Layout violated constraints %v by computing size %v", obj, cs, sz))
 	}
+
+	return sz
 }
 
 func NewRenderer() *Renderer {
@@ -334,6 +342,22 @@ func NewRenderer() *Renderer {
 	}
 }
 
-func (r *Renderer) Register(obj Object) {
-	obj.Handle().renderer = r
+// TODO(dh): evaluate if we actually need Dispose, or if GC does all the work for us
+func Dispose(obj Object) {
+	if obj, ok := obj.(Disposable); ok {
+		obj.Dispose()
+	}
+}
+
+func ScheduleInitialLayout(obj Object) {
+	h := obj.Handle()
+	h.needsLayout = true
+	h.relayoutBoundary = obj
+	h.owner.nodesNeedingLayout = append(h.owner.nodesNeedingLayout, obj)
+}
+
+func ScheduleInitialPaint(obj Object) {
+	h := obj.Handle()
+	h.needsPaint = true
+	h.owner.nodesNeedingPaint = append(h.owner.nodesNeedingPaint, obj)
 }

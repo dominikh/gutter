@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"image/color"
 
 	"honnef.co/go/gutter/f32"
@@ -9,11 +10,13 @@ import (
 	"gioui.org/op/paint"
 )
 
-var _ Object = (*Clip)(nil)
+var _ ObjectWithChild = (*Clip)(nil)
 var _ Object = (*FillColor)(nil)
-var _ Object = (*Padding)(nil)
-var _ Object = (*Constrained)(nil)
-var _ Object = (*Row)(nil)
+var _ ObjectWithChild = (*Padding)(nil)
+var _ ObjectWithChild = (*Constrained)(nil)
+var _ ObjectWithChildren = (*Row)(nil)
+
+// var _ Object = (*Proxy)(nil)
 
 func (obj *Clip) MarkNeedsPaint()        { MarkNeedsPaint(obj) }
 func (obj *FillColor) MarkNeedsPaint()   { MarkNeedsPaint(obj) }
@@ -27,6 +30,10 @@ func (obj *Padding) MarkNeedsLayout()     { MarkNeedsLayout(obj) }
 func (obj *Constrained) MarkNeedsLayout() { MarkNeedsLayout(obj) }
 func (obj *Row) MarkNeedsLayout()         { MarkNeedsLayout(obj) }
 
+type Box struct {
+	ObjectHandle
+}
+
 // Clip prevents its child from painting outside its bounds.
 type Clip struct {
 	Box
@@ -36,13 +43,13 @@ type Clip struct {
 func (w *Clip) SetChild(child Object) {
 	// TODO make sure the child doesn't already have a parent
 	child.Handle().SetParent(w)
-	w.child = child
+	w.Child = child
 }
 
 // Layout implements RenderObject.
-func (w *Clip) Layout(r *Renderer) f32.Point {
-	r.Layout(w.child, w.Handle().Constraints(), true)
-	return w.child.Handle().Size()
+func (w *Clip) Layout() f32.Point {
+	Layout(w.Child, w.Handle().Constraints(), true)
+	return w.Child.Handle().Size()
 }
 
 // Paint implements RenderObject.
@@ -51,7 +58,7 @@ func (w *Clip) Paint(r *Renderer, ops *op.Ops) {
 		Min: f32.Pt(0, 0),
 		Max: w.Handle().Size(),
 	}.Op(ops).Push(ops).Pop()
-	r.Paint(w.child).Add(ops)
+	r.Paint(w.Child).Add(ops)
 }
 
 // FillColor fills an infinite plane with the provided color.
@@ -77,7 +84,7 @@ func (fc *FillColor) Color() color.NRGBA {
 }
 
 // Layout implements RenderObject.
-func (c *FillColor) Layout(_ *Renderer) f32.Point {
+func (c *FillColor) Layout() f32.Point {
 	return c.Handle().Constraints().Min
 }
 
@@ -99,6 +106,10 @@ type Padding struct {
 	relChildOffset f32.Point
 }
 
+func NewPadding(padding Inset) *Padding {
+	return &Padding{inset: padding}
+}
+
 func (p *Padding) SetInset(ins Inset) {
 	if p.inset != ins {
 		p.inset = ins
@@ -112,13 +123,13 @@ func (p *Padding) Inset() Inset {
 
 func (p *Padding) SetChild(child Object) {
 	child.Handle().SetParent(p)
-	p.child = child
+	p.Child = child
 }
 
 // Layout implements RenderObject.
-func (p *Padding) Layout(r *Renderer) f32.Point {
+func (p *Padding) Layout() f32.Point {
 	cs := p.Handle().Constraints()
-	if p.child == nil {
+	if p.Child == nil {
 		return cs.Constrain(f32.Pt(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom))
 	}
 	horiz := p.inset.Left + p.inset.Right
@@ -128,16 +139,15 @@ func (p *Padding) Layout(r *Renderer) f32.Point {
 		Min: newMin,
 		Max: f32.Pt(max(newMin.X, cs.Max.X-horiz), max(newMin.Y, cs.Max.Y-vert)),
 	}
-	r.Layout(p.child, innerCs, true)
+	childSz := Layout(p.Child, innerCs, true)
 	p.relChildOffset = f32.Pt(p.inset.Left, p.inset.Top)
-	childSz := p.child.Handle().Size()
 	return cs.Constrain(childSz.Add(f32.Pt(horiz, vert)))
 }
 
 // Paint implements RenderObject.
 func (p *Padding) Paint(r *Renderer, ops *op.Ops) {
 	defer op.Affine(f32.Affine2D{}.Offset(p.relChildOffset)).Push(ops).Pop()
-	r.Paint(p.child).Add(ops)
+	r.Paint(p.Child).Add(ops)
 }
 
 type Constrained struct {
@@ -158,20 +168,21 @@ func (c *Constrained) ExtraConstraints() Constraints {
 }
 
 // Layout implements Object.
-func (c *Constrained) Layout(r *Renderer) f32.Point {
+func (c *Constrained) Layout() f32.Point {
 	cs := c.extraConstraints.Enforce(c.Handle().Constraints())
-	r.Layout(c.child, cs, true)
-	return c.child.Handle().Size()
+	fmt.Println("???", c.extraConstraints, c.Handle().Constraints(), cs)
+	Layout(c.Child, cs, true)
+	return c.Child.Handle().Size()
 }
 
 // Paint implements Object.
 func (c *Constrained) Paint(r *Renderer, ops *op.Ops) {
-	r.Paint(c.child).Add(ops)
+	r.Paint(c.Child).Add(ops)
 }
 
 func (c *Constrained) SetChild(child Object) {
 	child.Handle().SetParent(c)
-	c.child = child
+	c.Child = child
 }
 
 // TODO turn this into a proper Flex
@@ -182,7 +193,7 @@ type Row struct {
 }
 
 // Layout implements Object.
-func (row *Row) Layout(r *Renderer) f32.Point {
+func (row *Row) Layout() f32.Point {
 	cs := row.Handle().Constraints()
 	inCs := cs
 	inCs.Min.X = 0
@@ -190,7 +201,7 @@ func (row *Row) Layout(r *Renderer) f32.Point {
 	height := cs.Min.Y
 	for i, child := range row.children {
 		row.childOffsets[i] = off
-		r.Layout(child, inCs, true)
+		Layout(child, inCs, true)
 		sz := child.Handle().Size()
 		inCs.Max.X -= sz.X
 		off += sz.X
@@ -216,3 +227,42 @@ func (row *Row) Paint(r *Renderer, ops *op.Ops) {
 		stack.Pop()
 	}
 }
+
+// type Proxy struct {
+// 	Child Object
+// }
+
+// func (p *Proxy) SetChild(child Object) {
+// 	child.Handle().SetParent(p)
+// 	p.Child = child
+// }
+
+// // Handle implements Object.
+// func (p *Proxy) Handle() *ObjectHandle {
+// 	return p.Child.Handle()
+// }
+
+// // Layout implements Object.
+// func (p *Proxy) Layout() (size f32.Point) {
+// 	return p.Child.Layout()
+// }
+
+// // MarkNeedsLayout implements Object.
+// func (p *Proxy) MarkNeedsLayout() {
+// 	p.Child.MarkNeedsLayout()
+// }
+
+// // MarkNeedsPaint implements Object.
+// func (p *Proxy) MarkNeedsPaint() {
+// 	p.Child.MarkNeedsPaint()
+// }
+
+// // Paint implements Object.
+// func (p *Proxy) Paint(r *Renderer, ops *op.Ops) {
+// 	p.Child.Paint(r, ops)
+// }
+
+// // VisitChildren implements Object.
+// func (p *Proxy) VisitChildren(yield func(Object) bool) {
+// 	p.Child.VisitChildren(yield)
+// }
