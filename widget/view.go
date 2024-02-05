@@ -25,6 +25,19 @@ type View struct {
 	Child         Widget
 }
 
+func (w *View) Attach(owner *BuildOwner, element *rawViewElement) *rawViewElement {
+	if element == nil {
+		element = w.CreateElement().(*rawViewElement)
+		element.AssignOwner(owner)
+		owner.BuildScope(element, func() {
+			element.Mount(nil, nil)
+		})
+	} else {
+		MarkNeedsBuild(element)
+	}
+	return element
+}
+
 // CreateElement implements RenderObjectWidget.
 func (w *View) CreateElement() Element {
 	return newRawViewElement(w, w.PipelineOwner)
@@ -135,4 +148,8 @@ func (el *rawViewElement) AttachRenderObject(newSlot any) {
 
 func (el *rawViewElement) DetachRenderObject() {
 	el.slot = nil
+}
+
+func (el *rawViewElement) AssignOwner(owner *BuildOwner) {
+	el.owner = owner
 }
