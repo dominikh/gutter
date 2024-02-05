@@ -40,19 +40,19 @@ func run2(w *app.Window) error {
 	var root widget.Widget = &widget.Padding{
 		Padding: render.Inset{Left: 20, Top: 20, Right: 20, Bottom: 20},
 		// XXX This SizedBox doesn't actually do anything, because we never loosen the constraints.
-		ChildWidget: &widget.SizedBox{
+		Child: &widget.SizedBox{
 			Width:  50,
 			Height: 50,
-			ChildWidget: &widget.ColoredBox{
+			Child: &widget.ColoredBox{
 				Color: color.NRGBA{255, 0, 0, 255},
 			},
 		},
 	}
 
 	// This is basically runApp
+	var bo widget.BuildOwner
 	po := render.NewPipelineOwner()
 	wview := widget.NewView(root, po)
-	var bo widget.BuildOwner
 	rootElem := (&widget.RootWidget{Child: wview}).Attach(&bo, nil)
 
 	var ops op.Ops
