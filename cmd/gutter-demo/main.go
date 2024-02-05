@@ -48,7 +48,8 @@ func run2(w *app.Window) error {
 	wview := widget.NewView(root)
 
 	// This is basically runApp
-	rb := render.TheRendererBinding
+	po := render.TopPipelineOwner
+	r := render.NewRenderer()
 	var bo widget.BuildOwner
 	rootElem := (&widget.RootWidget{wview}).Attach(&bo, nil)
 
@@ -67,7 +68,9 @@ func run2(w *app.Window) error {
 
 			// XXX we need to get the current constraints into the view
 			bo.BuildScope(rootElem, nil)
-			rb.DrawFrame(&ops)
+			po.FlushLayout()
+			po.FlushCompositingBits()
+			po.FlushPaint(r, &ops)
 			bo.FinalizeTree()
 			e.Frame(&ops)
 		}

@@ -6,10 +6,12 @@ import (
 	"gioui.org/op"
 )
 
+// XXX lol, get rid of this global state
+var TopPipelineOwner = NewPipelineOwner()
+
 type PipelineOwner struct {
 	rootNode                          Object
 	children                          map[*PipelineOwner]struct{}
-	rb                                *RendererBinding
 	nodesNeedingPaint                 []Object
 	nodesNeedingLayout                []Object
 	nodesNeedingCompositingBitsUpdate []Object
@@ -40,8 +42,6 @@ func (o *PipelineOwner) SetRootNode(root Object) {
 func (o *PipelineOwner) RequestVisualUpdate() {
 	if o.onNeedVisualUpdate != nil {
 		o.onNeedVisualUpdate()
-	} else {
-		o.rb.RequestVisualUpdate()
 	}
 }
 
@@ -155,28 +155,12 @@ func (o *PipelineOwner) FlushCompositingBits() {
 	}
 }
 
-func (o *PipelineOwner) Attach(rb *RendererBinding) {
-	o.rb = rb
-	for child := range o.children {
-		child.Attach(rb)
-	}
-}
-
-func (o *PipelineOwner) Detach() {
-	o.rb = nil
-	for child := range o.children {
-		child.Detach()
-	}
-}
-
 func (o *PipelineOwner) AdoptChild(child *PipelineOwner) {
 	o.children[child] = struct{}{}
-	child.Attach(o.rb)
 }
 
 func (o *PipelineOwner) DropChild(child *PipelineOwner) {
 	delete(o.children, child)
-	child.Detach()
 }
 
 func (o *PipelineOwner) VisitChildren(yield func(*PipelineOwner) bool) {

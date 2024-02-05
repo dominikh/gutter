@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/render"
 )
 
@@ -75,11 +76,11 @@ func (el *rawViewElement) updateChild() {
 func (el *rawViewElement) attachView(parentPipelineOwner *render.PipelineOwner) {
 	if parentPipelineOwner == nil {
 		parentPipelineOwner = render.TopPipelineOwner
-		// parentPipelineOwner = View.pipelineOwnerOf(el)
 	}
 	parentPipelineOwner.AdoptChild(el.effectivePipelineOwner())
-	// AllRenderViews[el.renderObject.(*render.View)] = struct{}{}
-	render.TheRendererBinding.AddRenderView(el.renderObject.(*render.View))
+	// XXX get the actual window size
+	sz := f32.Pt(400, 400)
+	el.renderObject.(*render.View).SetConfiguration(render.Constraints{sz, sz})
 	el.parentPipelineOwner = parentPipelineOwner
 }
 
