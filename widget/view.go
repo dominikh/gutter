@@ -47,20 +47,14 @@ type rawViewElement struct {
 	SingleChildRenderObjectElement
 	Root render.Object
 
-	pipelineOwner       *render.PipelineOwner
-	parentPipelineOwner *render.PipelineOwner
+	pipelineOwner *render.PipelineOwner
 }
 
 func newRawViewElement(view *View, po *render.PipelineOwner) *rawViewElement {
 	var el rawViewElement
 	el.widget = view
-	el.parentPipelineOwner = po
-	el.pipelineOwner = render.NewPipelineOwner()
+	el.pipelineOwner = po
 	return &el
-}
-
-func (el *rawViewElement) effectivePipelineOwner() *render.PipelineOwner {
-	return el.pipelineOwner
 }
 
 func (el *rawViewElement) ForgetChild(child Element) {
@@ -77,20 +71,9 @@ func (el *rawViewElement) updateChild() {
 }
 
 func (el *rawViewElement) attachView() {
-	el.parentPipelineOwner.AdoptChild(el.effectivePipelineOwner())
 	// XXX get the actual window size
 	sz := f32.Pt(400, 400)
 	el.renderObject.(*render.View).SetConfiguration(render.Constraints{sz, sz})
-}
-
-func (el *rawViewElement) detachView() {
-	parentPipelineOwner := el.parentPipelineOwner
-	if parentPipelineOwner != nil {
-		// delete(AllRenderViews, el.renderObject.(*render.View))
-		// RendererBinding.instance.removeRenderView(el.renderObject)
-		parentPipelineOwner.DropChild(el.effectivePipelineOwner())
-		el.parentPipelineOwner = nil
-	}
 }
 
 // XXX lol, get rid of this global state
@@ -104,14 +87,13 @@ func (el *rawViewElement) PerformRebuild() {
 func (el *rawViewElement) Activate() {
 	ElementActivate(el)
 	el.Root = el.renderObject
-	el.effectivePipelineOwner().SetRootNode(el.renderObject)
+	el.pipelineOwner.SetRootNode(el.renderObject)
 	el.attachView()
 }
 
 func (el *rawViewElement) Deactivate() {
-	el.detachView()
 	el.Root = nil
-	el.effectivePipelineOwner().SetRootNode(nil)
+	el.pipelineOwner.SetRootNode(nil)
 	ElementDeactivate(el)
 }
 
@@ -131,16 +113,14 @@ func (el *rawViewElement) RemoveRenderObjectChild(child render.Object, slot any)
 func (el *rawViewElement) Mount(parent Element, newSlot any) {
 	RenderObjectElementMount(el, parent, newSlot)
 	el.Root = el.renderObject
-	el.effectivePipelineOwner().SetRootNode(el.renderObject)
+	el.pipelineOwner.SetRootNode(el.renderObject)
 	el.attachView()
 	el.updateChild()
 	el.renderObject.(*render.View).PrepareInitialFrame()
 }
 
 func (el *rawViewElement) Unmount() {
-	if o := el.effectivePipelineOwner(); o != nil {
-		o.Dispose()
-	}
+	el.pipelineOwner.Dispose()
 	RenderObjectElementUnmount(el)
 }
 
