@@ -49,7 +49,7 @@ func run2(w *app.Window) error {
 	var bo widget.BuildOwner
 	po := render.NewPipelineOwner()
 	wview := widget.NewView(root, po)
-	rootElem := (&widget.RootWidget{wview}).Attach(&bo, nil)
+	rootElem := wview.Attach(&bo, nil)
 
 	var ops op.Ops
 	for {
