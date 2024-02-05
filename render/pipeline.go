@@ -11,9 +11,6 @@ import (
 	"gioui.org/op"
 )
 
-// XXX lol, get rid of this global state
-var TopPipelineOwner = NewPipelineOwner()
-
 type PipelineOwner struct {
 	rootNode                          Object
 	children                          map[*PipelineOwner]struct{}
