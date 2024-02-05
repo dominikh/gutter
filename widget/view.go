@@ -11,7 +11,7 @@ import (
 )
 
 var _ RenderObjectWidget = (*View)(nil)
-var _ RenderObjectElement = (*rawViewElement)(nil)
+var _ RenderObjectElement = (*viewElement)(nil)
 
 func NewView(root Widget, po *render.PipelineOwner) *View {
 	return &View{
@@ -25,9 +25,9 @@ type View struct {
 	Child         Widget
 }
 
-func (w *View) Attach(owner *BuildOwner, element *rawViewElement) *rawViewElement {
+func (w *View) Attach(owner *BuildOwner, element *viewElement) *viewElement {
 	if element == nil {
-		element = w.CreateElement().(*rawViewElement)
+		element = w.CreateElement().(*viewElement)
 		element.AssignOwner(owner)
 		owner.BuildScope(element, func() {
 			element.Mount(nil, nil)
@@ -40,7 +40,7 @@ func (w *View) Attach(owner *BuildOwner, element *rawViewElement) *rawViewElemen
 
 // CreateElement implements RenderObjectWidget.
 func (w *View) CreateElement() Element {
-	return newRawViewElement(w, w.PipelineOwner)
+	return newViewElement(w, w.PipelineOwner)
 }
 
 // CreateRenderObject implements RenderObjectWidget.
@@ -61,34 +61,34 @@ func (v *View) Key() any {
 // UpdateRenderObject implements RenderObjectWidget.
 func (*View) UpdateRenderObject(ctx BuildContext, obj render.Object) {}
 
-type rawViewElement struct {
+type viewElement struct {
 	SingleChildRenderObjectElement
 	Root render.Object
 
 	pipelineOwner *render.PipelineOwner
 }
 
-func newRawViewElement(view *View, po *render.PipelineOwner) *rawViewElement {
-	var el rawViewElement
+func newViewElement(view *View, po *render.PipelineOwner) *viewElement {
+	var el viewElement
 	el.widget = view
 	el.pipelineOwner = po
 	return &el
 }
 
-func (el *rawViewElement) ForgetChild(child Element) {
+func (el *viewElement) ForgetChild(child Element) {
 	el.ChildElement = nil
 }
 
-func (el *rawViewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
+func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
 	panic("unexpected call")
 }
 
-func (el *rawViewElement) updateChild() {
+func (el *viewElement) updateChild() {
 	child := el.widget.(*View).Child
 	el.ChildElement = el.UpdateChild(el.ChildElement, child, nil)
 }
 
-func (el *rawViewElement) attachView() {
+func (el *viewElement) attachView() {
 	// XXX get the actual window size
 	sz := f32.Pt(400, 400)
 	el.renderObject.(*render.View).SetConfiguration(render.Constraints{Min: sz, Max: sz})
@@ -97,38 +97,38 @@ func (el *rawViewElement) attachView() {
 // XXX lol, get rid of this global state
 // var AllRenderViews map[*render.View]struct{}
 
-func (el *rawViewElement) PerformRebuild() {
+func (el *viewElement) PerformRebuild() {
 	RenderObjectElementPerformRebuild(el)
 	el.updateChild()
 }
 
-func (el *rawViewElement) Activate() {
+func (el *viewElement) Activate() {
 	ElementActivate(el)
 	el.Root = el.renderObject
 	el.pipelineOwner.SetRootNode(el.renderObject)
 	el.attachView()
 }
 
-func (el *rawViewElement) Deactivate() {
+func (el *viewElement) Deactivate() {
 	el.Root = nil
 	el.pipelineOwner.SetRootNode(nil)
 	ElementDeactivate(el)
 }
 
-func (el *rawViewElement) Update(newWidget Widget) {
+func (el *viewElement) Update(newWidget Widget) {
 	SingleChildRenderObjectElementUpdate(el, newWidget.(RenderObjectWidget))
 	el.updateChild()
 }
 
-func (el *rawViewElement) InsertRenderObjectChild(child render.Object, slot any) {
+func (el *viewElement) InsertRenderObjectChild(child render.Object, slot any) {
 	el.renderObject.(render.ObjectWithChild).SetChild(child)
 }
 
-func (el *rawViewElement) RemoveRenderObjectChild(child render.Object, slot any) {
+func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot any) {
 	el.renderObject.(render.ObjectWithChild).SetChild(nil)
 }
 
-func (el *rawViewElement) Mount(parent Element, newSlot any) {
+func (el *viewElement) Mount(parent Element, newSlot any) {
 	RenderObjectElementMount(el, parent, newSlot)
 	el.Root = el.renderObject
 	el.pipelineOwner.SetRootNode(el.renderObject)
@@ -137,19 +137,19 @@ func (el *rawViewElement) Mount(parent Element, newSlot any) {
 	el.renderObject.(*render.View).PrepareInitialFrame()
 }
 
-func (el *rawViewElement) Unmount() {
+func (el *viewElement) Unmount() {
 	el.pipelineOwner.Dispose()
 	RenderObjectElementUnmount(el)
 }
 
-func (el *rawViewElement) AttachRenderObject(newSlot any) {
+func (el *viewElement) AttachRenderObject(newSlot any) {
 	el.slot = newSlot
 }
 
-func (el *rawViewElement) DetachRenderObject() {
+func (el *viewElement) DetachRenderObject() {
 	el.slot = nil
 }
 
-func (el *rawViewElement) AssignOwner(owner *BuildOwner) {
+func (el *viewElement) AssignOwner(owner *BuildOwner) {
 	el.owner = owner
 }
