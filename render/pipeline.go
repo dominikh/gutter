@@ -13,7 +13,6 @@ import (
 
 type PipelineOwner struct {
 	rootNode                          Object
-	children                          map[*PipelineOwner]struct{}
 	nodesNeedingPaint                 []Object
 	nodesNeedingLayout                []Object
 	nodesNeedingCompositingBitsUpdate []Object
@@ -22,9 +21,7 @@ type PipelineOwner struct {
 }
 
 func NewPipelineOwner() *PipelineOwner {
-	return &PipelineOwner{
-		children: make(map[*PipelineOwner]struct{}),
-	}
+	return &PipelineOwner{}
 }
 
 func (o *PipelineOwner) RootNode() Object { return o.rootNode }
@@ -85,9 +82,6 @@ func (o *PipelineOwner) FlushLayout() {
 		o.shouldMergeDirtyNodes = false
 	}
 
-	for child := range o.children {
-		child.FlushLayout()
-	}
 	o.shouldMergeDirtyNodes = false
 }
 
@@ -129,9 +123,6 @@ func (o *PipelineOwner) FlushPaint(r *Renderer, ops *op.Ops) {
 			// }
 		}
 	}
-	for child := range o.children {
-		child.FlushPaint(r, ops)
-	}
 
 	if o.rootNode != nil {
 		r.Paint(o.rootNode).Add(ops)
@@ -151,26 +142,6 @@ func (o *PipelineOwner) FlushCompositingBits() {
 	}
 	clear(nodes)
 	o.nodesNeedingCompositingBitsUpdate = nodes[:0]
-
-	for child := range o.children {
-		child.FlushCompositingBits()
-	}
-}
-
-func (o *PipelineOwner) AdoptChild(child *PipelineOwner) {
-	o.children[child] = struct{}{}
-}
-
-func (o *PipelineOwner) DropChild(child *PipelineOwner) {
-	delete(o.children, child)
-}
-
-func (o *PipelineOwner) VisitChildren(yield func(*PipelineOwner) bool) {
-	for child := range o.children {
-		if !yield(child) {
-			break
-		}
-	}
 }
 
 func (o *PipelineOwner) Dispose() {
