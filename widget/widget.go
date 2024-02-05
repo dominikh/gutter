@@ -3,10 +3,11 @@ package widget
 import (
 	"image/color"
 
-	"gioui.org/op"
-	"gioui.org/op/paint"
 	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/render"
+
+	"gioui.org/op"
+	"gioui.org/op/paint"
 )
 
 var _ RenderObjectWidget = (*Padding)(nil)

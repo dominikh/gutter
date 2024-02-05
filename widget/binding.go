@@ -1,8 +1,9 @@
 package widget
 
 import (
-	"gioui.org/op"
 	"honnef.co/go/gutter/render"
+
+	"gioui.org/op"
 )
 
 type WidgetsBinding struct {
