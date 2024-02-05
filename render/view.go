@@ -11,7 +11,15 @@ type View struct {
 	ObjectHandle
 	SingleChild
 
+	r             *Renderer
+	ops           op.Ops
 	configuration ViewConfiguration
+}
+
+func NewView() *View {
+	return &View{
+		r: NewRenderer(),
+	}
 }
 
 func (v *View) MarkNeedsPaint()  { MarkNeedsPaint(v) }
@@ -25,14 +33,6 @@ func (v *View) Paint(r *Renderer, ops *op.Ops) {
 
 // XXX include pxperdp etc in the view configuration
 type ViewConfiguration = Constraints
-
-func NewView(child Object, config ViewConfiguration /* , view *FlutterView */) *View {
-	var v View
-	v.SetChild(child)
-	v.SetConfiguration(config)
-	// v.view = view
-	return &v
-}
 
 func (v *View) SetConfiguration(value ViewConfiguration) {
 	if v.configuration == value {
@@ -77,19 +77,3 @@ func (v *View) Layout() f32.Point {
 // 	v.view.render(scene, v.size)
 // 	scene.dispose()
 // }
-
-/*
-/// The root of the render tree.
-///
-/// The view represents the total output surface of the render tree and handles
-/// bootstrapping the rendering pipeline. The view has a unique child
-/// [RenderBox], which is required to fill the entire output surface.
-class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox> {
-
-  /// The [FlutterView] into which this [RenderView] will render.
-  ui.FlutterView get flutterView => _view;
-
-  @override
-  bool get isRepaintBoundary => true;
-}
-*/

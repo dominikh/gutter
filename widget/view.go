@@ -7,12 +7,14 @@ import (
 var _ RenderObjectWidget = (*RawView)(nil)
 var _ RenderObjectElement = (*rawViewElement)(nil)
 
-// XXX we don't need flutter's View widget, because for now, it's just a thin wrapper around rawView
+func NewView(root Widget) *RawView {
+	return &RawView{
+		Child: root,
+	}
+}
 
 type RawView struct {
-	// view    *FlutterView
-	Child   Widget
-	builder func(ctx BuildContext, owner *render.PipelineOwner) Widget
+	Child Widget
 }
 
 // CreateElement implements RenderObjectWidget.
@@ -23,7 +25,7 @@ func (w *RawView) CreateElement() Element {
 // CreateRenderObject implements RenderObjectWidget.
 func (w *RawView) CreateRenderObject(ctx BuildContext) render.Object {
 	// XXX
-	return render.NewView(nil, render.Constraints{})
+	return render.NewView()
 }
 
 // Key implements RenderObjectWidget.
@@ -66,7 +68,7 @@ func (el *rawViewElement) MoveRenderObjectChild(child render.Object, oldSlot, ne
 }
 
 func (el *rawViewElement) updateChild() {
-	child := el.widget.(*RawView).builder(el, el.effectivePipelineOwner())
+	child := el.widget.(*RawView).Child
 	el.ChildElement = el.UpdateChild(el.ChildElement, child, nil)
 }
 
