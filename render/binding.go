@@ -17,7 +17,7 @@ type RendererBinding struct {
 
 func NewRendererBinding() *RendererBinding {
 	rb := &RendererBinding{
-		rootPipelineOwner: createRootPipelineOwner(),
+		rootPipelineOwner: TopPipelineOwner,
 		views:             make(map[*View]struct{}),
 		renderer:          NewRenderer(),
 	}
@@ -25,11 +25,6 @@ func NewRendererBinding() *RendererBinding {
 	return rb
 	// XXX
 	// addPersistentFrameCallback(_handlePersistentFrameCallback);
-}
-
-func createRootPipelineOwner() *PipelineOwner {
-	// return NewPipelineOwner()
-	return TopPipelineOwner
 }
 
 // XXX lol, get rid of this global state
