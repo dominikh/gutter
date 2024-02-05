@@ -6,7 +6,6 @@
 package render
 
 import (
-	"fmt"
 	"image/color"
 
 	"honnef.co/go/gutter/f32"
@@ -175,7 +174,6 @@ func (c *Constrained) ExtraConstraints() Constraints {
 // Layout implements Object.
 func (c *Constrained) Layout() f32.Point {
 	cs := c.extraConstraints.Enforce(c.Handle().Constraints())
-	fmt.Println("???", c.extraConstraints, c.Handle().Constraints(), cs)
 	Layout(c.Child, cs, true)
 	return c.Child.Handle().Size()
 }

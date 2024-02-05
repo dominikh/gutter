@@ -12,7 +12,6 @@ package main
 // end, all of the Gio events should be "reactive".
 
 import (
-	"fmt"
 	"image/color"
 	"log"
 	"os"
@@ -40,6 +39,7 @@ func main() {
 func run2(w *app.Window) error {
 	var root widget.Widget = &widget.Padding{
 		Padding: render.Inset{Left: 20, Top: 20, Right: 20, Bottom: 20},
+		// XXX This SizedBox doesn't actually do anything, because we never loosen the constraints.
 		ChildWidget: &widget.SizedBox{
 			Width:  50,
 			Height: 50,
@@ -68,7 +68,6 @@ func run2(w *app.Window) error {
 			// }
 
 			// XXX we need to get the current constraints into the view
-			fmt.Printf("ops in main: %p\n", &ops)
 			wb.DrawFrame(&ops)
 
 			// op.InvalidateOp{}.Add(&ops)

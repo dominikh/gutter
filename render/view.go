@@ -6,8 +6,6 @@
 package render
 
 import (
-	"fmt"
-
 	"gioui.org/f32"
 	"gioui.org/op"
 )
@@ -26,7 +24,6 @@ func (v *View) MarkNeedsLayout() { MarkNeedsLayout(v) }
 
 func (v *View) Paint(r *Renderer, ops *op.Ops) {
 	if v.Child != nil {
-		fmt.Printf("ops in render.View.Paint: %p\n", ops)
 		r.Paint(v.Child).Add(ops)
 	}
 }

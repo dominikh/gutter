@@ -6,8 +6,6 @@
 package widget
 
 import (
-	"log"
-
 	"gioui.org/op"
 	"honnef.co/go/gutter/render"
 )
@@ -24,9 +22,7 @@ var TheWidgetsBinding = NewWidgetsBinding()
 
 func NewWidgetsBinding() *WidgetsBinding {
 	b := WidgetsBinding{}
-	b.buildOwner.onBuildScheduled = func() {
-		log.Println("!!! onBuildScheduled")
-	}
+	b.buildOwner.onBuildScheduled = func() {}
 	b.rendererBinding = render.TheRendererBinding
 	return &b
 }
