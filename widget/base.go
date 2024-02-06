@@ -7,8 +7,15 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-// TODO Flutter has createElement() => StatelessElement(this) for StatelessWidget, which differs from the
-// createElement for Widget. Do we need that? What does StatelessElement do and look like?
+var _ Element = (*ElementMixin)(nil)
+var _ Element = (*ComponentElementMixin)(nil)
+var _ Element = (*StatelessElementMixin)(nil)
+var _ Element = (*RenderObjectElementMixin)(nil)
+var _ Element = (*SingleChildRenderObjectElementMixin)(nil)
+var _ RenderObjectElement = (*RenderObjectElementMixin)(nil)
+var _ RenderObjectElement = (*SingleChildRenderObjectElementMixin)(nil)
+var _ SingleChildElement = (*ComponentElementMixin)(nil)
+var _ SingleChildElement = (*SingleChildRenderObjectElementMixin)(nil)
 
 // TODO implement support for stateful widgets
 
@@ -17,11 +24,11 @@ import (
 // TODO support "Notification"
 // TODO support global keys
 
+type BuildContext interface{}
+
 type Widget interface {
 	Key() any
 
-	// Most implementations want to call one of
-	// - NewSingleChildRenderObjectElement
 	CreateElement() Element
 }
 
@@ -30,91 +37,9 @@ type StatelessWidget interface {
 	Build(ctx BuildContext) Widget
 }
 
-// All implementations of Element must embed ElementHandle. All elements that represent render objects must
-// embed RenderObjectElementHandle, which itself embeds ElementHandle.
-type Element interface {
-	// Most implementations want to call one of
-	// - ElementUpdateChild
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	UpdateChild(child Element, newWidget Widget, newSlot any) Element
-
-	// Most implementations want to call one of
-	// - ElementUpdate
-	// - StatelessElementUpdate
-	// - RenderObjectElementUpdate
-	// - SingleChildRenderObjectElementUpdate
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	//
-	// Custom implementations must call one of the aforementioned functions.
-	Update(newWidget Widget)
-
-	// Provided by default when embedding ElementHandle.
-	Handle() *ElementHandle
-	Parent() Element
-	Slot() any
-
-	// Most implementations want to call one of
-	// - ElementActivate
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	//
-	// Custom implementations must call ElementActivate.
-	Activate()
-
-	// Provided by default when embedding ElementHandle. Custom implementations must call ElementDeactivate.
-	Deactivate()
-
-	// Most implementations want to call one of
-	// - ElementMount
-	// - RenderObjectElementMount
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	Mount(parent Element, slot any)
-
-	// Most implementations want to call one of
-	// - ElementUnmount
-	// - RenderObjectElementUnmount
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	Unmount()
-
-	// Most implementations want to call one of
-	// - ElementAttachRenderObject
-	// - RenderObjectElementAttachRenderObject
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	AttachRenderObject(slot any)
-
-	// Most implementations want to call one of
-	// - ElementDetachRenderObject
-	// - RenderObjectElementDetachRenderObject
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	DetachRenderObject()
-
-	// Provided by default when embedding ElementHandle or RenderObjectElementHandle.
-	// Custom implementations must call ElementPerformRebuild or RenderObjectElementPerformRebuild.
-	PerformRebuild()
-
-	// Either implement it or embed one of
-	// - SingleChildRenderObjectElement
-	VisitChildren(yield func(el Element) bool)
-
-	// Most implementations want to call one of
-	// - ElementRenderObjectAttachingChild
-	// - RenderObjectElementRenderObjectAttachingChild
-	// or embed one of
-	// - SingleChildRenderObjectElement
-	RenderObjectAttachingChild() Element
-
-	// Provided by default when embedding ElementHandle or RenderObjectElementHandle.
-	// Custom implementations must call ElementUpdateSlot or RenderObjectElementUpdateSlot.
-	UpdateSlot(newSlot any)
-}
-
-type BuildContext interface {
+type SingleChildWidget interface {
+	Widget
+	GetChild() Widget
 }
 
 type RenderObjectWidget interface {
@@ -123,15 +48,36 @@ type RenderObjectWidget interface {
 	UpdateRenderObject(ctx BuildContext, obj render.Object)
 }
 
+type Element interface {
+	UpdateChild(child Element, newWidget Widget, newSlot any) Element
+	Update(newWidget Widget)
+	Handle() *ElementHandle
+	Parent() Element
+	Slot() any
+	Activate()
+	Deactivate()
+	Mount(parent Element, newSlot any)
+	Unmount()
+	AttachRenderObject(slot any)
+	DetachRenderObject()
+	PerformRebuild()
+	RenderObjectAttachingChild() Element
+	UpdateSlot(newSlot any)
+	VisitChildren(yield func(el Element) bool)
+}
+
+type SingleChildElement interface {
+	Element
+	GetChild() Element
+	SetChild(child Element)
+}
+
 type RenderObjectElement interface {
 	Element
 
-	// Provided by default when embedding RenderObjectElementHandle.
 	AncestorRenderObjectElement() RenderObjectElement
 	RenderHandle() *RenderObjectElementHandle
 
-	// Most implementations want to embed one of
-	// - SingleChildRenderObjectElement
 	InsertRenderObjectChild(child render.Object, slot any)
 	RemoveRenderObjectChild(child render.Object, slot any)
 	MoveRenderObjectChild(child render.Object, oldSlot, newSlot any)
@@ -140,6 +86,348 @@ type RenderObjectElement interface {
 type ChildForgetter interface {
 	ForgetChild(child Element)
 }
+
+type ElementMixin struct {
+	ElementHandle
+	Self Element
+}
+
+func (el *ElementMixin) Slot() any                                 { return el.slot }
+func (el *ElementMixin) Parent() Element                           { return el.parent }
+func (el *ElementMixin) VisitChildren(yield func(el Element) bool) {}
+func (el *ElementMixin) UpdateSlot(newSlot any)                    { el.slot = newSlot }
+func (el *ElementMixin) PerformRebuild()                           { el.dirty = false }
+
+func (el *ElementMixin) MarkNeedsBuild() {
+	if el.lifecycleState != ElementLifecycleActive {
+		return
+	}
+	if el.dirty {
+		return
+	}
+	el.dirty = true
+	el.owner.scheduleBuildFor(el.Self)
+}
+
+// Activate implements Element.
+func (el *ElementMixin) Activate() {
+	// hadDependencies := (el._dependencies != null && el._dependencies.isNotEmpty) || el._hadUnsatisfiedDependencies // XXX implement once we have InheritedWidget
+	el.lifecycleState = ElementLifecycleActive
+	// We unregistered our dependencies in deactivate, but never cleared the list.
+	// Since we're going to be reused, let's clear our list now.
+	// XXX
+	// if el._dependencies != nil {
+	// 	el._dependencies.clear()
+	// }
+	// el._hadUnsatisfiedDependencies = false
+	// el._updateInheritance()
+	// el.attachNotificationTree()
+	if el.dirty {
+		el.owner.scheduleBuildFor(el.Self)
+	}
+	// if hadDependencies {
+	// 	el.didChangeDependencies()
+	// }
+}
+
+func (el *ElementMixin) Deactivate() {
+	// XXX
+	// if (_dependencies != null && _dependencies!.isNotEmpty) {
+	//   for (final InheritedElement dependency in _dependencies!) {
+	//     dependency.removeDependent(this);
+	//   }
+	//   // For expediency, we don't actually clear the list here, even though it's
+	//   // no longer representative of what we are registered with. If we never
+	//   // get re-used, it doesn't matter. If we do, then we'll clear the list in
+	//   // activate(). The benefit of this is that it allows Element's activate()
+	//   // implementation to decide whether to rebuild based on whether we had
+	//   // dependencies here.
+	// }
+	// _inheritedElements = null;
+	el.lifecycleState = ElementLifecycleInactive
+}
+
+// AttachRenderObject implements Element.
+func (el *ElementMixin) AttachRenderObject(slot any) {
+	el.Self.VisitChildren(func(child Element) bool {
+		child.AttachRenderObject(slot)
+		return true
+	})
+	el.slot = slot
+}
+
+// DetachRenderObject implements Element.
+func (el *ElementMixin) DetachRenderObject() {
+	el.Self.VisitChildren(func(child Element) bool {
+		child.DetachRenderObject()
+		return true
+	})
+	el.slot = nil
+}
+
+// Mount implements Element.
+func (el *ElementMixin) Mount(parent Element, newSlot any) {
+	el.parent = parent
+	el.slot = newSlot
+	el.lifecycleState = ElementLifecycleActive
+	if parent != nil {
+		el.depth = parent.Handle().depth
+	} else {
+		el.depth = 1
+	}
+	if parent != nil {
+		// Only assign ownership if the parent is non-null. If parent is null
+		// (the root node), the owner should have already been assigned.
+		el.owner = parent.Handle().owner
+	}
+}
+
+// RenderObjectAttachingChild implements Element.
+func (el *ElementMixin) RenderObjectAttachingChild() Element {
+	var out Element
+	el.Self.VisitChildren(func(child Element) bool {
+		out = child
+		return false
+	})
+	return out
+}
+
+// Unmount implements Element.
+func (el *ElementMixin) Unmount() {
+	key := el.widget.Key()
+	if key, ok := key.(*GlobalKey); ok {
+		_ = key
+		// owner!._unregisterGlobalKey(key, this); // XXX
+	}
+	el.lifecycleState = ElementLifecycleDefunct
+}
+
+// Update implements Element.
+func (el *ElementMixin) Update(newWidget Widget) {
+	el.widget = newWidget
+}
+
+// UpdateChild implements Element.
+func (el *ElementMixin) UpdateChild(child Element, newWidget Widget, newSlot any) Element {
+	if newWidget == nil {
+		if child != nil {
+			deactivateChild(child)
+		}
+		return nil
+	}
+
+	var newChild Element
+	if child != nil {
+		if child.Handle().widget == newWidget {
+			if child.Handle().slot != newSlot {
+				updateSlotForChild(el.Self, child, newSlot)
+			}
+			newChild = child
+		} else if canUpdate(child.Handle().widget, newWidget) {
+			if child.Handle().slot != newSlot {
+				updateSlotForChild(el.Self, child, newSlot)
+			}
+			child.Update(newWidget)
+			newChild = child
+		} else {
+			deactivateChild(child)
+			newChild = InflateWidget(el.Self, newWidget, newSlot)
+		}
+	} else {
+		newChild = InflateWidget(el.Self, newWidget, newSlot)
+	}
+
+	return newChild
+}
+
+type ComponentElementMixin struct {
+	ElementMixin
+	child Element
+}
+
+func (el *ComponentElementMixin) GetChild() Element      { return el.child }
+func (el *ComponentElementMixin) SetChild(child Element) { el.child = child }
+
+type WidgetBuilder interface {
+	Build() Widget
+}
+
+// PerformRebuild implements Element.
+func (el *ComponentElementMixin) PerformRebuild() {
+	built := el.Self.(WidgetBuilder).Build()
+	// We delay marking the element as clean until after calling build() so
+	// that attempts to markNeedsBuild() during build() will be ignored.
+	el.ElementMixin.PerformRebuild()
+	el.child = el.Self.UpdateChild(el.child, built, el.slot)
+}
+
+// Mount implements Element.
+func (el *ComponentElementMixin) Mount(parent Element, newSlot any) {
+	el.ElementMixin.Mount(parent, newSlot)
+	rebuild(el.Self)
+}
+
+// RenderObjectAttachingChild implements Element.
+func (el *ComponentElementMixin) RenderObjectAttachingChild() Element {
+	return el.child
+}
+
+func (el *ComponentElementMixin) VisitChildren(yield func(el Element) bool) {
+	if el.child != nil {
+		yield(el.child)
+	}
+}
+
+func (el *ComponentElementMixin) ForgetChild(child Element) {
+	el.child = nil
+}
+
+type StatelessElementMixin struct {
+	ComponentElementMixin
+}
+
+// Update implements Element.
+func (el *StatelessElementMixin) Update(newWidget Widget) {
+	el.ComponentElementMixin.Update(newWidget)
+	forceRebuild(el.Self)
+}
+
+type RenderObjectElementMixin struct {
+	ElementMixin
+	RenderObjectElementHandle
+}
+
+func (el *RenderObjectElementMixin) RenderObject() render.Object {
+	return el.renderObject
+}
+
+func (el *RenderObjectElementMixin) AncestorRenderObjectElement() RenderObjectElement {
+	return el.ancestorRenderObjectElement
+}
+
+// InsertRenderObjectChild implements RenderObjectElement.
+func (*RenderObjectElementMixin) InsertRenderObjectChild(child render.Object, slot any) {
+	panic("unimplemented")
+}
+
+// MoveRenderObjectChild implements RenderObjectElement.
+func (*RenderObjectElementMixin) MoveRenderObjectChild(child render.Object, oldSlot any, newSlot any) {
+	panic("unimplemented")
+}
+
+// RemoveRenderObjectChild implements RenderObjectElement.
+func (*RenderObjectElementMixin) RemoveRenderObjectChild(child render.Object, slot any) {
+	panic("unimplemented")
+}
+
+// UpdateSlot implements Element.
+func (el *RenderObjectElementMixin) UpdateSlot(newSlot any) {
+	oldSlot := el.slot
+	el.ElementMixin.UpdateSlot(newSlot)
+	if ancestor := el.ancestorRenderObjectElement; ancestor != nil {
+		ancestor.MoveRenderObjectChild(el.renderObject, oldSlot, el.slot)
+	}
+}
+
+// PerformRebuild implements Element.
+func (el *RenderObjectElementMixin) PerformRebuild() {
+	el.widget.(RenderObjectWidget).UpdateRenderObject(el.Self, el.renderObject)
+	el.ElementMixin.PerformRebuild()
+}
+
+// AttachRenderObject implements Element.
+func (el *RenderObjectElementMixin) AttachRenderObject(slot any) {
+	el.slot = slot
+	el.ancestorRenderObjectElement = findAncestorRenderObjectElement(el.Self.(RenderObjectElement))
+	if el.ancestorRenderObjectElement != nil {
+		el.ancestorRenderObjectElement.InsertRenderObjectChild(el.renderObject, slot)
+	}
+}
+
+// DetachRenderObject implements Element.
+func (el *RenderObjectElementMixin) DetachRenderObject() {
+	if el.ancestorRenderObjectElement != nil {
+		el.ancestorRenderObjectElement.RemoveRenderObjectChild(el.renderObject, el.slot)
+		el.ancestorRenderObjectElement = nil
+	}
+	el.slot = nil
+}
+
+// Mount implements Element.
+func (el *RenderObjectElementMixin) Mount(parent Element, newSlot any) {
+	el.ElementMixin.Mount(parent, newSlot)
+
+	el.renderObject = el.widget.(RenderObjectWidget).CreateRenderObject(el.Self)
+	el.Self.(RenderObjectElement).AttachRenderObject(newSlot)
+	el.Self.(RenderObjectElement).PerformRebuild() // clears the "dirty" flag
+}
+
+// RenderObjectAttachingChild implements Element.
+func (*RenderObjectElementMixin) RenderObjectAttachingChild() Element {
+	return nil
+}
+
+// Unmount implements Element.
+func (el *RenderObjectElementMixin) Unmount() {
+	oldWidget := el.widget.(RenderObjectWidget)
+	el.ElementMixin.Unmount()
+	if n, ok := oldWidget.(RenderObjectUnmountNotifyee); ok {
+		n.DidUnmountRenderObject(el.renderObject)
+	}
+	render.Dispose(el.renderObject)
+	el.renderObject = nil
+}
+
+// Update implements Element.
+func (el *RenderObjectElementMixin) Update(newWidget Widget) {
+	el.ElementMixin.Update(newWidget)
+	el.Self.PerformRebuild()
+}
+
+type SingleChildRenderObjectElementMixin struct {
+	RenderObjectElementMixin
+	child Element
+}
+
+// Mount implements Element.
+func (el *SingleChildRenderObjectElementMixin) Mount(parent Element, newSlot any) {
+	el.RenderObjectElementMixin.Mount(parent, newSlot)
+	el.child = el.Self.UpdateChild(el.child, el.widget.(SingleChildWidget).GetChild(), nil)
+}
+
+// Update implements Element.
+func (el *SingleChildRenderObjectElementMixin) Update(newWidget Widget) {
+	el.RenderObjectElementMixin.Update(newWidget)
+	{
+		self := el.Self.(SingleChildElement)
+		self.SetChild(self.UpdateChild(self.GetChild(), el.widget.(SingleChildWidget).GetChild(), nil))
+	}
+}
+
+func (el *SingleChildRenderObjectElementMixin) GetChild() Element         { return el.child }
+func (el *SingleChildRenderObjectElementMixin) SetChild(child Element)    { el.child = child }
+func (el *SingleChildRenderObjectElementMixin) ForgetChild(child Element) { el.child = nil }
+
+func (s *SingleChildRenderObjectElementMixin) VisitChildren(yield func(el Element) bool) {
+	if s.child != nil {
+		yield(s.child)
+	}
+}
+
+func (el *SingleChildRenderObjectElementMixin) InsertRenderObjectChild(child render.Object, slot any) {
+	el.renderObject.(render.ObjectWithChild).SetChild(child)
+}
+
+func (el *SingleChildRenderObjectElementMixin) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
+	panic("unexpected call")
+}
+
+type RenderTreeRootElementMixin struct {
+	RenderObjectElementMixin
+}
+
+func (el *RenderTreeRootElementMixin) AttachRenderObject(newSlot any) { el.slot = newSlot }
+func (el *RenderTreeRootElementMixin) DetachRenderObject()            { el.slot = nil }
 
 // XXX rename this
 type BuildOwner struct {
@@ -229,107 +517,17 @@ type ElementHandle struct {
 
 func (el *ElementHandle) Handle() *ElementHandle { return el }
 
-func (h *ElementHandle) Slot() any       { return h.slot }
-func (h *ElementHandle) PerformRebuild() { h.dirty = false }
-func (h *ElementHandle) Parent() Element { return h.parent }
-
-func ElementMount(el Element, parent Element, newSlot any) {
-	h := el.Handle()
-	h.parent = parent
-	h.slot = newSlot
-	h.lifecycleState = ElementLifecycleActive
-	if parent != nil {
-		h.depth = parent.Handle().depth
-	} else {
-		h.depth = 1
-	}
-	if parent != nil {
-		// Only assign ownership if the parent is non-null. If parent is null
-		// (the root node), the owner should have already been assigned.
-		h.owner = parent.Handle().owner
-	}
-}
-
-func ElementUnmount(el Element) {
-	key := el.Handle().widget.Key()
-	if key, ok := key.(*GlobalKey); ok {
-		_ = key
-		// owner!._unregisterGlobalKey(key, this); // XXX
-	}
-	h := el.Handle()
-	h.lifecycleState = ElementLifecycleDefunct
-}
-
-func ElementAttachRenderObject(el Element, slot any) {
-	el.VisitChildren(func(child Element) bool {
-		child.AttachRenderObject(slot)
-		return true
-	})
-	el.Handle().slot = slot
-}
-
-func ElementPerformRebuild(el Element) {
-	el.Handle().PerformRebuild()
-}
-
-func RenderObjectElementPerformRebuild(el RenderObjectElement) {
-	el.RenderHandle().PerformRebuild()
-}
-
 type RenderObjectElementHandle struct {
-	ElementHandle
 	renderObject                render.Object
 	ancestorRenderObjectElement RenderObjectElement
-}
-
-func (el *RenderObjectElementHandle) PerformRebuild() {
-	el.widget.(RenderObjectWidget).UpdateRenderObject(el, el.RenderHandle().renderObject)
-	el.ElementHandle.PerformRebuild()
 }
 
 func (el *RenderObjectElementHandle) RenderHandle() *RenderObjectElementHandle {
 	return el
 }
 
-func (h *RenderObjectElementHandle) RenderObject() render.Object {
-	return h.renderObject
-}
-
-func (h *RenderObjectElementHandle) AncestorRenderObjectElement() RenderObjectElement {
-	return h.ancestorRenderObjectElement
-}
-
-func RenderObjectElementMount(el RenderObjectElement, parent Element, slot any) {
-	ElementMount(el, parent, slot)
-
-	el.RenderHandle().renderObject = el.Handle().widget.(RenderObjectWidget).CreateRenderObject(el)
-	el.AttachRenderObject(slot)
-	el.PerformRebuild() // clears the "dirty" flag
-}
-
 type RenderObjectUnmountNotifyee interface {
 	DidUnmountRenderObject(obj render.Object)
-}
-
-func RenderObjectElementUnmount(el RenderObjectElement) {
-	oldWidget := el.Handle().widget.(RenderObjectWidget)
-	ElementUnmount(el)
-	h := el.RenderHandle()
-	if n, ok := oldWidget.(RenderObjectUnmountNotifyee); ok {
-		n.DidUnmountRenderObject(h.RenderObject())
-	}
-	render.Dispose(h.renderObject)
-	h.renderObject = nil
-}
-
-func RenderObjectElementAttachRenderObject(el Element, slot any) {
-	he := el.Handle()
-	he.slot = slot
-	hr := el.(RenderObjectElement).RenderHandle()
-	hr.ancestorRenderObjectElement = findAncestorRenderObjectElement(el.(RenderObjectElement))
-	if hr.ancestorRenderObjectElement != nil {
-		hr.ancestorRenderObjectElement.InsertRenderObjectChild(hr.renderObject, slot)
-	}
 }
 
 func findAncestorRenderObjectElement(el RenderObjectElement) RenderObjectElement {
@@ -430,23 +628,6 @@ func (els *inactiveElements) remove(el Element) {
 	delete(els.elements, el)
 }
 
-func ElementDetachRenderObject(el Element) {
-	el.VisitChildren(func(el Element) bool {
-		el.DetachRenderObject()
-		return true
-	})
-	el.Handle().slot = nil
-}
-
-func RenderObjectElementDetachRenderObject(el RenderObjectElement) {
-	h := el.RenderHandle()
-	if h.ancestorRenderObjectElement != nil {
-		h.ancestorRenderObjectElement.RemoveRenderObjectChild(h.renderObject, h.slot)
-		h.ancestorRenderObjectElement = nil
-	}
-	el.Handle().slot = nil
-}
-
 // Key -> GlobalKey -> GlobalObjectKey
 
 // Use values, not pointers.
@@ -530,58 +711,6 @@ func activateRecursively(element Element) {
 	})
 }
 
-func ElementActivate(el Element) {
-	// hadDependencies := (el._dependencies != null && el._dependencies.isNotEmpty) || el._hadUnsatisfiedDependencies // XXX implement once we have InheritedWidget
-	el.Handle().lifecycleState = ElementLifecycleActive
-	// We unregistered our dependencies in deactivate, but never cleared the list.
-	// Since we're going to be reused, let's clear our list now.
-	// XXX
-	// if el._dependencies != nil {
-	// 	el._dependencies.clear()
-	// }
-	// el._hadUnsatisfiedDependencies = false
-	// el._updateInheritance()
-	// el.attachNotificationTree()
-	if el.Handle().dirty {
-		el.Handle().owner.scheduleBuildFor(el)
-	}
-	// if hadDependencies {
-	// 	el.didChangeDependencies()
-	// }
-}
-
-func ElementUpdateChild(el, child Element, newWidget Widget, newSlot any) Element {
-	if newWidget == nil {
-		if child != nil {
-			deactivateChild(child)
-		}
-		return nil
-	}
-
-	var newChild Element
-	if child != nil {
-		if child.Handle().widget == newWidget {
-			if child.Handle().slot != newSlot {
-				updateSlotForChild(el, child, newSlot)
-			}
-			newChild = child
-		} else if canUpdate(child.Handle().widget, newWidget) {
-			if child.Handle().slot != newSlot {
-				updateSlotForChild(el, child, newSlot)
-			}
-			child.Update(newWidget)
-			newChild = child
-		} else {
-			deactivateChild(child)
-			newChild = InflateWidget(el, newWidget, newSlot)
-		}
-	} else {
-		newChild = InflateWidget(el, newWidget, newSlot)
-	}
-
-	return newChild
-}
-
 func updateSlotForChild(el, child Element, newSlot any) {
 	var visit func(element Element)
 	visit = func(element Element) {
@@ -592,74 +721,6 @@ func updateSlotForChild(el, child Element, newSlot any) {
 		}
 	}
 	visit(child)
-}
-
-func ElementRenderObjectAttachingChild(el Element) Element {
-	var out Element
-	el.VisitChildren(func(child Element) bool {
-		out = child
-		return false
-	})
-	return out
-}
-
-func RenderObjectElementRenderObjectAttachingChild(el Element) Element {
-	return nil
-}
-
-func ElementUpdate(el Element, newWidget Widget) {
-	el.Handle().widget = newWidget
-}
-
-func StatelessElementUpdate(el Element, newWidget StatelessWidget) {
-	ElementUpdate(el, newWidget)
-	forceRebuild(el)
-}
-
-func RenderObjectElementUpdate(el Element, newWidget RenderObjectWidget) {
-	ElementUpdate(el, newWidget)
-	el.PerformRebuild()
-}
-
-func SingleChildRenderObjectElementUpdate(el SingleChildElement, newWidget RenderObjectWidget) {
-	RenderObjectElementUpdate(el, newWidget)
-
-	el.SetChild(el.UpdateChild(el.GetChild(), el.Handle().widget.(SingleChildWidget).GetChild(), nil))
-}
-
-type SingleChildWidget interface {
-	Widget
-	GetChild() Widget
-}
-
-type SingleChildElement interface {
-	Element
-	GetChild() Element
-	SetChild(child Element)
-}
-
-func ElementUpdateSlot(el Element, newSlot any) {
-	el.Handle().UpdateSlot(newSlot)
-}
-
-func RenderObjectElementUpdateSlot(el RenderObjectElement, newSlot any) {
-	oldSlot := el.Handle().slot
-	ElementUpdateSlot(el, newSlot)
-	if ancestor := el.AncestorRenderObjectElement(); ancestor != nil {
-		ancestor.MoveRenderObjectChild(el.RenderHandle().renderObject, oldSlot, el.Handle().slot)
-	}
-}
-
-func (h *ElementHandle) UpdateSlot(newSlot any) {
-	h.slot = newSlot
-}
-
-func (h *RenderObjectElementHandle) UpdateSlot(newSlot any) {
-	oldSlot := h.slot
-	h.slot = newSlot
-	if ancestor := h.ancestorRenderObjectElement; ancestor != nil {
-		ancestor.MoveRenderObjectChild(h.renderObject, oldSlot, h.slot)
-	}
 }
 
 func rebuild(el Element) {
@@ -674,36 +735,4 @@ func forceRebuild(el Element) {
 		return
 	}
 	el.PerformRebuild()
-}
-
-func ElementDeactivate(el Element) {
-	// XXX
-	// if (_dependencies != null && _dependencies!.isNotEmpty) {
-	//   for (final InheritedElement dependency in _dependencies!) {
-	//     dependency.removeDependent(this);
-	//   }
-	//   // For expediency, we don't actually clear the list here, even though it's
-	//   // no longer representative of what we are registered with. If we never
-	//   // get re-used, it doesn't matter. If we do, then we'll clear the list in
-	//   // activate(). The benefit of this is that it allows Element's activate()
-	//   // implementation to decide whether to rebuild based on whether we had
-	//   // dependencies here.
-	// }
-	// _inheritedElements = null;
-	el.Handle().Deactivate()
-}
-
-func (h *ElementHandle) Deactivate() {
-	h.lifecycleState = ElementLifecycleInactive
-}
-
-func MarkNeedsBuild(el Element) {
-	if el.Handle().lifecycleState != ElementLifecycleActive {
-		return
-	}
-	if el.Handle().dirty {
-		return
-	}
-	el.Handle().dirty = true
-	el.Handle().owner.scheduleBuildFor(el)
 }

@@ -4,6 +4,7 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
+var _ SingleChildWidget = (*View)(nil)
 var _ RenderObjectWidget = (*View)(nil)
 var _ RenderObjectElement = (*viewElement)(nil)
 
@@ -19,6 +20,11 @@ type View struct {
 	Child         Widget
 }
 
+// GetChild implements SingleChildWidget.
+func (w *View) GetChild() Widget {
+	return w.Child
+}
+
 func (w *View) Attach(owner *BuildOwner, element *viewElement) *viewElement {
 	if element == nil {
 		element = w.CreateElement().(*viewElement)
@@ -27,7 +33,7 @@ func (w *View) Attach(owner *BuildOwner, element *viewElement) *viewElement {
 			element.Mount(nil, nil)
 		})
 	} else {
-		MarkNeedsBuild(element)
+		element.MarkNeedsBuild()
 	}
 	return element
 }
@@ -56,14 +62,15 @@ func (v *View) Key() any {
 func (*View) UpdateRenderObject(ctx BuildContext, obj render.Object) {}
 
 type viewElement struct {
-	SingleChildRenderObjectElement
-	Root render.Object
+	RenderTreeRootElementMixin
+	child Element
 
 	pipelineOwner *render.PipelineOwner
 }
 
 func newViewElement(view *View, po *render.PipelineOwner) *viewElement {
 	var el viewElement
+	el.Self = &el
 	el.widget = view
 	el.pipelineOwner = po
 	return &el
@@ -74,37 +81,31 @@ func (el *viewElement) SetConfiguration(cs render.ViewConfiguration) {
 }
 
 func (el *viewElement) ForgetChild(child Element) {
-	el.ChildElement = nil
-}
-
-func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
-	panic("unexpected call")
+	el.child = nil
 }
 
 func (el *viewElement) updateChild() {
 	child := el.widget.(*View).Child
-	el.ChildElement = el.UpdateChild(el.ChildElement, child, nil)
+	el.child = el.Self.UpdateChild(el.child, child, nil)
 }
 
 func (el *viewElement) PerformRebuild() {
-	RenderObjectElementPerformRebuild(el)
+	el.RenderTreeRootElementMixin.PerformRebuild()
 	el.updateChild()
 }
 
 func (el *viewElement) Activate() {
-	ElementActivate(el)
-	el.Root = el.renderObject
+	el.RenderTreeRootElementMixin.Activate()
 	el.pipelineOwner.SetRootNode(el.renderObject)
 }
 
 func (el *viewElement) Deactivate() {
-	el.Root = nil
 	el.pipelineOwner.SetRootNode(nil)
-	ElementDeactivate(el)
+	el.RenderTreeRootElementMixin.Deactivate()
 }
 
 func (el *viewElement) Update(newWidget Widget) {
-	SingleChildRenderObjectElementUpdate(el, newWidget.(RenderObjectWidget))
+	el.RenderTreeRootElementMixin.Update(newWidget)
 	el.updateChild()
 }
 
@@ -112,13 +113,16 @@ func (el *viewElement) InsertRenderObjectChild(child render.Object, slot any) {
 	el.renderObject.(render.ObjectWithChild).SetChild(child)
 }
 
+func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
+	panic("unexpected call")
+}
+
 func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot any) {
 	el.renderObject.(render.ObjectWithChild).SetChild(nil)
 }
 
 func (el *viewElement) Mount(parent Element, newSlot any) {
-	RenderObjectElementMount(el, parent, newSlot)
-	el.Root = el.renderObject
+	el.RenderTreeRootElementMixin.Mount(parent, newSlot)
 	el.pipelineOwner.SetRootNode(el.renderObject)
 	el.updateChild()
 	el.renderObject.(*render.View).PrepareInitialFrame()
@@ -126,17 +130,15 @@ func (el *viewElement) Mount(parent Element, newSlot any) {
 
 func (el *viewElement) Unmount() {
 	el.pipelineOwner.Dispose()
-	RenderObjectElementUnmount(el)
-}
-
-func (el *viewElement) AttachRenderObject(newSlot any) {
-	el.slot = newSlot
-}
-
-func (el *viewElement) DetachRenderObject() {
-	el.slot = nil
+	el.RenderObjectElementMixin.Unmount()
 }
 
 func (el *viewElement) AssignOwner(owner *BuildOwner) {
 	el.owner = owner
+}
+
+func (el *viewElement) VisitChildren(yield func(Element) bool) {
+	if el.child != nil {
+		yield(el)
+	}
 }

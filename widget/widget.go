@@ -32,17 +32,14 @@ func (p *Padding) GetChild() Widget {
 }
 
 func (p *Padding) CreateRenderObject(ctx BuildContext) render.Object {
-	println(1)
 	return render.NewPadding(p.Padding)
 }
 
 func (p *Padding) UpdateRenderObject(ctx BuildContext, obj render.Object) {
-	println(2)
 	obj.(*render.Padding).SetInset(p.Padding)
 }
 
 func (p *Padding) CreateElement() Element {
-	println(3)
 	return NewSingleChildRenderObjectElement(p)
 }
 
@@ -113,87 +110,11 @@ func (r *renderColoredBox) setColor(c color.NRGBA) {
 	}
 }
 
-func NewSingleChildRenderObjectElement(w RenderObjectWidget) *SingleChildRenderObjectElement {
-	el := &SingleChildRenderObjectElement{
-		RenderObjectElementHandle: RenderObjectElementHandle{
-			ElementHandle: ElementHandle{
-				widget: w,
-			},
-		},
-	}
+func NewSingleChildRenderObjectElement(w RenderObjectWidget) *SingleChildRenderObjectElementMixin {
+	el := &SingleChildRenderObjectElementMixin{}
+	el.Self = el
+	el.widget = w
 	return el
-}
-
-type SingleChildRenderObjectElement struct {
-	RenderObjectElementHandle
-	ChildElement Element
-}
-
-func (el *SingleChildRenderObjectElement) GetChild() Element {
-	return el.ChildElement
-}
-
-func (el *SingleChildRenderObjectElement) SetChild(child Element) {
-	println("A")
-	el.ChildElement = child
-}
-
-func (el *SingleChildRenderObjectElement) Update(newWidget Widget) {
-	SingleChildRenderObjectElementUpdate(el, newWidget.(RenderObjectWidget))
-	el.ChildElement = el.UpdateChild(el.ChildElement, el.widget.(SingleChildWidget).GetChild(), nil)
-}
-
-func (el *SingleChildRenderObjectElement) ForgetChild(child Element) {
-	el.ChildElement = nil
-}
-
-func (el *SingleChildRenderObjectElement) Activate() {
-	ElementActivate(el)
-}
-
-func (el *SingleChildRenderObjectElement) RenderObjectAttachingChild() Element {
-	return RenderObjectElementRenderObjectAttachingChild(el)
-}
-
-func (el *SingleChildRenderObjectElement) UpdateChild(child Element, newWidget Widget, newSlot any) Element {
-	return ElementUpdateChild(el, child, newWidget, newSlot)
-}
-
-func (el *SingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
-	panic("unexpected call")
-}
-
-func (el *SingleChildRenderObjectElement) DetachRenderObject() {
-	RenderObjectElementDetachRenderObject(el)
-}
-
-func (el *SingleChildRenderObjectElement) AttachRenderObject(slot any) {
-	RenderObjectElementAttachRenderObject(el, slot)
-}
-
-func (el *SingleChildRenderObjectElement) Mount(parent Element, slot any) {
-	RenderObjectElementMount(el, parent, slot)
-	el.ChildElement = el.UpdateChild(el.ChildElement, el.widget.(SingleChildWidget).GetChild(), nil)
-}
-
-func (el *SingleChildRenderObjectElement) Unmount() {
-	RenderObjectElementUnmount(el)
-}
-
-func (el *SingleChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot any) {
-	renderObject := el.renderObject.(render.ObjectWithChild)
-	renderObject.SetChild(child)
-}
-
-func (el *SingleChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot any) {
-	el.renderObject.(render.ObjectWithChild).SetChild(nil)
-}
-
-func (s *SingleChildRenderObjectElement) VisitChildren(yield func(el Element) bool) {
-	println("B")
-	if s.ChildElement != nil {
-		yield(s.ChildElement)
-	}
 }
 
 var _ RenderObjectWidget = (*SizedBox)(nil)
