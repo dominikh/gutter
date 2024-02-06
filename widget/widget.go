@@ -110,9 +110,8 @@ func (r *renderColoredBox) setColor(c color.NRGBA) {
 	}
 }
 
-func NewSingleChildRenderObjectElement(w RenderObjectWidget) *SingleChildRenderObjectElementMixin {
-	el := &SingleChildRenderObjectElementMixin{}
-	el.Self = el
+func NewSingleChildRenderObjectElement(w RenderObjectWidget) *SimpleSingleChildRenderObjectElement {
+	el := &SimpleSingleChildRenderObjectElement{}
 	el.widget = w
 	return el
 }

@@ -6,7 +6,8 @@ import (
 
 var _ SingleChildWidget = (*View)(nil)
 var _ RenderObjectWidget = (*View)(nil)
-var _ RenderObjectElement = (*viewElement)(nil)
+var _ RenderTreeRootElement = (*viewElement)(nil)
+var _ SingleChildElement = (*viewElement)(nil)
 
 func NewView(root Widget, po *render.PipelineOwner) *View {
 	return &View{
@@ -30,10 +31,10 @@ func (w *View) Attach(owner *BuildOwner, element *viewElement) *viewElement {
 		element = w.CreateElement().(*viewElement)
 		element.AssignOwner(owner)
 		owner.BuildScope(element, func() {
-			element.Mount(nil, nil)
+			Mount(element, nil, nil)
 		})
 	} else {
-		element.MarkNeedsBuild()
+		MarkNeedsBuild(element)
 	}
 	return element
 }
@@ -62,15 +63,29 @@ func (v *View) Key() any {
 func (*View) UpdateRenderObject(ctx BuildContext, obj render.Object) {}
 
 type viewElement struct {
-	RenderTreeRootElementMixin
+	RenderObjectElementHandle
 	child Element
 
 	pipelineOwner *render.PipelineOwner
 }
 
+// GetChild implements SingleChildElement.
+func (el *viewElement) GetChild() Element {
+	return el.child
+}
+
+// SetChild implements SingleChildElement.
+func (el *viewElement) SetChild(child Element) {
+	el.child = child
+}
+
+// AttachRenderObject implements RenderTreeRootElement.
+func (el *viewElement) AttachRenderObject(slot any) {
+	RenderTreeRootElementAttachRenderObject(el, slot)
+}
+
 func newViewElement(view *View, po *render.PipelineOwner) *viewElement {
 	var el viewElement
-	el.Self = &el
 	el.widget = view
 	el.pipelineOwner = po
 	return &el
@@ -86,26 +101,24 @@ func (el *viewElement) ForgetChild(child Element) {
 
 func (el *viewElement) updateChild() {
 	child := el.widget.(*View).Child
-	el.child = el.Self.UpdateChild(el.child, child, nil)
+	el.child = UpdateChild(el, el.child, child, nil)
 }
 
 func (el *viewElement) PerformRebuild() {
-	el.RenderTreeRootElementMixin.PerformRebuild()
+	RenderTreeRootElementPerformRebuild(el)
 	el.updateChild()
 }
 
-func (el *viewElement) Activate() {
-	el.RenderTreeRootElementMixin.Activate()
+func (el *viewElement) AfterActivate() {
 	el.pipelineOwner.SetRootNode(el.renderObject)
 }
 
-func (el *viewElement) Deactivate() {
+func (el *viewElement) BeforeDeactivate() {
 	el.pipelineOwner.SetRootNode(nil)
-	el.RenderTreeRootElementMixin.Deactivate()
 }
 
-func (el *viewElement) Update(newWidget Widget) {
-	el.RenderTreeRootElementMixin.Update(newWidget)
+func (el *viewElement) AfterUpdate(newWidget Widget) {
+	RenderTreeRootElementAfterUpdate(el, newWidget)
 	el.updateChild()
 }
 
@@ -121,16 +134,16 @@ func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot any) {
 	el.renderObject.(render.ObjectWithChild).SetChild(nil)
 }
 
-func (el *viewElement) Mount(parent Element, newSlot any) {
-	el.RenderTreeRootElementMixin.Mount(parent, newSlot)
+func (el *viewElement) AfterMount(parent Element, newSlot any) {
+	RenderTreeRootElementAfterMount(el, parent, newSlot)
 	el.pipelineOwner.SetRootNode(el.renderObject)
 	el.updateChild()
 	el.renderObject.(*render.View).PrepareInitialFrame()
 }
 
-func (el *viewElement) Unmount() {
+func (el *viewElement) AfterUnmount() {
 	el.pipelineOwner.Dispose()
-	el.RenderObjectElementMixin.Unmount()
+	RenderObjectElementAfterUnmount(el)
 }
 
 func (el *viewElement) AssignOwner(owner *BuildOwner) {
