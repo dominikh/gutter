@@ -77,24 +77,24 @@ type SimpleInteriorElement struct {
 func (el *SimpleInteriorElement) Transition(t ElementTransition) {
 	switch t.Kind {
 	case ElementMounted:
-		if s := el.GetState(); s != nil {
+		if s := el.State; s != nil {
 			s.Transition(StateTransition{Kind: StateInitializing})
 			s.Transition(StateTransition{Kind: StateChangedDependencies})
 		}
 		rebuild(el)
 	case ElementActivated:
-		if s := el.GetState(); s != nil {
+		if s := el.State; s != nil {
 			s.Transition(StateTransition{Kind: StateActivating})
 		}
 		MarkNeedsBuild(el)
 	case ElementUnmounted:
-		if s := el.GetState(); s != nil {
-			h := el.GetStateHandle()
+		if s := el.State; s != nil {
+			h := s.GetStateHandle()
 			s.Transition(StateTransition{Kind: StateDisposing})
 			h.Element = nil
 		}
 	case ElementUpdated:
-		if s := el.GetState(); s != nil {
+		if s := el.State; s != nil {
 			h := el.GetStateHandle()
 			oldWidget := h.Widget
 			h.Widget = el.Handle().widget
@@ -102,11 +102,11 @@ func (el *SimpleInteriorElement) Transition(t ElementTransition) {
 		}
 		forceRebuild(el)
 	case ElementDeactivating:
-		if s := el.GetState(); s != nil {
+		if s := el.State; s != nil {
 			s.Transition(StateTransition{Kind: StateDeactivating})
 		}
 	case ElementChangedDependencies:
-		if s := el.GetState(); s != nil {
+		if s := el.State; s != nil {
 			el.GetStateHandle().didChangeDependencies = true
 		}
 	}
@@ -125,7 +125,7 @@ func (el *SimpleInteriorElement) GetState() State {
 }
 
 func (el *SimpleInteriorElement) Build() Widget {
-	if s := el.GetState(); s != nil {
+	if s := el.State; s != nil {
 		return s.Build()
 	} else {
 		return el.widget.(WidgetBuilder).Build()
@@ -133,7 +133,7 @@ func (el *SimpleInteriorElement) Build() Widget {
 }
 
 func (el *SimpleInteriorElement) PerformRebuild() {
-	if s := el.GetState(); s != nil {
+	if s := el.State; s != nil {
 		h := el.GetStateHandle()
 		if h.didChangeDependencies {
 			s.Transition(StateTransition{Kind: StateChangedDependencies})
