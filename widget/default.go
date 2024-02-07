@@ -68,16 +68,6 @@ func ComponentElementPerformRebuild(el Element) {
 	el.Handle().dirty = false
 }
 
-func StatelessElementAfterUpdate(el Element, newWidget Widget) {
-	forceRebuild(el)
-}
-func StatelessElementAfterMount(el Element, parent Element, newSlot any) {
-	ComponentElementAfterMount(el, parent, newSlot)
-}
-func StatelessElementPerformRebuild(el Element) {
-	ComponentElementPerformRebuild(el)
-}
-
 func RenderObjectElementAfterUpdate(el Element, newWidget Widget) {
 	rebuild(el)
 }
