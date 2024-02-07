@@ -33,19 +33,19 @@ func main() {
 	app.Main()
 }
 
-var _ widget.StatefulWidget = (*Bird)(nil)
+var _ widget.Widget = (*Bird)(nil)
 
 type Bird struct {
 	color color.NRGBA
 }
 
 // CreateElement implements widget.StatefulWidget.
-func (w *Bird) CreateElement() widget.Element { return widget.NewStatefulElement(w) }
+func (w *Bird) CreateElement() widget.Element { return widget.NewInteriorElement(w) }
 
-// CreateState implements widget.StatefulWidget.
-func (w *Bird) CreateState() widget.State {
-	return &BirdState{}
-}
+// // CreateState implements widget.StatefulWidget.
+// func (w *Bird) CreateState() widget.State {
+// 	return &BirdState{}
+// }
 
 type BirdState struct {
 	widget.StateHandle
@@ -55,10 +55,10 @@ type BirdState struct {
 func (*BirdState) Transition(t widget.StateTransition) {}
 
 // Build implements widget.State.
-func (s *BirdState) Build() widget.Widget {
+func (s *Bird) Build() widget.Widget {
 	return &widget.ColoredBox{
 		// XXX it'd be nice to make this more type-safe
-		Color: s.Widget.(*Bird).color,
+		Color: s.color,
 	}
 }
 

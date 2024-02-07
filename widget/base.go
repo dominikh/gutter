@@ -52,79 +52,93 @@ type StateTransition struct {
 // TODO support "Notification"
 // TODO support global keys
 
-func NewStatefulElement(w StatefulWidget) StatefulElement {
-	se := &SimpleStatefulElement{}
+func NewInteriorElement(w Widget) InteriorElement {
+	se := &SimpleInteriorElement{}
 	se.ElementHandle.widget = w
-	se.State = w.CreateState()
-	sh := se.State.GetStateHandle()
-	sh.Widget = w
-	sh.Element = se
+	if w, ok := w.(StatefulWidget); ok {
+		se.State = w.CreateState()
+		sh := se.State.GetStateHandle()
+		sh.Widget = w
+		sh.Element = se
+	}
 	return se
 }
 
-var _ StatefulElement = (*SimpleStatefulElement)(nil)
-var _ WidgetBuilder = (*SimpleStatefulElement)(nil)
+var _ InteriorElement = (*SimpleInteriorElement)(nil)
+var _ WidgetBuilder = (*SimpleInteriorElement)(nil)
 
-type SimpleStatefulElement struct {
+type SimpleInteriorElement struct {
 	ElementHandle
 	State
 
 	child Element
 }
 
-func (el *SimpleStatefulElement) Transition(t ElementTransition) {
+func (el *SimpleInteriorElement) Transition(t ElementTransition) {
 	switch t.Kind {
 	case ElementMounted:
-		s := el.GetState()
-		s.Transition(StateTransition{Kind: StateInitializing})
-		s.Transition(StateTransition{Kind: StateChangedDependencies})
+		if s := el.GetState(); s != nil {
+			s.Transition(StateTransition{Kind: StateInitializing})
+			s.Transition(StateTransition{Kind: StateChangedDependencies})
+		}
 		rebuild(el)
 	case ElementActivated:
-		el.GetState().Transition(StateTransition{Kind: StateActivating})
+		if s := el.GetState(); s != nil {
+			s.Transition(StateTransition{Kind: StateActivating})
+		}
 		MarkNeedsBuild(el)
 	case ElementUnmounted:
-		h := el.GetStateHandle()
-		el.GetState().Transition(StateTransition{Kind: StateDisposing})
-		h.Element = nil
+		if s := el.GetState(); s != nil {
+			h := el.GetStateHandle()
+			s.Transition(StateTransition{Kind: StateDisposing})
+			h.Element = nil
+		}
 	case ElementUpdated:
-		h := el.GetStateHandle()
-		oldWidget := h.Widget
-		h.Widget = el.Handle().widget.(StatefulWidget)
-		el.GetState().Transition(StateTransition{Kind: StateUpdatedWidget, OldWidget: oldWidget})
+		if s := el.GetState(); s != nil {
+			h := el.GetStateHandle()
+			oldWidget := h.Widget
+			h.Widget = el.Handle().widget
+			s.Transition(StateTransition{Kind: StateUpdatedWidget, OldWidget: oldWidget.(StatefulWidget)})
+		}
 		forceRebuild(el)
 	case ElementDeactivating:
-		el.GetState().Transition(StateTransition{Kind: StateDeactivating})
+		if s := el.GetState(); s != nil {
+			s.Transition(StateTransition{Kind: StateDeactivating})
+		}
 	case ElementChangedDependencies:
-		el.GetStateHandle().didChangeDependencies = true
+		if s := el.GetState(); s != nil {
+			el.GetStateHandle().didChangeDependencies = true
+		}
 	}
 }
 
-// GetChild implements StatefulElement.
-func (el *SimpleStatefulElement) GetChild() Element {
+func (el *SimpleInteriorElement) GetChild() Element {
 	return el.child
 }
 
-// SetChild implements StatefulElement.
-func (el *SimpleStatefulElement) SetChild(child Element) {
+func (el *SimpleInteriorElement) SetChild(child Element) {
 	el.child = child
 }
 
-func (el *SimpleStatefulElement) GetState() State {
+func (el *SimpleInteriorElement) GetState() State {
 	return el.State
 }
 
-// Build implements StatefulElement.
-func (el *SimpleStatefulElement) Build() Widget {
-	return el.GetState().Build()
+func (el *SimpleInteriorElement) Build() Widget {
+	if s := el.GetState(); s != nil {
+		return s.Build()
+	} else {
+		return el.widget.(WidgetBuilder).Build()
+	}
 }
 
-// PerformRebuild implements StatefulElement.
-func (el *SimpleStatefulElement) PerformRebuild() {
-	h := el.GetStateHandle()
-	s := el.GetState()
-	if h.didChangeDependencies {
-		s.Transition(StateTransition{Kind: StateChangedDependencies})
-		h.didChangeDependencies = false
+func (el *SimpleInteriorElement) PerformRebuild() {
+	if s := el.GetState(); s != nil {
+		h := el.GetStateHandle()
+		if h.didChangeDependencies {
+			s.Transition(StateTransition{Kind: StateChangedDependencies})
+			h.didChangeDependencies = false
+		}
 	}
 	built := el.Build()
 	el.SetChild(UpdateChild(el, el.GetChild(), built, el.Handle().slot))
@@ -174,6 +188,15 @@ type RenderObjectWidget interface {
 type Element interface {
 	Handle() *ElementHandle
 	Transition(t ElementTransition)
+	PerformRebuild()
+}
+
+type InteriorElement interface {
+	Element
+
+	SingleChildElement
+	WidgetBuilder
+	GetState() State
 }
 
 func DidChangeDependencies(el Element) {
@@ -529,7 +552,7 @@ const (
 )
 
 type StateHandle struct {
-	Widget                StatefulWidget
+	Widget                Widget
 	Element               Element
 	didChangeDependencies bool
 }
