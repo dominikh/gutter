@@ -69,6 +69,26 @@ type viewElement struct {
 	pipelineOwner *render.PipelineOwner
 }
 
+func (el *viewElement) Transition(t ElementTransition) {
+	switch t.Kind {
+	case ElementActivated:
+		el.pipelineOwner.SetRootNode(el.renderObject)
+	case ElementDeactivating:
+		el.pipelineOwner.SetRootNode(nil)
+	case ElementUpdated:
+		RenderTreeRootElementAfterUpdate(el, t.NewWidget)
+		el.updateChild()
+	case ElementMounted:
+		RenderTreeRootElementAfterMount(el, t.Parent, t.NewSlot)
+		el.pipelineOwner.SetRootNode(el.renderObject)
+		el.updateChild()
+		el.renderObject.(*render.View).PrepareInitialFrame()
+	case ElementUnmounted:
+		el.pipelineOwner.Dispose()
+		RenderObjectElementAfterUnmount(el)
+	}
+}
+
 // GetChild implements SingleChildElement.
 func (el *viewElement) GetChild() Element {
 	return el.child
@@ -109,19 +129,6 @@ func (el *viewElement) PerformRebuild() {
 	el.updateChild()
 }
 
-func (el *viewElement) AfterActivate() {
-	el.pipelineOwner.SetRootNode(el.renderObject)
-}
-
-func (el *viewElement) BeforeDeactivate() {
-	el.pipelineOwner.SetRootNode(nil)
-}
-
-func (el *viewElement) AfterUpdate(newWidget Widget) {
-	RenderTreeRootElementAfterUpdate(el, newWidget)
-	el.updateChild()
-}
-
 func (el *viewElement) InsertRenderObjectChild(child render.Object, slot any) {
 	el.renderObject.(render.ObjectWithChild).SetChild(child)
 }
@@ -132,18 +139,6 @@ func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSl
 
 func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot any) {
 	el.renderObject.(render.ObjectWithChild).SetChild(nil)
-}
-
-func (el *viewElement) AfterMount(parent Element, newSlot any) {
-	RenderTreeRootElementAfterMount(el, parent, newSlot)
-	el.pipelineOwner.SetRootNode(el.renderObject)
-	el.updateChild()
-	el.renderObject.(*render.View).PrepareInitialFrame()
-}
-
-func (el *viewElement) AfterUnmount() {
-	el.pipelineOwner.Dispose()
-	RenderObjectElementAfterUnmount(el)
 }
 
 func (el *viewElement) AssignOwner(owner *BuildOwner) {

@@ -51,6 +51,9 @@ type BirdState struct {
 	widget.StateHandle
 }
 
+// Transition implements widget.State.
+func (*BirdState) Transition(t widget.StateTransition) {}
+
 // Build implements widget.State.
 func (s *BirdState) Build() widget.Widget {
 	return &widget.ColoredBox{

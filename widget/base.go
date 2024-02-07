@@ -7,6 +7,46 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
+type ElementTransitionKind uint8
+
+const (
+	ElementMounted ElementTransitionKind = iota
+	ElementChangedDependencies
+	ElementUpdated
+	ElementDeactivating
+	ElementActivated
+	ElementUnmounted
+)
+
+type StateTransitionKind uint8
+
+const (
+	StateInitializing StateTransitionKind = iota
+	StateUpdatedWidget
+	StateChangedDependencies
+	StateDeactivating
+	StateActivating
+	StateDisposing
+)
+
+type ElementTransition struct {
+	Kind ElementTransitionKind
+
+	// The new widget for Kind == ElementUpdated
+	NewWidget Widget
+
+	// The parent and slot for Kind == ElementMounted
+	Parent  Element
+	NewSlot any
+}
+
+type StateTransition struct {
+	Kind StateTransitionKind
+
+	// The old widget for Kind == StateUpdatedWidget
+	OldWidget StatefulWidget
+}
+
 // TODO MediaQuery
 // TODO support inheritance (cf inheritedElements in framework.dart)
 // TODO support "Notification"
@@ -32,6 +72,23 @@ type SimpleStatefulElement struct {
 	child Element
 }
 
+func (el *SimpleStatefulElement) Transition(t ElementTransition) {
+	switch t.Kind {
+	case ElementMounted:
+		StatefulElementAfterMount(el, t.Parent, t.NewSlot)
+	case ElementActivated:
+		StatefulElementAfterActivate(el)
+	case ElementUnmounted:
+		StatefulElementAfterUnmount(el)
+	case ElementUpdated:
+		StatefulElementAfterUpdate(el, t.NewWidget)
+	case ElementDeactivating:
+		StatefulElementBeforeDeactivate(el)
+	case ElementChangedDependencies:
+		StatefulElementAfterDidChangeDependencies(el)
+	}
+}
+
 // GetChild implements StatefulElement.
 func (el *SimpleStatefulElement) GetChild() Element {
 	return el.child
@@ -46,39 +103,9 @@ func (el *SimpleStatefulElement) GetState() State {
 	return el.State
 }
 
-// AfterMount implements StatefulElement.
-func (el *SimpleStatefulElement) AfterMount(parent Element, newSlot any) {
-	StatefulElementAfterMount(el, parent, newSlot)
-}
-
-// AfterActivate implements StatefulElement.
-func (el *SimpleStatefulElement) AfterActivate() {
-	StatefulElementAfterActivate(el)
-}
-
-// AfterUnmount implements StatefulElement.
-func (el *SimpleStatefulElement) AfterUnmount() {
-	StatefulElementAfterUnmount(el)
-}
-
-// AfterUpdate implements StatefulElement.
-func (el *SimpleStatefulElement) AfterUpdate(newWidget Widget) {
-	StatefulElementAfterUpdate(el, newWidget)
-}
-
-// BeforeDeactivate implements StatefulElement.
-func (el *SimpleStatefulElement) BeforeDeactivate() {
-	StatefulElementBeforeDeactivate(el)
-}
-
 // Build implements StatefulElement.
 func (el *SimpleStatefulElement) Build() Widget {
 	return StatefulElementBuild(el)
-}
-
-// DidChangeDependencies implements StatefulElement.
-func (el *SimpleStatefulElement) DidChangeDependencies() {
-	StatefulElementAfterDidChangeDependencies(el)
 }
 
 // PerformRebuild implements StatefulElement.
@@ -112,30 +139,7 @@ type State interface {
 	WidgetBuilder
 
 	GetStateHandle() *StateHandle
-}
-
-type StateActivater interface {
-	Activate()
-}
-
-type StateDeactivater interface {
-	Deactivate()
-}
-
-type StateDidChangeDependencieser interface {
-	DidChangeDependencies()
-}
-
-type InitStater interface {
-	InitState()
-}
-
-type DidUpdateWidgeter interface {
-	DidUpdateWidget(oldWidget StatefulWidget)
-}
-
-type Disposer interface {
-	Dispose()
+	Transition(t StateTransition)
 }
 
 type SingleChildWidget interface {
@@ -151,29 +155,17 @@ type RenderObjectWidget interface {
 
 type Element interface {
 	Handle() *ElementHandle
-}
-
-// XXX this name obviously has to change
-type DidChangeDependencieser interface {
-	AfterDidChangeDependencies()
+	Transition(t ElementTransition)
 }
 
 func DidChangeDependencies(el Element) {
 	MarkNeedsBuild(el)
-	if el, ok := el.(DidChangeDependencieser); ok {
-		el.AfterDidChangeDependencies()
-	}
-}
-
-type Updater interface {
-	AfterUpdate(newWidget Widget)
+	el.Transition(ElementTransition{Kind: ElementChangedDependencies})
 }
 
 func Update(el Element, newWidget Widget) {
 	el.Handle().widget = newWidget
-	if el, ok := el.(Updater); ok {
-		el.AfterUpdate(newWidget)
-	}
+	el.Transition(ElementTransition{Kind: ElementUpdated, NewWidget: newWidget})
 }
 
 func RenderObjectAttachingChild(el Element) Element {
@@ -280,10 +272,6 @@ func UpdateChild(el, child Element, newWidget Widget, newSlot any) Element {
 	return newChild
 }
 
-type Activater interface {
-	AfterActivate()
-}
-
 // Activate activates the element. If it implements Activater, the AfterActivate method will be called afterwards.
 func Activate(el Element) {
 	// hadDependencies := (el._dependencies != null && el._dependencies.isNotEmpty) || el._hadUnsatisfiedDependencies // XXX implement once we have InheritedWidget
@@ -306,19 +294,11 @@ func Activate(el Element) {
 	// 	el.didChangeDependencies()
 	// }
 
-	if el, ok := el.(Activater); ok {
-		el.AfterActivate()
-	}
-}
-
-type Deactivater interface {
-	BeforeDeactivate()
+	el.Transition(ElementTransition{Kind: ElementActivated})
 }
 
 func Deactivate(el Element) {
-	if el, ok := el.(Deactivater); ok {
-		el.BeforeDeactivate()
-	}
+	el.Transition(ElementTransition{Kind: ElementDeactivating})
 
 	// XXX
 	// if (_dependencies != null && _dependencies!.isNotEmpty) {
@@ -334,10 +314,6 @@ func Deactivate(el Element) {
 	// }
 	// _inheritedElements = null;
 	el.Handle().lifecycleState = ElementLifecycleInactive
-}
-
-type Mounter interface {
-	AfterMount(parent Element, newSlot any)
 }
 
 func Mount(el, parent Element, newSlot any) {
@@ -357,13 +333,7 @@ func Mount(el, parent Element, newSlot any) {
 	}
 
 	el.Handle().dirty = true
-	if el, ok := el.(Mounter); ok {
-		el.AfterMount(parent, newSlot)
-	}
-}
-
-type Unmounter interface {
-	AfterUnmount()
+	el.Transition(ElementTransition{Kind: ElementMounted, Parent: parent, NewSlot: newSlot})
 }
 
 // Unmount unmounts the element. If it implements Unmounter, its AfterUnmount method will be called afterwards.
@@ -376,9 +346,7 @@ func Unmount(el Element) {
 	}
 	h.lifecycleState = ElementLifecycleDefunct
 
-	if el, ok := el.(Unmounter); ok {
-		el.AfterUnmount()
-	}
+	el.Transition(ElementTransition{Kind: ElementUnmounted})
 }
 
 type ChildrenVisiter interface {
@@ -429,19 +397,16 @@ type SimpleSingleChildRenderObjectElement struct {
 	child Element
 }
 
-// AfterMount implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) AfterMount(parent Element, newSlot any) {
-	SingleChildRenderObjectElementAfterMount(el, parent, newSlot)
-}
-
-// AfterUnmount implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) AfterUnmount() {
-	SingleChildRenderObjectElementAfterUnmount(el)
-}
-
-// AfterUpdate implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) AfterUpdate(newWidget Widget) {
-	SingleChildRenderObjectElementAfterUpdate(el, newWidget)
+// Transition implements SingleChildRenderObjectElement.
+func (el *SimpleSingleChildRenderObjectElement) Transition(t ElementTransition) {
+	switch t.Kind {
+	case ElementMounted:
+		SingleChildRenderObjectElementAfterMount(el, t.Parent, t.NewSlot)
+	case ElementUnmounted:
+		SingleChildRenderObjectElementAfterUnmount(el)
+	case ElementUpdated:
+		SingleChildRenderObjectElementAfterUpdate(el, t.NewWidget)
+	}
 }
 
 // AttachRenderObject implements SingleChildRenderObjectElement.

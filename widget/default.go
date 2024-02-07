@@ -26,13 +26,7 @@ type StatefulElement interface {
 	WidgetBuilder
 	GetStateHandle() *StateHandle
 	GetState() State
-	AfterUpdate(newWidget Widget)
 	PerformRebuild()
-	AfterActivate()
-	BeforeDeactivate()
-	AfterMount(parent Element, newSlot any)
-	AfterUnmount()
-	DidChangeDependencies()
 }
 
 type RenderObjectElement interface {
@@ -44,9 +38,6 @@ type RenderObjectElement interface {
 	RemoveRenderObjectChild(child render.Object, slot any)
 	MoveRenderObjectChild(child render.Object, oldSlot, newSlot any)
 
-	AfterUpdate(newWidget Widget)
-	AfterMount(parent Element, newSlot any)
-	AfterUnmount()
 	AttachRenderObject(slot any)
 	PerformRebuild()
 }
@@ -158,38 +149,28 @@ func StatefulElementAfterUpdate(el StatefulElement, newWidget Widget) {
 	h := el.GetStateHandle()
 	oldWidget := h.Widget
 	h.Widget = el.Handle().widget.(StatefulWidget)
-	if s, ok := el.GetState().(DidUpdateWidgeter); ok {
-		s.DidUpdateWidget(oldWidget)
-	}
+	el.GetState().Transition(StateTransition{Kind: StateUpdatedWidget, OldWidget: oldWidget})
 	forceRebuild(el)
 }
 func StatefulElementPerformRebuild(el StatefulElement) {
 	h := el.GetStateHandle()
 	s := el.GetState()
 	if h.didChangeDependencies {
-		if s, ok := s.(StateDidChangeDependencieser); ok {
-			s.DidChangeDependencies()
-		}
+		s.Transition(StateTransition{Kind: StateChangedDependencies})
 		h.didChangeDependencies = false
 	}
 	ComponentElementPerformRebuild(el)
 }
 func StatefulElementAfterActivate(el StatefulElement) {
-	if s, ok := el.GetState().(StateActivater); ok {
-		s.Activate()
-	}
+	el.GetState().Transition(StateTransition{Kind: StateActivating})
 	MarkNeedsBuild(el)
 }
 func StatefulElementBeforeDeactivate(el StatefulElement) {
-	if s, ok := el.GetState().(StateDeactivater); ok {
-		s.Deactivate()
-	}
+	el.GetState().Transition(StateTransition{Kind: StateDeactivating})
 }
 func StatefulElementAfterUnmount(el StatefulElement) {
 	h := el.GetStateHandle()
-	if s, ok := el.GetState().(Disposer); ok {
-		s.Dispose()
-	}
+	el.GetState().Transition(StateTransition{Kind: StateDisposing})
 	h.Element = nil
 }
 func StatefulElementAfterDidChangeDependencies(el StatefulElement) {
@@ -200,12 +181,8 @@ func StatefulElementBuild(el StatefulElement) Widget {
 }
 func StatefulElementAfterMount(el StatefulElement, parent Element, newSlot any) {
 	s := el.GetState()
-	if s, ok := s.(InitStater); ok {
-		s.InitState()
-	}
-	if s, ok := s.(StateDidChangeDependencieser); ok {
-		s.DidChangeDependencies()
-	}
+	s.Transition(StateTransition{Kind: StateInitializing})
+	s.Transition(StateTransition{Kind: StateChangedDependencies})
 	ComponentElementAfterMount(el, parent, newSlot)
 }
 
