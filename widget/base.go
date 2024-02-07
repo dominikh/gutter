@@ -7,12 +7,84 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-// TODO implement support for stateful widgets
-
 // TODO MediaQuery
 // TODO support inheritance (cf inheritedElements in framework.dart)
 // TODO support "Notification"
 // TODO support global keys
+
+func NewStatefulElement(w StatefulWidget) StatefulElement {
+	se := &SimpleStatefulElement{}
+	se.ElementHandle.widget = w
+	se.State = w.CreateState()
+	sh := se.State.GetStateHandle()
+	sh.Widget = w
+	sh.Element = se
+	return se
+}
+
+var _ StatefulElement = (*SimpleStatefulElement)(nil)
+var _ WidgetBuilder = (*SimpleStatefulElement)(nil)
+
+type SimpleStatefulElement struct {
+	ElementHandle
+	State
+
+	child Element
+}
+
+// GetChild implements StatefulElement.
+func (el *SimpleStatefulElement) GetChild() Element {
+	return el.child
+}
+
+// SetChild implements StatefulElement.
+func (el *SimpleStatefulElement) SetChild(child Element) {
+	el.child = child
+}
+
+func (el *SimpleStatefulElement) GetState() State {
+	return el.State
+}
+
+// AfterMount implements StatefulElement.
+func (el *SimpleStatefulElement) AfterMount(parent Element, newSlot any) {
+	StatefulElementAfterMount(el, parent, newSlot)
+}
+
+// AfterActivate implements StatefulElement.
+func (el *SimpleStatefulElement) AfterActivate() {
+	StatefulElementAfterActivate(el)
+}
+
+// AfterUnmount implements StatefulElement.
+func (el *SimpleStatefulElement) AfterUnmount() {
+	StatefulElementAfterUnmount(el)
+}
+
+// AfterUpdate implements StatefulElement.
+func (el *SimpleStatefulElement) AfterUpdate(newWidget Widget) {
+	StatefulElementAfterUpdate(el, newWidget)
+}
+
+// BeforeDeactivate implements StatefulElement.
+func (el *SimpleStatefulElement) BeforeDeactivate() {
+	StatefulElementBeforeDeactivate(el)
+}
+
+// Build implements StatefulElement.
+func (el *SimpleStatefulElement) Build() Widget {
+	return StatefulElementBuild(el)
+}
+
+// DidChangeDependencies implements StatefulElement.
+func (el *SimpleStatefulElement) DidChangeDependencies() {
+	StatefulElementAfterDidChangeDependencies(el)
+}
+
+// PerformRebuild implements StatefulElement.
+func (el *SimpleStatefulElement) PerformRebuild() {
+	StatefulElementPerformRebuild(el)
+}
 
 type BuildContext interface{}
 
@@ -25,6 +97,45 @@ type Widget interface {
 type StatelessWidget interface {
 	Widget
 	Build(ctx BuildContext) Widget
+}
+
+type StatefulWidget interface {
+	Widget
+	CreateState() State
+}
+
+// State is state.
+//
+// Implementations can optionally implement [InitStater], [StateDidUpdateWidgeter], [StateDeactivater],
+// [StateActivater], [Disposer], and [StateDidChangeDependencieser].
+type State interface {
+	WidgetBuilder
+
+	GetStateHandle() *StateHandle
+}
+
+type StateActivater interface {
+	Activate()
+}
+
+type StateDeactivater interface {
+	Deactivate()
+}
+
+type StateDidChangeDependencieser interface {
+	DidChangeDependencies()
+}
+
+type InitStater interface {
+	InitState()
+}
+
+type DidUpdateWidgeter interface {
+	DidUpdateWidget(oldWidget StatefulWidget)
+}
+
+type Disposer interface {
+	Dispose()
 }
 
 type SingleChildWidget interface {
@@ -40,6 +151,18 @@ type RenderObjectWidget interface {
 
 type Element interface {
 	Handle() *ElementHandle
+}
+
+// XXX this name obviously has to change
+type DidChangeDependencieser interface {
+	AfterDidChangeDependencies()
+}
+
+func DidChangeDependencies(el Element) {
+	MarkNeedsBuild(el)
+	if el, ok := el.(DidChangeDependencieser); ok {
+		el.AfterDidChangeDependencies()
+	}
 }
 
 type Updater interface {
@@ -233,6 +356,7 @@ func Mount(el, parent Element, newSlot any) {
 		h.owner = parent.Handle().owner
 	}
 
+	el.Handle().dirty = true
 	if el, ok := el.(Mounter); ok {
 		el.AfterMount(parent, newSlot)
 	}
@@ -421,6 +545,12 @@ const (
 	ElementLifecycleDefunct
 )
 
+type StateHandle struct {
+	Widget                StatefulWidget
+	Element               Element
+	didChangeDependencies bool
+}
+
 type ElementHandle struct {
 	parent         Element
 	slot           any
@@ -431,6 +561,8 @@ type ElementHandle struct {
 	inDirtyList    bool
 	widget         Widget
 }
+
+func (h *StateHandle) GetStateHandle() *StateHandle { return h }
 
 func (el *ElementHandle) Handle() *ElementHandle { return el }
 func (el *ElementHandle) Parent() Element        { return el.parent }

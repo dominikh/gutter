@@ -19,6 +19,22 @@ type StatelessElement interface {
 	PerformRebuild()
 }
 
+type StatefulElement interface {
+	Element
+
+	SingleChildElement
+	WidgetBuilder
+	GetStateHandle() *StateHandle
+	GetState() State
+	AfterUpdate(newWidget Widget)
+	PerformRebuild()
+	AfterActivate()
+	BeforeDeactivate()
+	AfterMount(parent Element, newSlot any)
+	AfterUnmount()
+	DidChangeDependencies()
+}
+
 type RenderObjectElement interface {
 	Element
 
@@ -135,3 +151,72 @@ func RenderTreeRootElementAttachRenderObject(el RenderObjectElement, newSlot any
 func RenderTreeRootElementPerformRebuild(el RenderObjectElement) {
 	RenderObjectElementPerformRebuild(el)
 }
+
+// Element -> ComponentElement -> StatefulElement
+
+func StatefulElementAfterUpdate(el StatefulElement, newWidget Widget) {
+	h := el.GetStateHandle()
+	oldWidget := h.Widget
+	h.Widget = el.Handle().widget.(StatefulWidget)
+	if s, ok := el.GetState().(DidUpdateWidgeter); ok {
+		s.DidUpdateWidget(oldWidget)
+	}
+	forceRebuild(el)
+}
+func StatefulElementPerformRebuild(el StatefulElement) {
+	h := el.GetStateHandle()
+	s := el.GetState()
+	if h.didChangeDependencies {
+		if s, ok := s.(StateDidChangeDependencieser); ok {
+			s.DidChangeDependencies()
+		}
+		h.didChangeDependencies = false
+	}
+	ComponentElementPerformRebuild(el)
+}
+func StatefulElementAfterActivate(el StatefulElement) {
+	if s, ok := el.GetState().(StateActivater); ok {
+		s.Activate()
+	}
+	MarkNeedsBuild(el)
+}
+func StatefulElementBeforeDeactivate(el StatefulElement) {
+	if s, ok := el.GetState().(StateDeactivater); ok {
+		s.Deactivate()
+	}
+}
+func StatefulElementAfterUnmount(el StatefulElement) {
+	h := el.GetStateHandle()
+	if s, ok := el.GetState().(Disposer); ok {
+		s.Dispose()
+	}
+	h.Element = nil
+}
+func StatefulElementAfterDidChangeDependencies(el StatefulElement) {
+	el.GetStateHandle().didChangeDependencies = true
+}
+func StatefulElementBuild(el StatefulElement) Widget {
+	return el.GetState().Build()
+}
+func StatefulElementAfterMount(el StatefulElement, parent Element, newSlot any) {
+	s := el.GetState()
+	if s, ok := s.(InitStater); ok {
+		s.InitState()
+	}
+	if s, ok := s.(StateDidChangeDependencieser); ok {
+		s.DidChangeDependencies()
+	}
+	ComponentElementAfterMount(el, parent, newSlot)
+}
+
+/*
+class StatefulElement extends ComponentElement {
+  /// Creates an element that uses the given widget as its configuration.
+  StatefulElement(StatefulWidget widget)
+      : _state = widget.createState(),
+        super(widget) {
+    state._element = this;
+    state._widget = widget;
+  }
+}
+*/

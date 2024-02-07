@@ -33,17 +33,52 @@ func main() {
 	app.Main()
 }
 
+var _ widget.StatefulWidget = (*Bird)(nil)
+
+type Bird struct {
+	color color.NRGBA
+}
+
+// CreateElement implements widget.StatefulWidget.
+func (w *Bird) CreateElement() widget.Element { return widget.NewStatefulElement(w) }
+
+// CreateState implements widget.StatefulWidget.
+func (w *Bird) CreateState() widget.State {
+	return &BirdState{}
+}
+
+type BirdState struct {
+	widget.StateHandle
+}
+
+// Build implements widget.State.
+func (s *BirdState) Build() widget.Widget {
+	return &widget.ColoredBox{
+		// XXX it'd be nice to make this more type-safe
+		Color: s.Widget.(*Bird).color,
+	}
+}
+
+// Key implements widget.StatefulWidget.
+func (*Bird) Key() any {
+	return nil
+}
+
 func run2(w *app.Window) error {
-	var root widget.Widget = &widget.Padding{
-		Padding: render.Inset{20, 20, 20, 20},
-		// XXX This SizedBox doesn't actually do anything, because we never loosen the constraints.
-		Child: &widget.SizedBox{
-			Width:  50,
-			Height: 50,
-			Child: &widget.ColoredBox{
-				Color: color.NRGBA{255, 0, 0, 255},
-			},
-		},
+	// var root widget.Widget = &widget.Padding{
+	// 	Padding: render.Inset{20, 20, 20, 20},
+	// 	// XXX This SizedBox doesn't actually do anything, because we never loosen the constraints.
+	// 	Child: &widget.SizedBox{
+	// 		Width:  50,
+	// 		Height: 50,
+	// 		Child: &widget.ColoredBox{
+	// 			Color: color.NRGBA{255, 0, 0, 255},
+	// 		},
+	// 	},
+	// }
+
+	var root widget.Widget = &Bird{
+		color: color.NRGBA{0, 255, 0, 255},
 	}
 
 	// This is basically runApp
