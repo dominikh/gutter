@@ -29,7 +29,6 @@ type StatefulElement interface {
 
 	SingleChildElement
 	WidgetBuilder
-	GetStateHandle() *StateHandle
 	GetState() State
 	PerformRebuild()
 }
