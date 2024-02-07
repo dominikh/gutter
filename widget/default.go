@@ -7,32 +7,6 @@ package widget
 
 import "honnef.co/go/gutter/render"
 
-type ComponentElement interface {
-	Element
-
-	AfterMount(parent Element, newSlot any)
-	PerformRebuild()
-	GetChild() Element
-	SetChild() Element
-}
-
-type StatelessElement interface {
-	Element
-
-	AfterUpdate(newWidget Widget)
-	AfterMount(parent Element, newSlot any)
-	PerformRebuild()
-}
-
-type StatefulElement interface {
-	Element
-
-	SingleChildElement
-	WidgetBuilder
-	GetState() State
-	PerformRebuild()
-}
-
 type RenderObjectElement interface {
 	Element
 
@@ -43,7 +17,6 @@ type RenderObjectElement interface {
 	MoveRenderObjectChild(child render.Object, oldSlot, newSlot any)
 
 	AttachRenderObject(slot any)
-	PerformRebuild()
 }
 
 type SingleChildRenderObjectElement interface {
@@ -55,16 +28,6 @@ type SingleChildRenderObjectElement interface {
 type RenderTreeRootElement interface {
 	Element
 	RenderObjectElement
-}
-
-func ComponentElementAfterMount(el Element, parent Element, newSlot any) {
-	rebuild(el)
-}
-func ComponentElementPerformRebuild(el Element) {
-	built := el.(WidgetBuilder).Build()
-	cel := el.(SingleChildElement)
-	cel.SetChild(UpdateChild(el, cel.GetChild(), built, el.Handle().slot))
-	el.Handle().dirty = false
 }
 
 func RenderObjectElementAfterUpdate(el Element, newWidget Widget) {
