@@ -75,17 +75,27 @@ type SimpleStatefulElement struct {
 func (el *SimpleStatefulElement) Transition(t ElementTransition) {
 	switch t.Kind {
 	case ElementMounted:
-		StatefulElementAfterMount(el, t.Parent, t.NewSlot)
+		s := el.GetState()
+		s.Transition(StateTransition{Kind: StateInitializing})
+		s.Transition(StateTransition{Kind: StateChangedDependencies})
+		rebuild(el)
 	case ElementActivated:
-		StatefulElementAfterActivate(el)
+		el.GetState().Transition(StateTransition{Kind: StateActivating})
+		MarkNeedsBuild(el)
 	case ElementUnmounted:
-		StatefulElementAfterUnmount(el)
+		h := el.GetStateHandle()
+		el.GetState().Transition(StateTransition{Kind: StateDisposing})
+		h.Element = nil
 	case ElementUpdated:
-		StatefulElementAfterUpdate(el, t.NewWidget)
+		h := el.GetStateHandle()
+		oldWidget := h.Widget
+		h.Widget = el.Handle().widget.(StatefulWidget)
+		el.GetState().Transition(StateTransition{Kind: StateUpdatedWidget, OldWidget: oldWidget})
+		forceRebuild(el)
 	case ElementDeactivating:
-		StatefulElementBeforeDeactivate(el)
+		el.GetState().Transition(StateTransition{Kind: StateDeactivating})
 	case ElementChangedDependencies:
-		StatefulElementAfterDidChangeDependencies(el)
+		el.GetStateHandle().didChangeDependencies = true
 	}
 }
 
@@ -105,12 +115,20 @@ func (el *SimpleStatefulElement) GetState() State {
 
 // Build implements StatefulElement.
 func (el *SimpleStatefulElement) Build() Widget {
-	return StatefulElementBuild(el)
+	return el.GetState().Build()
 }
 
 // PerformRebuild implements StatefulElement.
 func (el *SimpleStatefulElement) PerformRebuild() {
-	StatefulElementPerformRebuild(el)
+	h := el.GetStateHandle()
+	s := el.GetState()
+	if h.didChangeDependencies {
+		s.Transition(StateTransition{Kind: StateChangedDependencies})
+		h.didChangeDependencies = false
+	}
+	built := el.Build()
+	el.SetChild(UpdateChild(el, el.GetChild(), built, el.Handle().slot))
+	el.Handle().dirty = false
 }
 
 type BuildContext interface{}
