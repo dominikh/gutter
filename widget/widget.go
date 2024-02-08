@@ -94,6 +94,7 @@ func (c *renderColoredBox) MarkNeedsPaint() {
 }
 
 func (c *renderColoredBox) SetChild(child render.Object) {
+	// XXX not needing this method would be nice
 	child.Handle().SetParent(c)
 	c.Child = child
 }
@@ -115,7 +116,10 @@ func (r *renderColoredBox) setColor(c color.NRGBA) {
 	}
 }
 
-func NewSingleChildRenderObjectElement(w RenderObjectWidget) *SimpleSingleChildRenderObjectElement {
+func NewSingleChildRenderObjectElement(w interface {
+	RenderObjectWidget
+	SingleChildWidget
+}) *SimpleSingleChildRenderObjectElement {
 	el := &SimpleSingleChildRenderObjectElement{}
 	el.widget = w
 	return el

@@ -15,6 +15,7 @@ import (
 	"image/color"
 	"log"
 	"os"
+	"time"
 
 	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/render"
@@ -43,26 +44,45 @@ type Bird struct {
 	color color.NRGBA
 }
 
-// CreateElement implements widget.StatefulWidget.
-func (w *Bird) CreateElement() widget.Element { return widget.NewInteriorElement(w) }
+func (w *Bird) CreateElement() widget.Element {
+	return widget.NewInteriorElement(w)
+}
 
-// // CreateState implements widget.StatefulWidget.
-// func (w *Bird) CreateState() widget.State {
-// 	return &BirdState{}
-// }
+func (w *Bird) CreateState() widget.State {
+	return &BirdState{}
+}
 
 type BirdState struct {
 	widget.StateHandle
+
+	c color.NRGBA
 }
 
-// Transition implements widget.State.
-func (*BirdState) Transition(t widget.StateTransition) {}
+func (s *BirdState) Transition(t widget.StateTransition) {
+	switch t.Kind {
+	case widget.StateInitializing:
+		s.c = color.NRGBA{0, 255, 0, 255}
+		go ticker(1*time.Millisecond, func() {
+			s.c.R += 1
+			widget.MarkNeedsBuild(s.Element)
+		})
 
-// Build implements widget.State.
-func (s *Bird) Build() widget.Widget {
-	return &widget.ColoredBox{
-		// XXX it'd be nice to make this more type-safe
-		Color: s.color,
+	}
+	// XXX tear down the timer when we're done
+}
+
+func (s *BirdState) Build() widget.Widget {
+	return &widget.Padding{
+		Padding: render.Inset{Left: 20, Top: 20, Right: 20, Bottom: 20},
+		Child: &widget.ColoredBox{
+			Color: color.NRGBA{255, 0, 0, 255},
+			Child: &widget.Padding{
+				Padding: render.Inset{Left: 100, Top: 100, Right: 100, Bottom: 100},
+				Child: &widget.ColoredBox{
+					Color: s.c,
+				},
+			},
+		},
 	}
 }
 
@@ -71,18 +91,20 @@ func (*Bird) Key() any {
 	return nil
 }
 
+var notify = make(chan func(), 1)
+var win *app.Window
+
+func ticker(interval time.Duration, fn func()) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for range t.C {
+		notify <- fn
+		win.Invalidate()
+	}
+}
+
 func run2(w *app.Window) error {
-	// var root widget.Widget = &widget.Padding{
-	// 	Padding: render.Inset{Left: 20, Top: 20, Right: 20, Bottom: 20},
-	// 	// XXX This SizedBox doesn't actually do anything, because we never loosen the constraints.
-	// 	Child: &widget.SizedBox{
-	// 		Width:  50,
-	// 		Height: 50,
-	// 		Child: &widget.ColoredBox{
-	// 			Color: color.NRGBA{255, 0, 0, 255},
-	// 		},
-	// 	},
-	// }
+	win = w
 
 	var root widget.Widget = &Bird{
 		color: color.NRGBA{0, 255, 0, 255},
@@ -105,6 +127,16 @@ func run2(w *app.Window) error {
 				Max: f32.FPt(e.Size),
 			}
 			rootElem.SetConfiguration(cs)
+
+		loop:
+			for {
+				select {
+				case fn := <-notify:
+					fn()
+				default:
+					break loop
+				}
+			}
 
 			// XXX we need to get the current constraints into the view
 			bo.BuildScope(rootElem, nil)

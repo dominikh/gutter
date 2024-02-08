@@ -99,10 +99,8 @@ func (o *PipelineOwner) FlushPaint(ops *op.Ops) {
 
 	for _, node := range dirtyNodes {
 		h := node.Handle()
-		if (h.needsPaint) && h.owner == o {
-			if h.needsPaint {
-				o.renderer.Paint(node)
-			}
+		if h.needsPaint && h.owner == o {
+			o.renderer.Paint(node)
 		}
 	}
 
