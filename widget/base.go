@@ -486,7 +486,7 @@ type BuildOwner struct {
 	dirtyElements               []Element
 	inactiveElements            inactiveElements
 	dirtyElementsNeedsResorting bool
-	onBuildScheduled            func()
+	OnBuildScheduled            func()
 	scheduledFlushDirtyElements bool
 }
 
@@ -495,9 +495,9 @@ func (o *BuildOwner) scheduleBuildFor(el Element) {
 		o.dirtyElementsNeedsResorting = true
 		return
 	}
-	if !o.scheduledFlushDirtyElements && o.onBuildScheduled != nil {
+	if !o.scheduledFlushDirtyElements && o.OnBuildScheduled != nil {
 		o.scheduledFlushDirtyElements = true
-		o.onBuildScheduled()
+		o.OnBuildScheduled()
 	}
 	o.dirtyElements = append(o.dirtyElements, el)
 	el.Handle().inDirtyList = true
