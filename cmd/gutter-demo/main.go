@@ -118,6 +118,7 @@ func run2(w *app.Window) error {
 		case system.DestroyEvent:
 			return e.Err
 		case system.FrameEvent:
+			ops.Reset()
 			cs := render.ViewConfiguration{
 				Min: f32.FPt(e.Size),
 				Max: f32.FPt(e.Size),
