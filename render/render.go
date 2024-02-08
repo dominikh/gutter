@@ -344,7 +344,6 @@ func ScheduleInitialLayout(obj Object) {
 func ScheduleInitialPaint(obj Object) {
 	h := obj.Handle()
 	h.needsPaint = true
-	h.owner.nodesNeedingPaint = append(h.owner.nodesNeedingPaint, obj)
 }
 
 func SetChild(parent ObjectWithChild, child Object) {
