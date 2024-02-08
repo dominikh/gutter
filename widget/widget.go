@@ -88,12 +88,6 @@ func (c *renderColoredBox) MarkNeedsPaint() {
 	render.MarkNeedsPaint(c)
 }
 
-func (c *renderColoredBox) SetChild(child render.Object) {
-	// XXX not needing this method would be nice
-	child.Handle().SetParent(c)
-	c.Child = child
-}
-
 func (c *renderColoredBox) Paint(r *render.Renderer, ops *op.Ops) {
 	sz := c.Size()
 	if sz != f32.Pt(0, 0) {

@@ -37,12 +37,6 @@ type Clip struct {
 	SingleChild
 }
 
-func (w *Clip) SetChild(child Object) {
-	// TODO make sure the child doesn't already have a parent
-	child.Handle().SetParent(w)
-	w.Child = child
-}
-
 // Layout implements RenderObject.
 func (w *Clip) Layout() f32.Point {
 	Layout(w.Child, w.Handle().Constraints(), true)
@@ -116,11 +110,6 @@ func (p *Padding) SetInset(ins Inset) {
 
 func (p *Padding) Inset() Inset {
 	return p.inset
-}
-
-func (p *Padding) SetChild(child Object) {
-	child.Handle().SetParent(p)
-	p.Child = child
 }
 
 // Layout implements RenderObject.

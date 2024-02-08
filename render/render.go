@@ -87,12 +87,10 @@ func MarkNeedsPaint(obj Object) {
 		return
 	}
 	h.needsPaint = true
-	if true /* && isRepaintBoundary(obj) && h.wasRepaintBoundary */ {
-		if h.owner != nil {
-			h.owner.nodesNeedingPaint = append(h.owner.nodesNeedingPaint, obj)
-			h.owner.RequestVisualUpdate()
-		}
-	} else if h.parent != nil {
+
+	// We always have to walk the tree up to the parent because our composition of objects is implemented by
+	// parents calling op.CallOp.
+	if h.parent != nil {
 		h.parent.MarkNeedsPaint()
 	} else {
 		if h.owner != nil {
@@ -342,4 +340,9 @@ func ScheduleInitialPaint(obj Object) {
 	h := obj.Handle()
 	h.needsPaint = true
 	h.owner.nodesNeedingPaint = append(h.owner.nodesNeedingPaint, obj)
+}
+
+func SetChild(parent ObjectWithChild, child Object) {
+	parent.SetChild(child)
+	child.Handle().parent = parent
 }

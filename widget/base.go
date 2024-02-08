@@ -469,7 +469,7 @@ func (el *SimpleSingleChildRenderObjectElement) GetChild() Element      { return
 func (el *SimpleSingleChildRenderObjectElement) SetChild(child Element) { el.child = child }
 
 func (el *SimpleSingleChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot any) {
-	el.renderObject.(render.ObjectWithChild).SetChild(child)
+	render.SetChild(el.renderObject.(render.ObjectWithChild), child)
 }
 
 func (el *SimpleSingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
