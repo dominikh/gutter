@@ -9,7 +9,6 @@ import (
 type PipelineOwner struct {
 	renderer                          *Renderer
 	rootNode                          Object
-	nodesNeedingPaint                 []Object
 	nodesNeedingLayout                []Object
 	nodesNeedingCompositingBitsUpdate []Object
 	shouldMergeDirtyNodes             bool
@@ -83,22 +82,6 @@ func layoutWithoutResize(obj Object) {
 }
 
 func (o *PipelineOwner) FlushPaint(ops *op.Ops) {
-	dirtyNodes := o.nodesNeedingPaint
-	// OPT(dh): avoid this alloc, probably via double buffering
-	o.nodesNeedingPaint = nil
-
-	// Sort the dirty nodes in reverse order (deepest first).
-	slices.SortFunc(dirtyNodes, func(a, b Object) int {
-		return b.Handle().depth - a.Handle().depth
-	})
-
-	for _, node := range dirtyNodes {
-		h := node.Handle()
-		if h.needsPaint && h.owner == o {
-			o.renderer.Paint(node)
-		}
-	}
-
 	if o.rootNode != nil {
 		o.renderer.Paint(o.rootNode).Add(ops)
 	}
@@ -122,7 +105,6 @@ func (o *PipelineOwner) FlushCompositingBits() {
 func (o *PipelineOwner) Dispose() {
 	clear(o.nodesNeedingLayout)
 	clear(o.nodesNeedingCompositingBitsUpdate)
-	clear(o.nodesNeedingPaint)
 }
 
 func Attach(obj Object, owner *PipelineOwner) {
