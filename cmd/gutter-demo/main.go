@@ -37,7 +37,6 @@ func main() {
 var _ widget.Widget = (*Bird)(nil)
 
 type Bird struct {
-	color color.NRGBA
 }
 
 func (w *Bird) CreateElement() widget.Element {
@@ -87,24 +86,26 @@ func (*Bird) Key() any {
 	return nil
 }
 
-var notify = make(chan func(), 1)
 var win *app.Window
 
 func ticker(interval time.Duration, fn func()) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for range t.C {
-		notify <- fn
-		win.Invalidate()
+		win.EmitEvent(CallbackEvent{fn})
 	}
 }
+
+type CallbackEvent struct {
+	cb func()
+}
+
+func (CallbackEvent) ImplementsEvent() {}
 
 func run2(w *app.Window) error {
 	win = w
 
-	var root widget.Widget = &Bird{
-		color: color.NRGBA{0, 255, 0, 255},
-	}
+	var root widget.Widget = &Bird{}
 
 	// This is basically runApp
 	var bo widget.BuildOwner
@@ -112,28 +113,25 @@ func run2(w *app.Window) error {
 	wview := widget.NewView(root, po)
 	rootElem := wview.Attach(&bo, nil)
 
+	bo.OnBuildScheduled = func() {
+		win.Invalidate()
+	}
+
 	var ops op.Ops
 	for {
 		switch e := w.NextEvent().(type) {
 		case system.DestroyEvent:
 			return e.Err
+		case CallbackEvent:
+			e.cb()
 		case system.FrameEvent:
+			log.Println("rendering frame")
 			ops.Reset()
 			cs := render.ViewConfiguration{
 				Min: f32.FPt(e.Size),
 				Max: f32.FPt(e.Size),
 			}
 			rootElem.SetConfiguration(cs)
-
-		loop:
-			for {
-				select {
-				case fn := <-notify:
-					fn()
-				default:
-					break loop
-				}
-			}
 
 			// XXX we need to get the current constraints into the view
 			bo.BuildScope(rootElem, nil)
