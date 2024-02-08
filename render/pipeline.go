@@ -154,8 +154,13 @@ func Attach(obj Object, owner *PipelineOwner) {
 		obj.MarkNeedsPaint()
 	}
 
-	if obj, ok := obj.(Attacher); ok {
-		obj.Attach(owner)
+	if aobj, ok := obj.(Attacher); ok {
+		aobj.Attach(owner)
+	} else {
+		obj.VisitChildren(func(child Object) bool {
+			Attach(child, owner)
+			return true
+		})
 	}
 }
 
