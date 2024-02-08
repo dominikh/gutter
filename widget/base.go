@@ -693,6 +693,10 @@ func (els *inactiveElements) add(el Element) {
 	if el.Handle().lifecycleState == ElementLifecycleActive {
 		els.deactivateRecursively(el)
 	}
+	// OPT(dh): move this initialization to a constructor
+	if els.elements == nil {
+		els.elements = make(map[Element]struct{})
+	}
 	els.elements[el] = struct{}{}
 }
 

@@ -87,7 +87,7 @@ func MarkNeedsPaint(obj Object) {
 		return
 	}
 	h.needsPaint = true
-	if false /* && isRepaintBoundary(obj) && h.wasRepaintBoundary */ {
+	if true /* && isRepaintBoundary(obj) && h.wasRepaintBoundary */ {
 		if h.owner != nil {
 			h.owner.nodesNeedingPaint = append(h.owner.nodesNeedingPaint, obj)
 			h.owner.RequestVisualUpdate()
