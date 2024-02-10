@@ -20,18 +20,6 @@ var _ ObjectWithChild = (*Padding)(nil)
 var _ ObjectWithChild = (*Constrained)(nil)
 var _ ObjectWithChildren = (*Row)(nil)
 
-func (obj *Clip) MarkNeedsPaint()        { MarkNeedsPaint(obj) }
-func (obj *FillColor) MarkNeedsPaint()   { MarkNeedsPaint(obj) }
-func (obj *Padding) MarkNeedsPaint()     { MarkNeedsPaint(obj) }
-func (obj *Constrained) MarkNeedsPaint() { MarkNeedsPaint(obj) }
-func (obj *Row) MarkNeedsPaint()         { MarkNeedsPaint(obj) }
-
-func (obj *Clip) MarkNeedsLayout()        { MarkNeedsLayout(obj) }
-func (obj *FillColor) MarkNeedsLayout()   { MarkNeedsLayout(obj) }
-func (obj *Padding) MarkNeedsLayout()     { MarkNeedsLayout(obj) }
-func (obj *Constrained) MarkNeedsLayout() { MarkNeedsLayout(obj) }
-func (obj *Row) MarkNeedsLayout()         { MarkNeedsLayout(obj) }
-
 type Box struct {
 	ObjectHandle
 }
@@ -71,7 +59,7 @@ func (*FillColor) VisitChildren(yield func(Object) bool) {}
 func (fc *FillColor) SetColor(c color.NRGBA) {
 	if fc.color != c {
 		fc.color = c
-		fc.MarkNeedsPaint()
+		MarkNeedsPaint(fc)
 	}
 }
 
@@ -108,7 +96,7 @@ func NewPadding(padding Inset) *Padding {
 func (p *Padding) SetInset(ins Inset) {
 	if p.inset != ins {
 		p.inset = ins
-		p.MarkNeedsLayout()
+		MarkNeedsLayout(p)
 	}
 }
 
@@ -149,7 +137,7 @@ type Constrained struct {
 func (c *Constrained) SetExtraConstraints(cs Constraints) {
 	if c.extraConstraints != cs {
 		c.extraConstraints = cs
-		c.MarkNeedsLayout()
+		MarkNeedsLayout(c)
 	}
 }
 

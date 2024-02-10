@@ -40,8 +40,6 @@ type Object interface {
 	// Don't call Object.Paint directly. Use [Renderer.Paint] instead.
 	Paint(r *Renderer, ops *op.Ops)
 
-	MarkNeedsLayout()
-	MarkNeedsPaint()
 	VisitChildren(yield func(Object) bool)
 	Handle() *ObjectHandle
 }
@@ -99,7 +97,7 @@ func MarkNeedsPaint(obj Object) {
 	// We always have to walk the tree up to the parent because our composition of objects is implemented by
 	// parents calling op.CallOp.
 	if h.parent != nil {
-		h.parent.MarkNeedsPaint()
+		MarkNeedsPaint(h.parent)
 	} else {
 		if h.owner != nil {
 			h.owner.RequestVisualUpdate()
@@ -115,7 +113,7 @@ func MarkNeedsLayout(obj Object) {
 	if h.relayoutBoundary == nil {
 		h.needsLayout = true
 		if h.parent != nil {
-			h.parent.MarkNeedsLayout()
+			MarkNeedsLayout(h.parent)
 		}
 		return
 	}
@@ -123,7 +121,7 @@ func MarkNeedsLayout(obj Object) {
 		if h.parent == nil {
 			panic(fmt.Sprintf("%[1]T(%[1]p) isn't a relayout boundary but also doesn't have a parent", obj))
 		}
-		h.parent.MarkNeedsLayout()
+		MarkNeedsLayout(h.parent)
 	} else {
 		h.needsLayout = true
 		h.owner.nodesNeedingLayout = append(h.owner.nodesNeedingLayout, obj)
@@ -314,7 +312,7 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
 	}
 	obj.Handle().size = obj.Layout()
 	h.needsLayout = false
-	obj.MarkNeedsPaint()
+	MarkNeedsPaint(obj)
 
 	sz := obj.Handle().Size()
 	if sz.X < cs.Min.X || sz.X > cs.Max.X || sz.Y < cs.Min.Y || sz.Y > cs.Max.Y {
