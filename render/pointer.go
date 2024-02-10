@@ -112,8 +112,8 @@ type PointerRegion struct {
 	OnMove func(hit HitTestEntry, ev pointer.Event)
 }
 
-// Layout implements render.Object.
-func (c *PointerRegion) Layout() (size f32.Point) {
+// PerformLayout implements render.Object.
+func (c *PointerRegion) PerformLayout() (size f32.Point) {
 	if c.Child != nil {
 		return Layout(c.Child, c.Constraints(), true)
 	} else {
@@ -121,8 +121,8 @@ func (c *PointerRegion) Layout() (size f32.Point) {
 	}
 }
 
-// Paint implements render.Object.
-func (c *PointerRegion) Paint(r *Renderer, ops *op.Ops) {
+// PerformPaint implements render.Object.
+func (c *PointerRegion) PerformPaint(r *Renderer, ops *op.Ops) {
 	if c.Child != nil {
 		r.Paint(c.Child).Add(ops)
 	}
