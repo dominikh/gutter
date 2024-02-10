@@ -73,15 +73,15 @@ type renderColoredBox struct {
 	color color.NRGBA
 }
 
-// Layout implements render.Object.
-func (c *renderColoredBox) Layout() (size f32.Point) {
+// PerformLayout implements render.Object.
+func (c *renderColoredBox) PerformLayout() (size f32.Point) {
 	if c.Child == nil {
 		return c.Constraints().Min
 	}
 	return render.Layout(c.Child, c.Constraints(), true)
 }
 
-func (c *renderColoredBox) Paint(r *render.Renderer, ops *op.Ops) {
+func (c *renderColoredBox) PerformPaint(r *render.Renderer, ops *op.Ops) {
 	sz := c.Size()
 	if sz != f32.Pt(0, 0) {
 		paint.FillShape(ops, c.color, render.FRect{Max: sz}.Op(ops))

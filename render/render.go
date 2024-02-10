@@ -23,17 +23,15 @@ import (
 //   would still be calling the repainted ops of the child. However, Gio makes us go through macros, and
 //   macros record both the start and end PC, and we can't expect those to remain the same.
 
-// TODO rename Layout to PerformLayout and Paint to PerformPaint
-
 type Object interface {
-	// Layout lays out the object.
+	// PerformLayout lays out the object.
 	//
-	// Don't call Object.Layout directly. Use [Layout] instead.
-	Layout() (size f32.Point)
-	// Paint paints the object at the specified offset.
+	// Don't call Object.PerformLayout directly. Use [Layout] instead.
+	PerformLayout() (size f32.Point)
+	// PerformPaint paints the object at the specified offset.
 	//
-	// Don't call Object.Paint directly. Use [Renderer.Paint] instead.
-	Paint(r *Renderer, ops *op.Ops)
+	// Don't call Object.PerformPaint directly. Use [Renderer.Paint] instead.
+	PerformPaint(r *Renderer, ops *op.Ops)
 
 	VisitChildren(yield func(Object) bool)
 	Handle() *ObjectHandle
@@ -244,7 +242,7 @@ func (r *Renderer) Paint(obj Object) op.CallOp {
 	}
 
 	m := op.Record(ops)
-	obj.Paint(r, ops)
+	obj.PerformPaint(r, ops)
 	call := m.Stop()
 	r.ops[obj] = cachedOps{ops, call}
 	return call
@@ -305,7 +303,7 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
 		}
 		obj.VisitChildren(cleanRelayoutBoundary)
 	}
-	obj.Handle().size = obj.Layout()
+	obj.Handle().size = obj.PerformLayout()
 	h.needsLayout = false
 	MarkNeedsPaint(obj)
 

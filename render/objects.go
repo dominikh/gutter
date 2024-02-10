@@ -25,14 +25,14 @@ type Clip struct {
 	SingleChild
 }
 
-// Layout implements RenderObject.
-func (w *Clip) Layout() f32.Point {
+// PerformLayout implements RenderObject.
+func (w *Clip) PerformLayout() f32.Point {
 	Layout(w.Child, w.Handle().Constraints(), true)
 	return w.Child.Handle().Size()
 }
 
-// Paint implements RenderObject.
-func (w *Clip) Paint(r *Renderer, ops *op.Ops) {
+// PerformPaint implements RenderObject.
+func (w *Clip) PerformPaint(r *Renderer, ops *op.Ops) {
 	defer FRect{
 		Min: f32.Pt(0, 0),
 		Max: w.Handle().Size(),
@@ -62,15 +62,15 @@ func (fc *FillColor) Color() color.NRGBA {
 	return fc.color
 }
 
-// Layout implements RenderObject.
-func (c *FillColor) Layout() f32.Point {
+// PerformLayout implements RenderObject.
+func (c *FillColor) PerformLayout() f32.Point {
 	return c.Handle().Constraints().Min
 }
 
 func (c *FillColor) SizedByParent() {}
 
-// Paint implements RenderObject.
-func (c *FillColor) Paint(_ *Renderer, ops *op.Ops) {
+// PerformPaint implements RenderObject.
+func (c *FillColor) PerformPaint(_ *Renderer, ops *op.Ops) {
 	paint.Fill(ops, c.color)
 }
 
@@ -99,8 +99,8 @@ func (p *Padding) Inset() Inset {
 	return p.inset
 }
 
-// Layout implements RenderObject.
-func (p *Padding) Layout() f32.Point {
+// PerformLayout implements RenderObject.
+func (p *Padding) PerformLayout() f32.Point {
 	cs := p.Handle().Constraints()
 	if p.Child == nil {
 		return cs.Constrain(f32.Pt(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom))
@@ -117,8 +117,8 @@ func (p *Padding) Layout() f32.Point {
 	return cs.Constrain(childSz.Add(f32.Pt(horiz, vert)))
 }
 
-// Paint implements RenderObject.
-func (p *Padding) Paint(r *Renderer, ops *op.Ops) {
+// PerformPaint implements RenderObject.
+func (p *Padding) PerformPaint(r *Renderer, ops *op.Ops) {
 	defer op.Affine(f32.Affine2D{}.Offset(p.Child.Handle().offset)).Push(ops).Pop()
 	r.Paint(p.Child).Add(ops)
 }
@@ -140,15 +140,15 @@ func (c *Constrained) ExtraConstraints() Constraints {
 	return c.extraConstraints
 }
 
-// Layout implements Object.
-func (c *Constrained) Layout() f32.Point {
+// PerformLayout implements Object.
+func (c *Constrained) PerformLayout() f32.Point {
 	cs := c.extraConstraints.Enforce(c.Handle().Constraints())
 	Layout(c.Child, cs, true)
 	return c.Child.Handle().Size()
 }
 
-// Paint implements Object.
-func (c *Constrained) Paint(r *Renderer, ops *op.Ops) {
+// PerformPaint implements Object.
+func (c *Constrained) PerformPaint(r *Renderer, ops *op.Ops) {
 	r.Paint(c.Child).Add(ops)
 }
 
@@ -163,8 +163,8 @@ type Row struct {
 	ManyChildren
 }
 
-// Layout implements Object.
-func (row *Row) Layout() f32.Point {
+// PerformLayout implements Object.
+func (row *Row) PerformLayout() f32.Point {
 	cs := row.Handle().Constraints()
 	inCs := cs
 	inCs.Min.X = 0
@@ -188,8 +188,8 @@ func (row *Row) AddChild(child Object) {
 	row.children = append(row.children, child)
 }
 
-// Paint implements Object.
-func (row *Row) Paint(r *Renderer, ops *op.Ops) {
+// PerformPaint implements Object.
+func (row *Row) PerformPaint(r *Renderer, ops *op.Ops) {
 	for _, child := range row.children {
 		stack := op.Affine(f32.Affine2D{}.Offset(child.Handle().offset)).Push(ops)
 		call := r.Paint(child)

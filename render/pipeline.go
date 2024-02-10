@@ -77,7 +77,7 @@ func (o *PipelineOwner) FlushLayout() {
 
 // XXX what's the meaning of this function name?
 func layoutWithoutResize(obj Object) {
-	obj.Handle().size = obj.Layout()
+	obj.Handle().size = obj.PerformLayout()
 	obj.Handle().needsLayout = false
 	MarkNeedsPaint(obj)
 }

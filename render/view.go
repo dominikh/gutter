@@ -22,7 +22,7 @@ func NewView() *View {
 	}
 }
 
-func (v *View) Paint(r *Renderer, ops *op.Ops) {
+func (v *View) PerformPaint(r *Renderer, ops *op.Ops) {
 	if v.Child != nil {
 		r.Paint(v.Child).Add(ops)
 	}
@@ -48,7 +48,7 @@ func (v *View) constraints() Constraints {
 	return v.configuration
 }
 
-func (v *View) Layout() f32.Point {
+func (v *View) PerformLayout() f32.Point {
 	sizedByChild := !v.constraints().Tight()
 	if v.Child != nil {
 		Layout(v.Child, v.constraints(), sizedByChild)
