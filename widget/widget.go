@@ -81,16 +81,6 @@ func (c *renderColoredBox) Layout() (size f32.Point) {
 	return render.Layout(c.Child, c.Constraints(), true)
 }
 
-// MarkNeedsLayout implements render.Object.
-func (c *renderColoredBox) MarkNeedsLayout() {
-	render.MarkNeedsLayout(c)
-}
-
-// MarkNeedsPaint implements render.Object.
-func (c *renderColoredBox) MarkNeedsPaint() {
-	render.MarkNeedsPaint(c)
-}
-
 func (c *renderColoredBox) Paint(r *render.Renderer, ops *op.Ops) {
 	sz := c.Size()
 	if sz != f32.Pt(0, 0) {
@@ -104,7 +94,7 @@ func (c *renderColoredBox) Paint(r *render.Renderer, ops *op.Ops) {
 func (r *renderColoredBox) setColor(c color.NRGBA) {
 	if r.color != c {
 		r.color = c
-		r.MarkNeedsPaint()
+		render.MarkNeedsPaint(r)
 	}
 }
 

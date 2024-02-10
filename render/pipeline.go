@@ -79,7 +79,7 @@ func (o *PipelineOwner) FlushLayout() {
 func layoutWithoutResize(obj Object) {
 	obj.Handle().size = obj.Layout()
 	obj.Handle().needsLayout = false
-	obj.MarkNeedsPaint()
+	MarkNeedsPaint(obj)
 }
 
 func (o *PipelineOwner) FlushPaint(ops *op.Ops) {
@@ -117,7 +117,7 @@ func Attach(obj Object, owner *PipelineOwner) {
 		// Don't enter this block if we've never laid out at all;
 		// scheduleInitialLayout() will handle it
 		h.needsLayout = false
-		obj.MarkNeedsLayout()
+		MarkNeedsLayout(obj)
 	}
 	if h.needsCompositingBitsUpdate {
 		h.needsCompositingBitsUpdate = false
@@ -127,7 +127,7 @@ func Attach(obj Object, owner *PipelineOwner) {
 		// Don't enter this block if we've never painted at all;
 		// scheduleInitialPaint() will handle it
 		h.needsPaint = false
-		obj.MarkNeedsPaint()
+		MarkNeedsPaint(obj)
 	}
 
 	if aobj, ok := obj.(Attacher); ok {

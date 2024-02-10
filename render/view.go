@@ -22,9 +22,6 @@ func NewView() *View {
 	}
 }
 
-func (v *View) MarkNeedsPaint()  { MarkNeedsPaint(v) }
-func (v *View) MarkNeedsLayout() { MarkNeedsLayout(v) }
-
 func (v *View) Paint(r *Renderer, ops *op.Ops) {
 	if v.Child != nil {
 		r.Paint(v.Child).Add(ops)
@@ -39,7 +36,7 @@ func (v *View) SetConfiguration(value ViewConfiguration) {
 		return
 	}
 	v.configuration = value
-	v.MarkNeedsLayout()
+	MarkNeedsLayout(v)
 }
 
 func (v *View) PrepareInitialFrame() {

@@ -116,12 +116,6 @@ func (c *PointerRegion) Layout() (size f32.Point) {
 	}
 }
 
-// MarkNeedsLayout implements render.Object.
-func (c *PointerRegion) MarkNeedsLayout() { MarkNeedsLayout(c) }
-
-// MarkNeedsPaint implements render.Object.
-func (c *PointerRegion) MarkNeedsPaint() { MarkNeedsPaint(c) }
-
 // Paint implements render.Object.
 func (c *PointerRegion) Paint(r *Renderer, ops *op.Ops) {
 	if c.Child != nil {
