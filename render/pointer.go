@@ -104,7 +104,12 @@ type PointerEventHandler interface {
 type PointerRegion struct {
 	Box
 	SingleChild
-	OnMove func(hit HitTestEntry, ev pointer.Event)
+	OnPress   func(hit HitTestEntry, ev pointer.Event)
+	OnRelease func(hit HitTestEntry, ev pointer.Event)
+	OnMove    func(hit HitTestEntry, ev pointer.Event)
+	OnDrag    func(hit HitTestEntry, ev pointer.Event)
+	OnScroll  func(hit HitTestEntry, ev pointer.Event)
+	OnAll     func(hit HitTestEntry, ev pointer.Event)
 }
 
 // PerformLayout implements render.Object.
@@ -124,8 +129,24 @@ func (c *PointerRegion) PerformPaint(r *Renderer, ops *op.Ops) {
 }
 
 func (c *PointerRegion) HandlePointerEvent(hit HitTestEntry, ev pointer.Event) {
-	switch ev.Kind {
-	case pointer.Move, pointer.Drag:
-		c.OnMove(hit, ev)
+	call := func(fn func(hit HitTestEntry, ev pointer.Event)) {
+		if fn == nil {
+			return
+		}
+		fn(hit, ev)
 	}
+	switch ev.Kind {
+	case pointer.Move:
+		call(c.OnMove)
+	case pointer.Drag:
+		call(c.OnMove)
+		call(c.OnDrag)
+	case pointer.Press:
+		call(c.OnPress)
+	case pointer.Release:
+		call(c.OnRelease)
+	case pointer.Scroll:
+		call(c.OnScroll)
+	}
+	call(c.OnAll)
 }

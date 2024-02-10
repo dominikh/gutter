@@ -146,21 +146,36 @@ func (box *SizedBox) GetChild() Widget {
 }
 
 type PointerRegion struct {
-	OnMove func(hit render.HitTestEntry, ev pointer.Event)
-	Child  Widget
+	OnPress   func(hit render.HitTestEntry, ev pointer.Event)
+	OnRelease func(hit render.HitTestEntry, ev pointer.Event)
+	OnMove    func(hit render.HitTestEntry, ev pointer.Event)
+	OnDrag    func(hit render.HitTestEntry, ev pointer.Event)
+	OnScroll  func(hit render.HitTestEntry, ev pointer.Event)
+	OnAll     func(hit render.HitTestEntry, ev pointer.Event)
+	Child     Widget
 }
 
 // CreateRenderObject implements RenderObjectWidget.
 func (p *PointerRegion) CreateRenderObject(ctx BuildContext) render.Object {
 	obj := &render.PointerRegion{}
 	obj.HitTestBehavior = render.Opaque
+	obj.OnPress = p.OnPress
+	obj.OnRelease = p.OnRelease
 	obj.OnMove = p.OnMove
+	obj.OnDrag = p.OnDrag
+	obj.OnScroll = p.OnScroll
+	obj.OnAll = p.OnAll
 	return obj
 }
 
 // UpdateRenderObject implements RenderObjectWidget.
 func (p *PointerRegion) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+	obj.(*render.PointerRegion).OnPress = p.OnPress
+	obj.(*render.PointerRegion).OnRelease = p.OnRelease
 	obj.(*render.PointerRegion).OnMove = p.OnMove
+	obj.(*render.PointerRegion).OnDrag = p.OnDrag
+	obj.(*render.PointerRegion).OnScroll = p.OnScroll
+	obj.(*render.PointerRegion).OnAll = p.OnAll
 }
 
 // CreateElement implements Widget.
