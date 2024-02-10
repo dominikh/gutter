@@ -12,6 +12,7 @@ package main
 // end, all of the Gio events should be "reactive".
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"os"
@@ -22,13 +23,13 @@ import (
 	"honnef.co/go/gutter/widget"
 
 	"gioui.org/app"
-	"gioui.org/io/system"
+	"gioui.org/io/pointer"
 	"gioui.org/op"
 )
 
 func main() {
 	go func() {
-		w := app.NewWindow()
+		w := app.NewWindow(app.CustomInputHandling(true))
 		err := run2(w)
 		if err != nil {
 			log.Fatal(err)
@@ -61,10 +62,9 @@ func (s *BirdState) Transition(t widget.StateTransition) {
 	switch t.Kind {
 	case widget.StateInitializing:
 		s.c = color.NRGBA{0, 255, 0, 255}
-		go ticker(1*time.Millisecond, func() {
-			s.c.R += 1
-			widget.MarkNeedsBuild(s.Element)
-		})
+		// go ticker(1*time.Millisecond, func() {
+		// 	s.c.R += 1
+		// })
 
 	}
 	// XXX tear down the timer when we're done
@@ -73,12 +73,21 @@ func (s *BirdState) Transition(t widget.StateTransition) {
 func (s *BirdState) Build() widget.Widget {
 	return &widget.Padding{
 		Padding: render.Inset{Left: 20, Top: 20, Right: 20, Bottom: 20},
-		Child: &widget.ColoredBox{
-			Color: color.NRGBA{255, 0, 0, 255},
-			Child: &widget.Padding{
-				Padding: render.Inset{Left: 100, Top: 100, Right: 100, Bottom: 100},
-				Child: &widget.ColoredBox{
-					Color: s.c,
+		Child: &widget.Padding{
+			Padding: render.Inset{Left: 50, Top: 50, Right: 50, Bottom: 50},
+			Child: &widget.ColoredBox{
+				Color: color.NRGBA{255, 0, 0, 255},
+				Child: &widget.Padding{
+					Padding: render.Inset{Left: 200, Top: 200, Right: 200, Bottom: 200},
+					Child: &widget.PointerRegion{
+						OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
+							s.c.G = uint8(hit.Offset.Y)
+							widget.MarkNeedsBuild(s.Element)
+						},
+						Child: &widget.ColoredBox{
+							Color: s.c,
+						},
+					},
 				},
 			},
 		},
@@ -124,12 +133,23 @@ func run2(w *app.Window) error {
 	var ops op.Ops
 	for {
 		switch e := w.NextEvent().(type) {
-		case system.DestroyEvent:
+		default:
+			fmt.Printf("%T %v\n", e, e)
+		case pointer.Event:
+			var ht render.HitTestResult
+			render.HitTest(&ht, rootElem.RenderHandle().RenderObject, e.Position)
+			for _, hit := range ht.Hits {
+				if obj, ok := hit.Object.(render.PointerEventHandler); ok {
+					obj.HandlePointerEvent(hit, e)
+				}
+			}
+
+			// fmt.Println(ht)
+		case app.DestroyEvent:
 			return e.Err
 		case CallbackEvent:
 			e.cb()
-		case system.FrameEvent:
-			log.Println("rendering frame")
+		case app.FrameEvent:
 			ops.Reset()
 			cs := render.ViewConfiguration{
 				Min: f32.FPt(e.Size),
@@ -137,7 +157,6 @@ func run2(w *app.Window) error {
 			}
 			rootElem.SetConfiguration(cs)
 
-			// XXX we need to get the current constraints into the view
 			bo.BuildScope(rootElem, nil)
 			po.FlushLayout()
 			po.FlushCompositingBits()
