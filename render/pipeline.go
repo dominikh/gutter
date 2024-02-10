@@ -75,8 +75,9 @@ func (o *PipelineOwner) FlushLayout() {
 	o.shouldMergeDirtyNodes = false
 }
 
+// XXX what's the meaning of this function name?
 func layoutWithoutResize(obj Object) {
-	obj.Layout()
+	obj.Handle().size = obj.Layout()
 	obj.Handle().needsLayout = false
 	obj.MarkNeedsPaint()
 }

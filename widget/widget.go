@@ -6,6 +6,7 @@ import (
 	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/render"
 
+	"gioui.org/io/pointer"
 	"gioui.org/op"
 	"gioui.org/op/paint"
 )
@@ -14,6 +15,8 @@ var _ RenderObjectWidget = (*Padding)(nil)
 var _ SingleChildWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*ColoredBox)(nil)
 var _ SingleChildWidget = (*ColoredBox)(nil)
+var _ RenderObjectWidget = (*PointerRegion)(nil)
+var _ SingleChildWidget = (*PointerRegion)(nil)
 
 var _ render.Object = (*renderColoredBox)(nil)
 var _ render.ObjectWithChild = (*renderColoredBox)(nil)
@@ -150,4 +153,37 @@ func (box *SizedBox) Key() any {
 // GetChild implements SingleChildWidget.
 func (box *SizedBox) GetChild() Widget {
 	return box.Child
+}
+
+type PointerRegion struct {
+	OnMove func(hit render.HitTestEntry, ev pointer.Event)
+	Child  Widget
+}
+
+// CreateRenderObject implements RenderObjectWidget.
+func (p *PointerRegion) CreateRenderObject(ctx BuildContext) render.Object {
+	obj := &render.PointerRegion{}
+	obj.HitTestBehavior = render.Opaque
+	obj.OnMove = p.OnMove
+	return obj
+}
+
+// UpdateRenderObject implements RenderObjectWidget.
+func (p *PointerRegion) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+	obj.(*render.PointerRegion).OnMove = p.OnMove
+}
+
+// CreateElement implements Widget.
+func (w *PointerRegion) CreateElement() Element {
+	return NewSingleChildRenderObjectElement(w)
+}
+
+func (w *PointerRegion) GetChild() Widget {
+	return w.Child
+}
+
+// Key implements Widget.
+func (*PointerRegion) Key() any {
+	// XXX
+	return nil
 }

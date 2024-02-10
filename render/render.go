@@ -66,7 +66,9 @@ type Disposable interface {
 }
 
 type ObjectHandle struct {
-	size                       f32.Point
+	size f32.Point
+	// the object's position as a relative offset from the parent object's origin.
+	offset                     f32.Point
 	needsPaint                 bool
 	needsLayout                bool
 	needsCompositingBitsUpdate bool
@@ -75,6 +77,7 @@ type ObjectHandle struct {
 	relayoutBoundary           Object
 	depth                      int
 	owner                      *PipelineOwner
+	HitTestBehavior            HitTestBehavior
 }
 
 func (h *ObjectHandle) Handle() *ObjectHandle    { return h }

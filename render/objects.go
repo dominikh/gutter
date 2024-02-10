@@ -93,8 +93,7 @@ type Inset struct {
 type Padding struct {
 	Box
 	SingleChild
-	inset          Inset
-	relChildOffset f32.Point
+	inset Inset
 }
 
 func NewPadding(padding Inset) *Padding {
@@ -126,13 +125,13 @@ func (p *Padding) Layout() f32.Point {
 		Max: f32.Pt(max(newMin.X, cs.Max.X-horiz), max(newMin.Y, cs.Max.Y-vert)),
 	}
 	childSz := Layout(p.Child, innerCs, true)
-	p.relChildOffset = f32.Pt(p.inset.Left, p.inset.Top)
+	p.Child.Handle().offset = f32.Pt(p.inset.Left, p.inset.Top)
 	return cs.Constrain(childSz.Add(f32.Pt(horiz, vert)))
 }
 
 // Paint implements RenderObject.
 func (p *Padding) Paint(r *Renderer, ops *op.Ops) {
-	defer op.Affine(f32.Affine2D{}.Offset(p.relChildOffset)).Push(ops).Pop()
+	defer op.Affine(f32.Affine2D{}.Offset(p.Child.Handle().offset)).Push(ops).Pop()
 	r.Paint(p.Child).Add(ops)
 }
 
@@ -174,7 +173,6 @@ func (c *Constrained) SetChild(child Object) {
 type Row struct {
 	Box
 	ManyChildren
-	childOffsets []float32
 }
 
 // Layout implements Object.
@@ -184,8 +182,8 @@ func (row *Row) Layout() f32.Point {
 	inCs.Min.X = 0
 	off := float32(0)
 	height := cs.Min.Y
-	for i, child := range row.children {
-		row.childOffsets[i] = off
+	for _, child := range row.children {
+		child.Handle().offset = f32.Pt(off, 0)
 		Layout(child, inCs, true)
 		sz := child.Handle().Size()
 		inCs.Max.X -= sz.X
@@ -200,13 +198,12 @@ func (row *Row) Layout() f32.Point {
 func (row *Row) AddChild(child Object) {
 	child.Handle().SetParent(row)
 	row.children = append(row.children, child)
-	row.childOffsets = append(row.childOffsets, 0)
 }
 
 // Paint implements Object.
 func (row *Row) Paint(r *Renderer, ops *op.Ops) {
-	for i, child := range row.children {
-		stack := op.Affine(f32.Affine2D{}.Offset(f32.Pt(row.childOffsets[i], 0))).Push(ops)
+	for _, child := range row.children {
+		stack := op.Affine(f32.Affine2D{}.Offset(child.Handle().offset)).Push(ops)
 		call := r.Paint(child)
 		call.Add(ops)
 		stack.Pop()

@@ -72,7 +72,7 @@ type viewElement struct {
 func (el *viewElement) Transition(t ElementTransition) {
 	switch t.Kind {
 	case ElementActivated:
-		el.pipelineOwner.SetRootNode(el.renderObject)
+		el.pipelineOwner.SetRootNode(el.RenderObject)
 	case ElementDeactivating:
 		el.pipelineOwner.SetRootNode(nil)
 	case ElementUpdated:
@@ -80,9 +80,9 @@ func (el *viewElement) Transition(t ElementTransition) {
 		el.updateChild()
 	case ElementMounted:
 		RenderTreeRootElementAfterMount(el, t.Parent, t.NewSlot)
-		el.pipelineOwner.SetRootNode(el.renderObject)
+		el.pipelineOwner.SetRootNode(el.RenderObject)
 		el.updateChild()
-		el.renderObject.(*render.View).PrepareInitialFrame()
+		el.RenderObject.(*render.View).PrepareInitialFrame()
 	case ElementUnmounted:
 		el.pipelineOwner.Dispose()
 		RenderObjectElementAfterUnmount(el)
@@ -112,7 +112,7 @@ func newViewElement(view *View, po *render.PipelineOwner) *viewElement {
 }
 
 func (el *viewElement) SetConfiguration(cs render.ViewConfiguration) {
-	el.renderObject.(*render.View).SetConfiguration(cs)
+	el.RenderObject.(*render.View).SetConfiguration(cs)
 }
 
 func (el *viewElement) ForgetChild(child Element) {
@@ -130,7 +130,7 @@ func (el *viewElement) PerformRebuild() {
 }
 
 func (el *viewElement) InsertRenderObjectChild(child render.Object, slot any) {
-	render.SetChild(el.renderObject.(render.ObjectWithChild), child)
+	render.SetChild(el.RenderObject.(render.ObjectWithChild), child)
 }
 
 func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
@@ -138,7 +138,7 @@ func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSl
 }
 
 func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot any) {
-	render.SetChild(el.renderObject.(render.ObjectWithChild), nil)
+	render.SetChild(el.RenderObject.(render.ObjectWithChild), nil)
 }
 
 func (el *viewElement) AssignOwner(owner *BuildOwner) {

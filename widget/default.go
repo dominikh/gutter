@@ -28,12 +28,12 @@ type RenderTreeRootElement interface {
 }
 
 func RenderObjectElementAfterUpdate(el RenderObjectElement, newWidget Widget) {
-	el.Handle().widget.(RenderObjectWidget).UpdateRenderObject(el, el.RenderHandle().renderObject)
+	el.Handle().widget.(RenderObjectWidget).UpdateRenderObject(el, el.RenderHandle().RenderObject)
 	forceRebuild(el)
 }
 func RenderObjectElementAfterMount(el RenderObjectElement, parent Element, newSlot any) {
 	h := el.RenderHandle()
-	h.renderObject = h.widget.(RenderObjectWidget).CreateRenderObject(el)
+	h.RenderObject = h.widget.(RenderObjectWidget).CreateRenderObject(el)
 	AttachRenderObject(el, newSlot)
 	rebuild(el)
 }
@@ -41,22 +41,22 @@ func RenderObjectElementAfterUnmount(el RenderObjectElement) {
 	h := el.RenderHandle()
 	oldWidget := h.widget.(RenderObjectWidget)
 	if n, ok := oldWidget.(RenderObjectUnmountNotifyee); ok {
-		n.DidUnmountRenderObject(h.renderObject)
+		n.DidUnmountRenderObject(h.RenderObject)
 	}
-	render.Dispose(h.renderObject)
-	h.renderObject = nil
+	render.Dispose(h.RenderObject)
+	h.RenderObject = nil
 }
 func RenderObjectElementAttachRenderObject(el RenderObjectElement, slot any) {
 	h := el.RenderHandle()
 	h.slot = slot
 	h.ancestorRenderObjectElement = findAncestorRenderObjectElement(el.(RenderObjectElement))
 	if h.ancestorRenderObjectElement != nil {
-		h.ancestorRenderObjectElement.InsertRenderObjectChild(h.renderObject, slot)
+		h.ancestorRenderObjectElement.InsertRenderObjectChild(h.RenderObject, slot)
 	}
 }
 func RenderObjectElementPerformRebuild(el RenderObjectElement) {
 	h := el.RenderHandle()
-	h.widget.(RenderObjectWidget).UpdateRenderObject(el, h.renderObject)
+	h.widget.(RenderObjectWidget).UpdateRenderObject(el, h.RenderObject)
 	el.Handle().dirty = false
 }
 

@@ -164,9 +164,6 @@ type StatefulWidget interface {
 }
 
 // State is state.
-//
-// Implementations can optionally implement [InitStater], [StateDidUpdateWidgeter], [StateDeactivater],
-// [StateActivater], [Disposer], and [StateDidChangeDependencieser].
 type State interface {
 	WidgetBuilder
 
@@ -469,7 +466,7 @@ func (el *SimpleSingleChildRenderObjectElement) GetChild() Element      { return
 func (el *SimpleSingleChildRenderObjectElement) SetChild(child Element) { el.child = child }
 
 func (el *SimpleSingleChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot any) {
-	render.SetChild(el.renderObject.(render.ObjectWithChild), child)
+	render.SetChild(el.RenderObject.(render.ObjectWithChild), child)
 }
 
 func (el *SimpleSingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
@@ -576,7 +573,7 @@ func (el *ElementHandle) Slot() any              { return el.slot }
 
 type RenderObjectElementHandle struct {
 	ElementHandle
-	renderObject                render.Object
+	RenderObject                render.Object
 	ancestorRenderObjectElement RenderObjectElement
 }
 
@@ -586,13 +583,13 @@ func (el *RenderObjectElementHandle) RenderHandle() *RenderObjectElementHandle {
 
 func (h *RenderObjectElementHandle) UpdateSlot(oldSlot, newSlot any) {
 	if ancestor := h.ancestorRenderObjectElement; ancestor != nil {
-		ancestor.MoveRenderObjectChild(h.renderObject, oldSlot, h.slot)
+		ancestor.MoveRenderObjectChild(h.RenderObject, oldSlot, h.slot)
 	}
 }
 
 func (el *RenderObjectElementHandle) DetachRenderObject() {
 	if el.ancestorRenderObjectElement != nil {
-		el.ancestorRenderObjectElement.RemoveRenderObjectChild(el.renderObject, el.slot)
+		el.ancestorRenderObjectElement.RemoveRenderObjectChild(el.RenderObject, el.slot)
 		el.ancestorRenderObjectElement = nil
 	}
 	el.slot = nil

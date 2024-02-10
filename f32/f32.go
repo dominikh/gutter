@@ -134,6 +134,11 @@ func (r Rectangle) Sub(p Point) Rectangle {
 	}
 }
 
+func (r Rectangle) Contains(p Point) bool {
+	return p.X >= r.Min.X && p.Y >= r.Min.Y &&
+		p.X < r.Max.X && p.Y < r.Max.Y
+}
+
 func Clamp(v, minV, maxV float32) float32 {
 	return min(maxV, max(minV, v))
 }
