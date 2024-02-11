@@ -2,6 +2,7 @@ package f32
 
 import (
 	"image"
+	"math"
 
 	"gioui.org/f32"
 )
@@ -17,6 +18,11 @@ func FPt(pt image.Point) Point {
 		X: float32(pt.X),
 		Y: float32(pt.Y),
 	}
+}
+
+// Magnitude treats p as a vector and returns its magnitude.
+func Magnitude(p f32.Point) float32 {
+	return float32(math.Hypot(float64(p.X), float64(p.Y)))
 }
 
 // A Rectangle contains the points (X, Y) where Min.X <= X < Max.X,
