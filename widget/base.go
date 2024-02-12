@@ -6,6 +6,7 @@
 package widget
 
 import (
+	"fmt"
 	"slices"
 	"unsafe"
 
@@ -132,8 +133,10 @@ func (el *SimpleInteriorElement[W]) GetState() State[W] {
 func (el *SimpleInteriorElement[W]) Build() Widget {
 	if s := el.State; s != nil {
 		return s.Build()
+	} else if w, ok := el.widget.(WidgetBuilder); ok {
+		return w.Build()
 	} else {
-		return el.widget.(WidgetBuilder).Build()
+		panic(fmt.Sprintf("widget %T needs to implement WidgetBuilder or StatefulWidget", el.widget))
 	}
 }
 
