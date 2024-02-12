@@ -39,18 +39,18 @@ func (w *Bird) CreateElement() widget.Element {
 	return widget.NewInteriorElement(w)
 }
 
-func (w *Bird) CreateState() widget.State {
+func (w *Bird) CreateState() widget.State[*Bird] {
 	return &BirdState{}
 }
 
 type BirdState struct {
-	widget.StateHandle
+	widget.StateHandle[*Bird]
 
 	padding float32
 	c       color.NRGBA
 }
 
-func (s *BirdState) Transition(t widget.StateTransition) {
+func (s *BirdState) Transition(t widget.StateTransition[*Bird]) {
 	switch t.Kind {
 	case widget.StateInitializing:
 		s.c = color.NRGBA{0, 255, 0, 255}

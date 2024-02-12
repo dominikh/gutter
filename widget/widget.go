@@ -19,7 +19,7 @@ var _ RenderObjectWidget = (*ColoredBox)(nil)
 var _ SingleChildWidget = (*ColoredBox)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
 var _ SingleChildWidget = (*PointerRegion)(nil)
-var _ StatefulWidget = (*AnimatedPadding)(nil)
+var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
 var _ SingleChildWidget = (*AnimatedPadding)(nil)
 
 var _ render.Object = (*renderColoredBox)(nil)
@@ -69,7 +69,7 @@ func (a *AnimatedPadding) CreateElement() Element {
 }
 
 // CreateState implements StatefulWidget.
-func (a *AnimatedPadding) CreateState() State {
+func (a *AnimatedPadding) CreateState() State[*AnimatedPadding] {
 	return &animatedPaddingState{}
 }
 
@@ -80,7 +80,7 @@ func (a *AnimatedPadding) Key() any {
 }
 
 type animatedPaddingState struct {
-	StateHandle
+	StateHandle[*AnimatedPadding]
 
 	animation animation.Animation[render.Inset]
 	padding   render.Inset
@@ -90,7 +90,7 @@ type animatedPaddingState struct {
 func (a *animatedPaddingState) Build() Widget {
 	return &Padding{
 		Padding: a.padding,
-		Child:   a.Widget.(*AnimatedPadding).Child,
+		Child:   a.Widget.Child,
 	}
 }
 
@@ -105,10 +105,10 @@ func (a *animatedPaddingState) updateAnimation(now time.Time) {
 }
 
 // Transition implements State.
-func (a *animatedPaddingState) Transition(t StateTransition) {
+func (a *animatedPaddingState) Transition(t StateTransition[*AnimatedPadding]) {
 	switch t.Kind {
 	case StateInitializing:
-		w := a.Widget.(*AnimatedPadding)
+		w := a.Widget
 		a.padding = w.Padding
 		if w.Curve != nil {
 			a.animation.Curve = w.Curve
@@ -117,9 +117,8 @@ func (a *animatedPaddingState) Transition(t StateTransition) {
 		}
 		a.animation.Compute = render.LerpInset
 	case StateUpdatedWidget:
-		w := a.Widget.(*AnimatedPadding)
-		ow := t.OldWidget.(*AnimatedPadding)
-		if w.Padding != ow.Padding {
+		w := a.Widget
+		if w.Padding != t.OldWidget.Padding {
 			// XXX this should use the frame's now, not time.Now
 			a.animation.Start(time.Now(), w.Duration, a.padding, w.Padding)
 			a.updateAnimation(time.Now())

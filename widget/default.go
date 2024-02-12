@@ -49,7 +49,7 @@ func RenderObjectElementAfterUnmount(el RenderObjectElement) {
 func RenderObjectElementAttachRenderObject(el RenderObjectElement, slot any) {
 	h := el.RenderHandle()
 	h.slot = slot
-	h.ancestorRenderObjectElement = findAncestorRenderObjectElement(el.(RenderObjectElement))
+	h.ancestorRenderObjectElement = findAncestorRenderObjectElement(el)
 	if h.ancestorRenderObjectElement != nil {
 		h.ancestorRenderObjectElement.InsertRenderObjectChild(h.RenderObject, slot)
 	}
