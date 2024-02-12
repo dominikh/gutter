@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
@@ -45,13 +46,15 @@ func (w *Bird) CreateState() widget.State {
 type BirdState struct {
 	widget.StateHandle
 
-	c color.NRGBA
+	padding float32
+	c       color.NRGBA
 }
 
 func (s *BirdState) Transition(t widget.StateTransition) {
 	switch t.Kind {
 	case widget.StateInitializing:
 		s.c = color.NRGBA{0, 255, 0, 255}
+		s.padding = 200
 		// go ticker(1*time.Millisecond, func() {
 		// 	s.c.R += 1
 		// })
@@ -61,19 +64,29 @@ func (s *BirdState) Transition(t widget.StateTransition) {
 }
 
 func (s *BirdState) Build() widget.Widget {
-	return &widget.Padding{
-		Padding: render.Inset{70, 70, 70, 70},
+	return &widget.AnimatedPadding{
+		Duration: 1000 * time.Millisecond,
+		Curve:    animation.EaseOutBounce,
+		Padding:  render.Inset{s.padding, s.padding, s.padding, s.padding},
 		Child: &widget.PointerRegion{
 			OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
-				fmt.Println("outer:", ev)
+				// fmt.Println("outer:", ev)
 			},
 			Child: &widget.ColoredBox{
 				Color: color.NRGBA{255, 0, 0, 255},
 				Child: &widget.Padding{
 					Padding: render.Inset{200, 200, 200, 200},
 					Child: &widget.PointerRegion{
+						OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
+							if s.padding == 200 {
+								s.padding = 0
+							} else {
+								s.padding = 200
+							}
+							widget.MarkNeedsBuild(s.Element)
+						},
 						OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
-							fmt.Println("inner:", ev)
+							// fmt.Println("inner:", ev)
 							s.c.G = uint8(hit.Offset.Y)
 							widget.MarkNeedsBuild(s.Element)
 						},
@@ -116,12 +129,12 @@ func run2(w *app.Window) error {
 	// This is basically runApp
 	var bo widget.BuildOwner
 	po := render.NewPipelineOwner()
+	bo.PipelineOwner = po
 	wview := widget.NewView(root, po)
 	rootElem := wview.Attach(&bo, nil)
 
-	bo.OnBuildScheduled = func() {
-		win.Invalidate()
-	}
+	po.OnNeedVisualUpdate = win.Invalidate
+	bo.OnBuildScheduled = win.Invalidate
 
 	var ops op.Ops
 	for {
@@ -172,6 +185,8 @@ func run2(w *app.Window) error {
 				Max: f32.FPt(e.Size),
 			}
 			rootElem.SetConfiguration(cs)
+
+			po.RunFrameCallbacks(e.Now)
 
 			bo.BuildScope(rootElem, nil)
 			po.FlushLayout()

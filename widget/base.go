@@ -227,7 +227,7 @@ func MarkNeedsBuild(el Element) {
 		return
 	}
 	h.dirty = true
-	h.owner.scheduleBuildFor(el)
+	h.buildOwner.scheduleBuildFor(el)
 }
 
 type RenderObjectAttacher interface {
@@ -326,7 +326,7 @@ func Activate(el Element) {
 	// el._updateInheritance()
 	// el.attachNotificationTree()
 	if h.dirty {
-		h.owner.scheduleBuildFor(el)
+		h.buildOwner.scheduleBuildFor(el)
 	}
 	// if hadDependencies {
 	// 	el.didChangeDependencies()
@@ -367,7 +367,7 @@ func Mount(el, parent Element, newSlot any) {
 	if parent != nil {
 		// Only assign ownership if the parent is non-null. If parent is null
 		// (the root node), the owner should have already been assigned.
-		h.owner = parent.Handle().owner
+		h.buildOwner = parent.Handle().buildOwner
 	}
 
 	el.Handle().dirty = true
@@ -480,6 +480,7 @@ type BuildOwner struct {
 	dirtyElementsNeedsResorting bool
 	OnBuildScheduled            func()
 	scheduledFlushDirtyElements bool
+	PipelineOwner               *render.PipelineOwner
 }
 
 func (o *BuildOwner) scheduleBuildFor(el Element) {
@@ -559,7 +560,7 @@ type ElementHandle struct {
 	slot           any
 	lifecycleState int
 	depth          int
-	owner          *BuildOwner
+	buildOwner     *BuildOwner
 	dirty          bool
 	inDirtyList    bool
 	widget         Widget
@@ -624,7 +625,7 @@ func canUpdate(old, new Widget) bool {
 func deactivateChild(child Element) {
 	child.Handle().parent = nil
 	DetachRenderObject(child)
-	child.Handle().owner.inactiveElements.add(child)
+	child.Handle().buildOwner.inactiveElements.add(child)
 }
 
 type inactiveElements struct {
@@ -752,7 +753,7 @@ func RetakeInactiveElement(el Element, key GlobalKey, newWidget Widget) Element 
 		ForgetChild(parent, element)
 		deactivateChild(element)
 	}
-	el.Handle().owner.inactiveElements.remove(element)
+	el.Handle().buildOwner.inactiveElements.remove(element)
 	return element
 }
 

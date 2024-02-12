@@ -2,7 +2,9 @@ package widget
 
 import (
 	"image/color"
+	"time"
 
+	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
@@ -17,6 +19,8 @@ var _ RenderObjectWidget = (*ColoredBox)(nil)
 var _ SingleChildWidget = (*ColoredBox)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
 var _ SingleChildWidget = (*PointerRegion)(nil)
+var _ StatefulWidget = (*AnimatedPadding)(nil)
+var _ SingleChildWidget = (*AnimatedPadding)(nil)
 
 var _ render.Object = (*renderColoredBox)(nil)
 var _ render.ObjectWithChild = (*renderColoredBox)(nil)
@@ -44,6 +48,84 @@ func (p *Padding) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 
 func (p *Padding) CreateElement() Element {
 	return NewSingleChildRenderObjectElement(p)
+}
+
+type AnimatedPadding struct {
+	Padding render.Inset
+	Child   Widget
+
+	Duration time.Duration
+	Curve    func(t float64) float64
+}
+
+// GetChild implements SingleChildWidget.
+func (a *AnimatedPadding) GetChild() Widget {
+	return a.Child
+}
+
+// CreateElement implements StatefulWidget.
+func (a *AnimatedPadding) CreateElement() Element {
+	return NewInteriorElement(a)
+}
+
+// CreateState implements StatefulWidget.
+func (a *AnimatedPadding) CreateState() State {
+	return &animatedPaddingState{}
+}
+
+// Key implements StatefulWidget.
+func (a *AnimatedPadding) Key() any {
+	// XXX
+	return nil
+}
+
+type animatedPaddingState struct {
+	StateHandle
+
+	animation animation.Animation[render.Inset]
+	padding   render.Inset
+}
+
+// Build implements State.
+func (a *animatedPaddingState) Build() Widget {
+	return &Padding{
+		Padding: a.padding,
+		Child:   a.Widget.(*AnimatedPadding).Child,
+	}
+}
+
+func (a *animatedPaddingState) updateAnimation(now time.Time) {
+	var done bool
+	a.padding, done = a.animation.Evaluate(now)
+	if !done {
+		// XXX this chain of fields is ridiculous
+		a.StateHandle.Element.Handle().buildOwner.PipelineOwner.AddNextFrameCallback(a.updateAnimation)
+	}
+	MarkNeedsBuild(a.Element)
+}
+
+// Transition implements State.
+func (a *animatedPaddingState) Transition(t StateTransition) {
+	switch t.Kind {
+	case StateInitializing:
+		w := a.Widget.(*AnimatedPadding)
+		a.padding = w.Padding
+		if w.Curve != nil {
+			a.animation.Curve = w.Curve
+		} else {
+			a.animation.Curve = animation.EaseInSine
+		}
+		a.animation.Compute = render.LerpInset
+	case StateUpdatedWidget:
+		w := a.Widget.(*AnimatedPadding)
+		ow := t.OldWidget.(*AnimatedPadding)
+		if w.Padding != ow.Padding {
+			// XXX this should use the frame's now, not time.Now
+			a.animation.Start(time.Now(), w.Duration, a.padding, w.Padding)
+			a.updateAnimation(time.Now())
+		}
+		MarkNeedsBuild(a.Element)
+	}
 }
 
 type ColoredBox struct {

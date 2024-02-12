@@ -142,7 +142,7 @@ func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot any) {
 }
 
 func (el *viewElement) AssignOwner(owner *BuildOwner) {
-	el.owner = owner
+	el.buildOwner = owner
 }
 
 func (el *viewElement) VisitChildren(yield func(Element) bool) {

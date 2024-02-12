@@ -2,6 +2,7 @@ package render
 
 import (
 	"slices"
+	"time"
 
 	"gioui.org/op"
 )
@@ -12,7 +13,9 @@ type PipelineOwner struct {
 	nodesNeedingLayout                []Object
 	nodesNeedingCompositingBitsUpdate []Object
 	shouldMergeDirtyNodes             bool
-	onNeedVisualUpdate                func()
+	OnNeedVisualUpdate                func()
+
+	NextFrameCallbacks []func(now time.Time)
 }
 
 func NewPipelineOwner() *PipelineOwner {
@@ -36,8 +39,23 @@ func (o *PipelineOwner) SetRootNode(root Object) {
 }
 
 func (o *PipelineOwner) RequestVisualUpdate() {
-	if o.onNeedVisualUpdate != nil {
-		o.onNeedVisualUpdate()
+	if o.OnNeedVisualUpdate != nil {
+		o.OnNeedVisualUpdate()
+	}
+}
+
+func (o *PipelineOwner) AddNextFrameCallback(fn func(now time.Time)) {
+	o.NextFrameCallbacks = append(o.NextFrameCallbacks, fn)
+	o.RequestVisualUpdate()
+}
+
+func (o *PipelineOwner) RunFrameCallbacks(now time.Time) {
+	// OPT(dh): avoid this alloc via double buffering
+	fns := o.NextFrameCallbacks
+	o.NextFrameCallbacks = nil
+
+	for _, fn := range fns {
+		fn(now)
 	}
 }
 
