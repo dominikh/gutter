@@ -4,9 +4,9 @@ import (
 	"image/color"
 
 	"honnef.co/go/gutter/f32"
+	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
 
-	"gioui.org/io/pointer"
 	"gioui.org/op"
 	"gioui.org/op/paint"
 )
@@ -149,7 +149,6 @@ type PointerRegion struct {
 	OnPress   func(hit render.HitTestEntry, ev pointer.Event)
 	OnRelease func(hit render.HitTestEntry, ev pointer.Event)
 	OnMove    func(hit render.HitTestEntry, ev pointer.Event)
-	OnDrag    func(hit render.HitTestEntry, ev pointer.Event)
 	OnScroll  func(hit render.HitTestEntry, ev pointer.Event)
 	OnAll     func(hit render.HitTestEntry, ev pointer.Event)
 	Child     Widget
@@ -162,7 +161,6 @@ func (p *PointerRegion) CreateRenderObject(ctx BuildContext) render.Object {
 	obj.OnPress = p.OnPress
 	obj.OnRelease = p.OnRelease
 	obj.OnMove = p.OnMove
-	obj.OnDrag = p.OnDrag
 	obj.OnScroll = p.OnScroll
 	obj.OnAll = p.OnAll
 	return obj
@@ -173,7 +171,6 @@ func (p *PointerRegion) UpdateRenderObject(ctx BuildContext, obj render.Object) 
 	obj.(*render.PointerRegion).OnPress = p.OnPress
 	obj.(*render.PointerRegion).OnRelease = p.OnRelease
 	obj.(*render.PointerRegion).OnMove = p.OnMove
-	obj.(*render.PointerRegion).OnDrag = p.OnDrag
 	obj.(*render.PointerRegion).OnScroll = p.OnScroll
 	obj.(*render.PointerRegion).OnAll = p.OnAll
 }

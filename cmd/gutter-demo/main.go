@@ -1,12 +1,5 @@
 package main
 
-// Right now we have a weird mix of designs. Gio wants to push us events and get frames in return. The Flutter
-// design uses callbacks and sort of expects frames to be pushed. We should combine the two. Also, the
-// render.View abstraction is a bit silly right now, considering we pass op.Ops to WidgetsBinding.DrawFrame.
-// render.View is supposed to wrap a FlutterView, which provides functionality for pushing frames into. We
-// should probably store an op.Ops in the view, and overall don't expose Gio's event loop to the user. In the
-// end, all of the Gio events should be "reactive".
-
 import (
 	"fmt"
 	"image/color"
@@ -15,11 +8,12 @@ import (
 	"time"
 
 	"honnef.co/go/gutter/f32"
+	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
 
 	"gioui.org/app"
-	"gioui.org/io/pointer"
+	giopointer "gioui.org/io/pointer"
 	"gioui.org/op"
 )
 
@@ -68,15 +62,18 @@ func (s *BirdState) Transition(t widget.StateTransition) {
 
 func (s *BirdState) Build() widget.Widget {
 	return &widget.Padding{
-		Padding: render.Inset{20, 20, 20, 20},
-		Child: &widget.Padding{
-			Padding: render.Inset{50, 50, 50, 50},
+		Padding: render.Inset{70, 70, 70, 70},
+		Child: &widget.PointerRegion{
+			OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
+				fmt.Println("outer:", ev)
+			},
 			Child: &widget.ColoredBox{
 				Color: color.NRGBA{255, 0, 0, 255},
 				Child: &widget.Padding{
 					Padding: render.Inset{200, 200, 200, 200},
 					Child: &widget.PointerRegion{
 						OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
+							fmt.Println("inner:", ev)
 							s.c.G = uint8(hit.Offset.Y)
 							widget.MarkNeedsBuild(s.Element)
 						},
@@ -131,12 +128,35 @@ func run2(w *app.Window) error {
 		switch e := w.NextEvent().(type) {
 		default:
 			fmt.Printf("%T %v\n", e, e)
-		case pointer.Event:
+		case giopointer.Event:
 			var ht render.HitTestResult
 			render.HitTest(&ht, rootElem.RenderHandle().RenderObject, e.Position)
+			n := 0
+			for _, hit := range ht.Hits {
+				if _, ok := hit.Object.(render.PointerEventHandler); ok {
+					n++
+					if n >= 2 {
+						break
+					}
+				}
+			}
+			var kind pointer.Priority
+			if n < 2 {
+				kind = pointer.Exclusive
+			} else {
+				kind = pointer.Shared
+			}
+			first := true
 			for _, hit := range ht.Hits {
 				if obj, ok := hit.Object.(render.PointerEventHandler); ok {
-					obj.HandlePointerEvent(hit, e)
+					prio := kind
+					if first && prio == pointer.Shared {
+						prio = pointer.Foremost
+					}
+					first = false
+					ev := pointer.FromRaw(e)
+					ev.Priority = prio
+					obj.HandlePointerEvent(hit, ev)
 				}
 			}
 

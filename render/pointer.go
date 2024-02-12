@@ -1,9 +1,10 @@
 package render
 
 import (
-	"gioui.org/io/pointer"
-	"gioui.org/op"
 	"honnef.co/go/gutter/f32"
+	"honnef.co/go/gutter/io/pointer"
+
+	"gioui.org/op"
 )
 
 var _ Object = (*PointerRegion)(nil)
@@ -107,7 +108,6 @@ type PointerRegion struct {
 	OnPress   func(hit HitTestEntry, ev pointer.Event)
 	OnRelease func(hit HitTestEntry, ev pointer.Event)
 	OnMove    func(hit HitTestEntry, ev pointer.Event)
-	OnDrag    func(hit HitTestEntry, ev pointer.Event)
 	OnScroll  func(hit HitTestEntry, ev pointer.Event)
 	OnAll     func(hit HitTestEntry, ev pointer.Event)
 }
@@ -138,9 +138,6 @@ func (c *PointerRegion) HandlePointerEvent(hit HitTestEntry, ev pointer.Event) {
 	switch ev.Kind {
 	case pointer.Move:
 		call(c.OnMove)
-	case pointer.Drag:
-		call(c.OnMove)
-		call(c.OnDrag)
 	case pointer.Press:
 		call(c.OnPress)
 	case pointer.Release:
