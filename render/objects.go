@@ -8,6 +8,7 @@ package render
 import (
 	"image/color"
 
+	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/f32"
 
 	"gioui.org/op"
@@ -81,6 +82,15 @@ func (c *FillColor) PerformPaint(_ *Renderer, ops *op.Ops) {
 
 type Inset struct {
 	Left, Top, Right, Bottom float32
+}
+
+func LerpInset(start, end Inset, t float64) Inset {
+	return Inset{
+		Left:   animation.Lerp(start.Left, end.Left, t),
+		Top:    animation.Lerp(start.Top, end.Top, t),
+		Right:  animation.Lerp(start.Right, end.Right, t),
+		Bottom: animation.Lerp(start.Bottom, end.Bottom, t),
+	}
 }
 
 type Padding struct {
