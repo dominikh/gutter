@@ -40,10 +40,6 @@ type Padding struct {
 	Child   Widget
 }
 
-// XXX
-func (*Padding) Key() any    { return nil }
-func (*ColoredBox) Key() any { return nil }
-
 func (p *Padding) GetChild() Widget {
 	return p.Child
 }
@@ -83,12 +79,6 @@ func (a *AnimatedPadding) CreateState() State[*AnimatedPadding] {
 	s := &animatedPaddingState{}
 	s.AnimatedProperty = makeAnimatedProperty(s, render.LerpInset)
 	return s
-}
-
-// Key implements StatefulWidget.
-func (a *AnimatedPadding) Key() any {
-	// XXX
-	return nil
 }
 
 type animatedPaddingState struct {
@@ -193,12 +183,6 @@ func (box *SizedBox) CreateElement() Element {
 	return NewSingleChildRenderObjectElement(box)
 }
 
-// Key implements Widget.
-func (box *SizedBox) Key() any {
-	// XXX
-	return nil
-}
-
 // GetChild implements SingleChildWidget.
 func (box *SizedBox) GetChild() Widget {
 	return box.Child
@@ -243,12 +227,6 @@ func (w *PointerRegion) GetChild() Widget {
 	return w.Child
 }
 
-// Key implements Widget.
-func (*PointerRegion) Key() any {
-	// XXX
-	return nil
-}
-
 type Opacity struct {
 	Opacity float32
 	Child   Widget
@@ -274,12 +252,6 @@ func (o *Opacity) GetChild() Widget {
 	return o.Child
 }
 
-// Key implements SingleChildWidget.
-func (o *Opacity) Key() any {
-	// XXX
-	return nil
-}
-
 type AnimatedOpacity struct {
 	Opacity float32 `gutter:"animated"`
 	Child   Widget
@@ -303,12 +275,6 @@ func (a *AnimatedOpacity) CreateElement() Element {
 // GetChild implements SingleChildWidget.
 func (a *AnimatedOpacity) GetChild() Widget {
 	return a.Child
-}
-
-// Key implements SingleChildWidget.
-func (a *AnimatedOpacity) Key() any {
-	// XXX
-	return nil
 }
 
 type animatedOpacityState struct {
