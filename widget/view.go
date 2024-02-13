@@ -89,7 +89,6 @@ func (el *viewElement) Transition(t ElementTransition) {
 		el.updateChild()
 		el.RenderObject.(*render.View).PrepareInitialFrame()
 	case ElementUnmounted:
-		el.pipelineOwner.Dispose()
 		RenderObjectElementAfterUnmount(el)
 	}
 }
