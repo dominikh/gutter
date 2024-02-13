@@ -151,9 +151,13 @@ func (el *SimpleInteriorElement[W]) PerformRebuild() {
 type BuildContext interface{}
 
 type Widget interface {
-	Key() any
-
 	CreateElement() Element
+}
+
+type KeyedWidget interface {
+	Widget
+
+	GetKey() any
 }
 
 type StatelessWidget interface {
@@ -376,13 +380,15 @@ func Mount(el, parent Element, newSlot any) {
 	el.Transition(ElementTransition{Kind: ElementMounted, Parent: parent, NewSlot: newSlot})
 }
 
-// Unmount unmounts the element. If it implements Unmounter, its AfterUnmount method will be called afterwards.
+// Unmount unmounts the element.
 func Unmount(el Element) {
 	h := el.Handle()
-	key := h.widget.Key()
-	if key, ok := key.(*GlobalKey); ok {
-		_ = key
-		// owner!._unregisterGlobalKey(key, this); // XXX
+	if keyer, ok := h.widget.(KeyedWidget); ok {
+		key := keyer.GetKey()
+		if key, ok := key.(*GlobalKey); ok {
+			_ = key
+			// owner!._unregisterGlobalKey(key, this); // XXX
+		}
 	}
 	h.lifecycleState = ElementLifecycleDefunct
 
@@ -621,7 +627,17 @@ func sameType(a, b any) bool {
 }
 
 func canUpdate(old, new Widget) bool {
-	return sameType(old, new) && old.Key() == new.Key()
+	if !sameType(old, new) {
+		return false
+	}
+	var key1, key2 any
+	if old, ok := old.(KeyedWidget); ok {
+		key1 = old.GetKey()
+		if new, ok := new.(KeyedWidget); ok {
+			key2 = new.GetKey()
+		}
+	}
+	return key1 == key2
 }
 
 func deactivateChild(child Element) {
@@ -721,13 +737,15 @@ func (g GlobalKey) currentElement() Element {
 }
 
 func InflateWidget(parent Element, widget Widget, slot any) Element {
-	key := widget.Key()
-	if key, ok := key.(GlobalKey); ok {
-		newChild := RetakeInactiveElement(parent, key, widget)
-		if newChild != nil {
-			activateWithParent(newChild, parent, slot)
-			updatedChild := UpdateChild(parent, newChild, widget, slot)
-			return updatedChild
+	if widget, ok := widget.(KeyedWidget); ok {
+		key := widget.GetKey()
+		if key, ok := key.(GlobalKey); ok {
+			newChild := RetakeInactiveElement(parent, key, widget)
+			if newChild != nil {
+				activateWithParent(newChild, parent, slot)
+				updatedChild := UpdateChild(parent, newChild, widget, slot)
+				return updatedChild
+			}
 		}
 	}
 	newChild := widget.CreateElement()
