@@ -253,7 +253,7 @@ func isType[T any](obj any) bool {
 	return ok
 }
 
-func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
+func Layout(obj Object, cs Constraints, parentUsesSize bool) f32.Point {
 	if cs.Min.X > cs.Max.X || cs.Min.Y > cs.Max.Y || cs.Min.X < 0 || cs.Min.Y < 0 {
 		panic(fmt.Sprintf("constraints %v are malformed", cs))
 	}
