@@ -121,11 +121,6 @@ func (o *PipelineOwner) FlushCompositingBits() {
 	o.nodesNeedingCompositingBitsUpdate = nodes[:0]
 }
 
-func (o *PipelineOwner) Dispose() {
-	clear(o.nodesNeedingLayout)
-	clear(o.nodesNeedingCompositingBitsUpdate)
-}
-
 func Attach(obj Object, owner *PipelineOwner) {
 	h := obj.Handle()
 	h.owner = owner
