@@ -15,6 +15,7 @@ var _ Object = (*FillColor)(nil)
 var _ ObjectWithChild = (*Padding)(nil)
 var _ ObjectWithChild = (*Constrained)(nil)
 var _ ObjectWithChildren = (*Row)(nil)
+var _ ObjectWithChild = (*Opacity)(nil)
 
 type Box struct {
 	ObjectHandle
@@ -205,5 +206,40 @@ func (row *Row) PerformPaint(r *Renderer, ops *op.Ops) {
 		call := r.Paint(child)
 		call.Add(ops)
 		stack.Pop()
+	}
+}
+
+type Opacity struct {
+	Box
+	SingleChild
+	Opacity float32
+}
+
+// PerformLayout implements ObjectWithChild.
+func (o *Opacity) PerformLayout() (size f32.Point) {
+	if o.Child != nil {
+		return Layout(o.Child, o.constraints, true)
+	} else {
+		return o.constraints.Constrain(f32.Pt(0, 0))
+	}
+}
+
+// PerformPaint implements ObjectWithChild.
+func (o *Opacity) PerformPaint(r *Renderer, ops *op.Ops) {
+	switch o.Opacity {
+	case 0:
+		return
+	case 1:
+		r.Paint(o.Child).Add(ops)
+	default:
+		defer paint.PushOpacity(ops, o.Opacity).Pop()
+		r.Paint(o.Child).Add(ops)
+	}
+}
+
+func (o *Opacity) SetOpacity(f float32) {
+	if o.Opacity != f {
+		o.Opacity = f
+		MarkNeedsPaint(o)
 	}
 }
