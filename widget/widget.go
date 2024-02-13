@@ -2,6 +2,7 @@ package widget
 
 import (
 	"image/color"
+	"reflect"
 	"time"
 
 	"honnef.co/go/gutter/animation"
@@ -55,7 +56,7 @@ func (p *Padding) CreateElement() Element {
 }
 
 type AnimatedPadding struct {
-	Padding render.Inset
+	Padding render.Inset `gutter:"animated"`
 	Child   Widget
 
 	Duration time.Duration
@@ -74,7 +75,9 @@ func (a *AnimatedPadding) CreateElement() Element {
 
 // CreateState implements StatefulWidget.
 func (a *AnimatedPadding) CreateState() State[*AnimatedPadding] {
-	return &animatedPaddingState{}
+	s := &animatedPaddingState{}
+	s.AnimatedProperty = makeAnimatedProperty(s, render.LerpInset)
+	return s
 }
 
 // Key implements StatefulWidget.
@@ -86,53 +89,14 @@ func (a *AnimatedPadding) Key() any {
 type animatedPaddingState struct {
 	StateHandle[*AnimatedPadding]
 
-	animation animation.Animation[render.Inset]
-	padding   render.Inset
-	// This caches the method value. If we didn't cache it, Go would create it anew every time we pass it to
-	// AddNextFrameCallback, causing an allocation on every animation frame. The field gets set at state
-	// initialization time, i.e. in the Transition method.
-	updateAnimationClosure func(time.Time)
+	AnimatedProperty[render.Inset, *AnimatedPadding, *animatedPaddingState]
 }
 
 // Build implements State.
 func (a *animatedPaddingState) Build() Widget {
 	return &Padding{
-		Padding: a.padding,
+		Padding: a.AnimatedProperty.Value,
 		Child:   a.Widget.Child,
-	}
-}
-
-func (a *animatedPaddingState) updateAnimation(now time.Time) {
-	var done bool
-	a.padding, done = a.animation.Evaluate(now)
-	if !done {
-		// XXX this chain of fields is ridiculous
-		a.StateHandle.Element.Handle().buildOwner.PipelineOwner.AddNextFrameCallback(a.updateAnimationClosure)
-	}
-	MarkNeedsBuild(a.Element)
-}
-
-// Transition implements State.
-func (a *animatedPaddingState) Transition(t StateTransition[*AnimatedPadding]) {
-	switch t.Kind {
-	case StateInitializing:
-		w := a.Widget
-		a.updateAnimationClosure = a.updateAnimation
-		a.padding = w.Padding
-		if w.Curve != nil {
-			a.animation.Curve = w.Curve
-		} else {
-			a.animation.Curve = animation.EaseInSine
-		}
-		a.animation.Compute = render.LerpInset
-	case StateUpdatedWidget:
-		w := a.Widget
-		if w.Padding != t.OldWidget.Padding {
-			// XXX this should use the frame's now, not time.Now
-			a.animation.Start(time.Now(), w.Duration, a.padding, w.Padding)
-			a.updateAnimation(time.Now())
-		}
-		MarkNeedsBuild(a.Element)
 	}
 }
 
@@ -312,7 +276,7 @@ func (o *Opacity) Key() any {
 }
 
 type AnimatedOpacity struct {
-	Opacity float32
+	Opacity float32 `gutter:"animated"`
 	Child   Widget
 
 	Duration time.Duration
@@ -321,7 +285,9 @@ type AnimatedOpacity struct {
 
 // CreateState implements StatefulWidget.
 func (a *AnimatedOpacity) CreateState() State[*AnimatedOpacity] {
-	return &animatedOpacityState{}
+	s := &animatedOpacityState{}
+	s.AnimatedProperty = makeAnimatedProperty(s, animation.Lerp[float32])
+	return s
 }
 
 // CreateElement implements SingleChildWidget.
@@ -343,49 +309,82 @@ func (a *AnimatedOpacity) Key() any {
 type animatedOpacityState struct {
 	StateHandle[*AnimatedOpacity]
 
-	animation              animation.Animation[float32]
-	opacity                float32
-	updateAnimationClosure func(time.Time)
+	AnimatedProperty[float32, *AnimatedOpacity, *animatedOpacityState]
 }
 
 // Build implements State.
 func (a *animatedOpacityState) Build() Widget {
 	return &Opacity{
-		Opacity: a.opacity,
+		Opacity: a.AnimatedProperty.Value,
 		Child:   a.Widget.Child,
 	}
 }
 
-func (a *animatedOpacityState) updateAnimation(now time.Time) {
-	var done bool
-	a.opacity, done = a.animation.Evaluate(now)
-	if !done {
-		// XXX this chain of fields is ridiculous
-		a.StateHandle.Element.Handle().buildOwner.PipelineOwner.AddNextFrameCallback(a.updateAnimationClosure)
+func makeAnimatedProperty[T any, W Widget, S State[W]](state S, compute func(start, end T, t float64) T) AnimatedProperty[T, W, S] {
+	return AnimatedProperty[T, W, S]{
+		state:   state,
+		compute: compute,
 	}
-	MarkNeedsBuild(a.Element)
 }
 
-// Transition implements State.
-func (a *animatedOpacityState) Transition(t StateTransition[*AnimatedOpacity]) {
+type AnimatedProperty[T any, W Widget, S State[W]] struct {
+	state   S
+	compute func(start, end T, t float64) T
+
+	field     int
+	animation animation.Animation[T]
+	Value     T
+
+	// This caches the method value. If we didn't cache it, Go would create it anew every time we pass it to
+	// AddNextFrameCallback, causing an allocation on every animation frame. The field gets set at state
+	// initialization time, i.e. in the Transition method.
+	updateAnimationFn func(time.Time)
+}
+
+func (p *AnimatedProperty[T, W, S]) Transition(t StateTransition[W]) {
 	switch t.Kind {
 	case StateInitializing:
-		w := a.Widget
-		a.updateAnimationClosure = a.updateAnimation
-		a.opacity = w.Opacity
-		if w.Curve != nil {
-			a.animation.Curve = w.Curve
-		} else {
-			a.animation.Curve = animation.EaseInSine
+		p.updateAnimationFn = p.updateAnimation
+
+		w := reflect.ValueOf(p.state.GetStateHandle().Widget).Elem()
+		wt := w.Type()
+		for i, n := wt.NumField(), 0; i < n; i++ {
+			if wt.Field(i).Tag.Get("gutter") == "animated" {
+				p.field = i
+				break
+			}
 		}
-		a.animation.Compute = animation.Lerp[float32]
+
+		p.Value = w.Field(p.field).Interface().(T)
+		p.animation.Curve = curveOrDefault(w.FieldByName("Curve").Interface().(func(float64) float64))
+		p.animation.Compute = p.compute
 	case StateUpdatedWidget:
-		w := a.Widget
-		if w.Opacity != t.OldWidget.Opacity {
-			// XXX this should use the frame's now, not time.Now
-			a.animation.Start(time.Now(), w.Duration, a.opacity, w.Opacity)
-			a.updateAnimation(time.Now())
+		sh := p.state.GetStateHandle()
+		w := reflect.ValueOf(sh.Widget).Elem()
+		if !w.Field(p.field).Equal(reflect.ValueOf(t.OldWidget).Elem().Field(p.field)) {
+			// XXX this should use the event's now, not time.Now
+			p.animation.Start(time.Now(), w.FieldByName("Duration").Interface().(time.Duration), p.Value, w.Field(p.field).Interface().(T))
+			p.updateAnimation(time.Now())
+			MarkNeedsBuild(sh.Element)
 		}
-		MarkNeedsBuild(a.Element)
+	}
+}
+
+func (p *AnimatedProperty[T, W, S]) updateAnimation(now time.Time) {
+	v, done := p.animation.Evaluate(now)
+	p.Value = v
+
+	if !done {
+		// XXX this chain of fields is ridiculous
+		p.state.GetStateHandle().Element.Handle().BuildOwner.PipelineOwner.AddNextFrameCallback(p.updateAnimationFn)
+	}
+	MarkNeedsBuild(p.state.GetStateHandle().Element)
+}
+
+func curveOrDefault(curve func(float64) float64) func(float64) float64 {
+	if curve != nil {
+		return curve
+	} else {
+		return animation.EaseInSine
 	}
 }
