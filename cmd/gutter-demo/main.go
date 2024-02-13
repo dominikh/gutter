@@ -5,6 +5,8 @@ import (
 	"image/color"
 	"log"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"honnef.co/go/gutter/animation"
@@ -19,12 +21,16 @@ import (
 )
 
 func main() {
+	runtime.MemProfileRate = 1
 	go func() {
 		w := app.NewWindow(app.CustomInputHandling(true))
 		err := run2(w)
 		if err != nil {
 			log.Fatal(err)
 		}
+		f, _ := os.Create("mem.pprof")
+		runtime.GC()
+		pprof.WriteHeapProfile(f)
 		os.Exit(0)
 	}()
 	app.Main()
@@ -136,13 +142,14 @@ func run2(w *app.Window) error {
 	po.OnNeedVisualUpdate = win.Invalidate
 	bo.OnBuildScheduled = win.Invalidate
 
+	var ht render.HitTestResult
 	var ops op.Ops
 	for {
 		switch e := w.NextEvent().(type) {
 		default:
 			fmt.Printf("%T %v\n", e, e)
 		case giopointer.Event:
-			var ht render.HitTestResult
+			ht.Reset()
 			render.HitTest(&ht, rootElem.RenderHandle().RenderObject, e.Position)
 			n := 0
 			for _, hit := range ht.Hits {

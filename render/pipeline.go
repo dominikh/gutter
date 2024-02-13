@@ -4,18 +4,20 @@ import (
 	"slices"
 	"time"
 
+	"honnef.co/go/gutter/mem"
+
 	"gioui.org/op"
 )
 
 type PipelineOwner struct {
 	renderer                          *Renderer
 	rootNode                          Object
-	nodesNeedingLayout                []Object
+	nodesNeedingLayout                mem.DoubleBufferedSlice[Object]
 	nodesNeedingCompositingBitsUpdate []Object
 	shouldMergeDirtyNodes             bool
 	OnNeedVisualUpdate                func()
 
-	NextFrameCallbacks []func(now time.Time)
+	NextFrameCallbacks mem.DoubleBufferedSlice[func(now time.Time)]
 }
 
 func NewPipelineOwner() *PipelineOwner {
@@ -45,14 +47,13 @@ func (o *PipelineOwner) RequestVisualUpdate() {
 }
 
 func (o *PipelineOwner) AddNextFrameCallback(fn func(now time.Time)) {
-	o.NextFrameCallbacks = append(o.NextFrameCallbacks, fn)
+	o.NextFrameCallbacks.Front = append(o.NextFrameCallbacks.Front, fn)
 	o.RequestVisualUpdate()
 }
 
 func (o *PipelineOwner) RunFrameCallbacks(now time.Time) {
-	// OPT(dh): avoid this alloc via double buffering
-	fns := o.NextFrameCallbacks
-	o.NextFrameCallbacks = nil
+	fns := o.NextFrameCallbacks.Front
+	o.NextFrameCallbacks.Swap()
 
 	for _, fn := range fns {
 		fn(now)
@@ -65,18 +66,17 @@ func (o *PipelineOwner) enableMutationsToDirtySubtrees(fn func()) {
 }
 
 func (o *PipelineOwner) FlushLayout() {
-	for len(o.nodesNeedingLayout) != 0 {
-		dirtyNodes := o.nodesNeedingLayout
-		// OPT(dh): avoid this alloc, probably via double buffering
-		o.nodesNeedingLayout = nil
+	for len(o.nodesNeedingLayout.Front) != 0 {
+		dirtyNodes := o.nodesNeedingLayout.Front
+		o.nodesNeedingLayout.Swap()
 		slices.SortFunc(dirtyNodes, func(a, b Object) int {
 			return a.Handle().depth - b.Handle().depth
 		})
 		for i := range dirtyNodes {
 			if o.shouldMergeDirtyNodes {
 				o.shouldMergeDirtyNodes = false
-				if len(o.nodesNeedingLayout) != 0 {
-					o.nodesNeedingLayout = append(o.nodesNeedingLayout, dirtyNodes[i:]...)
+				if len(o.nodesNeedingLayout.Front) != 0 {
+					o.nodesNeedingLayout.Front = append(o.nodesNeedingLayout.Front, dirtyNodes[i:]...)
 					break
 				}
 			}

@@ -117,7 +117,7 @@ func MarkNeedsLayout(obj Object) {
 		MarkNeedsLayout(h.parent)
 	} else {
 		h.needsLayout = true
-		h.owner.nodesNeedingLayout = append(h.owner.nodesNeedingLayout, obj)
+		h.owner.nodesNeedingLayout.Front = append(h.owner.nodesNeedingLayout.Front, obj)
 		h.owner.RequestVisualUpdate()
 	}
 }
@@ -292,15 +292,6 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
 		// The local relayout boundary has changed, must notify children in case
 		// they also need updating. Otherwise, they will be confused about what
 		// their actual relayout boundary is later.
-		var cleanRelayoutBoundary func(child Object) bool
-		cleanRelayoutBoundary = func(child Object) bool {
-			childh := child.Handle()
-			if childh.relayoutBoundary != child {
-				childh.relayoutBoundary = nil
-				child.VisitChildren(cleanRelayoutBoundary)
-			}
-			return true
-		}
 		obj.VisitChildren(cleanRelayoutBoundary)
 	}
 	obj.Handle().size = obj.PerformLayout()
@@ -313,6 +304,15 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) (OUT f32.Point) {
 	}
 
 	return sz
+}
+
+func cleanRelayoutBoundary(child Object) bool {
+	childh := child.Handle()
+	if childh.relayoutBoundary != child {
+		childh.relayoutBoundary = nil
+		child.VisitChildren(cleanRelayoutBoundary)
+	}
+	return true
 }
 
 func NewRenderer() *Renderer {
@@ -332,7 +332,7 @@ func ScheduleInitialLayout(obj Object) {
 	h := obj.Handle()
 	h.needsLayout = true
 	h.relayoutBoundary = obj
-	h.owner.nodesNeedingLayout = append(h.owner.nodesNeedingLayout, obj)
+	h.owner.nodesNeedingLayout.Front = append(h.owner.nodesNeedingLayout.Front, obj)
 }
 
 func ScheduleInitialPaint(obj Object) {

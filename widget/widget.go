@@ -84,6 +84,10 @@ type animatedPaddingState struct {
 
 	animation animation.Animation[render.Inset]
 	padding   render.Inset
+	// This caches the method value. If we didn't cache it, Go would create it anew every time we pass it to
+	// AddNextFrameCallback, causing an allocation on every animation frame. The field gets set at state
+	// initialization time, i.e. in the Transition method.
+	updateAnimationClosure func(time.Time)
 }
 
 // Build implements State.
@@ -99,7 +103,7 @@ func (a *animatedPaddingState) updateAnimation(now time.Time) {
 	a.padding, done = a.animation.Evaluate(now)
 	if !done {
 		// XXX this chain of fields is ridiculous
-		a.StateHandle.Element.Handle().buildOwner.PipelineOwner.AddNextFrameCallback(a.updateAnimation)
+		a.StateHandle.Element.Handle().buildOwner.PipelineOwner.AddNextFrameCallback(a.updateAnimationClosure)
 	}
 	MarkNeedsBuild(a.Element)
 }
@@ -109,6 +113,7 @@ func (a *animatedPaddingState) Transition(t StateTransition[*AnimatedPadding]) {
 	switch t.Kind {
 	case StateInitializing:
 		w := a.Widget
+		a.updateAnimationClosure = a.updateAnimation
 		a.padding = w.Padding
 		if w.Curve != nil {
 			a.animation.Curve = w.Curve

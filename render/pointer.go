@@ -21,6 +21,11 @@ type HitTestResult struct {
 	transformStack []f32.Affine2D
 }
 
+func (ht *HitTestResult) Reset() {
+	clear(ht.Hits[:cap(ht.Hits)])
+	ht.Hits = ht.Hits[:0]
+}
+
 func (ht *HitTestResult) PushTransform(trans f32.Affine2D) {
 	ht.transformStack = append(ht.transformStack, ht.transform)
 	ht.transform = ht.transform.Mul(trans)
