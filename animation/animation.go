@@ -81,13 +81,13 @@ func (anim *Animation[T]) Start(now time.Time, d time.Duration, start, end T) {
 
 func (anim *Animation[T]) Evaluate(now time.Time) (v T, done bool) {
 	t := AnimationProgress(anim.StartTime, anim.EndTime, now)
-	t = anim.Curve(t)
 	switch t {
 	case 0:
 		return anim.StartValue, false
 	case 1:
 		return anim.EndValue, true
 	default:
+		t = anim.Curve(t)
 		return anim.Compute(anim.StartValue, anim.EndValue, t), false
 	}
 }
