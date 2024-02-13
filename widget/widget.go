@@ -354,3 +354,27 @@ func curveOrDefault(curve func(float64) float64) func(float64) float64 {
 		return animation.EaseInSine
 	}
 }
+
+type KeyedSubtree struct {
+	Key   any
+	Child Widget
+}
+
+// Build implements WidgetBuilder.
+func (k *KeyedSubtree) Build() Widget {
+	return k.Child
+}
+
+func (k *KeyedSubtree) GetKey() any {
+	return k.Key
+}
+
+// CreateElement implements SingleChildWidget.
+func (k *KeyedSubtree) CreateElement() Element {
+	return NewInteriorElement(k)
+}
+
+// GetChild implements SingleChildWidget.
+func (k *KeyedSubtree) GetChild() Widget {
+	return k.Child
+}
