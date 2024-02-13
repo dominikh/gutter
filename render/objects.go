@@ -10,12 +10,14 @@ import (
 	"gioui.org/op/paint"
 )
 
-var _ ObjectWithChild = (*Clip)(nil)
 var _ Object = (*FillColor)(nil)
-var _ ObjectWithChild = (*Padding)(nil)
+
+var _ ObjectWithChild = (*Clip)(nil)
 var _ ObjectWithChild = (*Constrained)(nil)
-var _ ObjectWithChildren = (*Row)(nil)
 var _ ObjectWithChild = (*Opacity)(nil)
+var _ ObjectWithChild = (*Padding)(nil)
+
+var _ ObjectWithChildren = (*Row)(nil)
 
 type Box struct {
 	ObjectHandle
