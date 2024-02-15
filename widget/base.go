@@ -30,6 +30,23 @@ const (
 	StateDisposing
 )
 
+type RenderObjectElement interface {
+	Element
+
+	RenderHandle() *RenderObjectElementHandle
+
+	InsertRenderObjectChild(child render.Object, slot int)
+	RemoveRenderObjectChild(child render.Object, slot int)
+	MoveRenderObjectChild(child render.Object, oldSlot, newSlot int)
+
+	AttachRenderObject(slot int)
+}
+
+type SingleChildRenderObjectElement interface {
+	SingleChildElement
+	RenderObjectElement
+}
+
 type ElementTransition struct {
 	Kind ElementTransitionKind
 

@@ -4,23 +4,6 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-type RenderObjectElement interface {
-	Element
-
-	RenderHandle() *RenderObjectElementHandle
-
-	InsertRenderObjectChild(child render.Object, slot int)
-	RemoveRenderObjectChild(child render.Object, slot int)
-	MoveRenderObjectChild(child render.Object, oldSlot, newSlot int)
-
-	AttachRenderObject(slot int)
-}
-
-type SingleChildRenderObjectElement interface {
-	SingleChildElement
-	RenderObjectElement
-}
-
 func RenderObjectElementAfterUpdate(el RenderObjectElement, newWidget Widget) {
 	el.Handle().widget.(RenderObjectWidget).UpdateRenderObject(el, el.RenderHandle().RenderObject)
 	forceRebuild(el)
