@@ -214,7 +214,7 @@ func (row *Row) PerformPaint(r *Renderer, ops *op.Ops) {
 type Opacity struct {
 	Box
 	SingleChild
-	Opacity float32
+	opacity float32
 }
 
 // PerformLayout implements Object.
@@ -228,20 +228,20 @@ func (o *Opacity) PerformLayout() (size f32.Point) {
 
 // PerformPaint implements Object.
 func (o *Opacity) PerformPaint(r *Renderer, ops *op.Ops) {
-	switch o.Opacity {
+	switch o.opacity {
 	case 0:
 		return
 	case 1:
 		r.Paint(o.Child).Add(ops)
 	default:
-		defer paint.PushOpacity(ops, o.Opacity).Pop()
+		defer paint.PushOpacity(ops, o.opacity).Pop()
 		r.Paint(o.Child).Add(ops)
 	}
 }
 
 func (o *Opacity) SetOpacity(f float32) {
-	if o.Opacity != f {
-		o.Opacity = f
+	if o.opacity != f {
+		o.opacity = f
 		MarkNeedsPaint(o)
 	}
 }

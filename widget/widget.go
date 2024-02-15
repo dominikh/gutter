@@ -234,7 +234,9 @@ type Opacity struct {
 
 // CreateRenderObject implements RenderObjectWidget.
 func (o *Opacity) CreateRenderObject(ctx BuildContext) render.Object {
-	return &render.Opacity{Opacity: o.Opacity}
+	obj := &render.Opacity{}
+	obj.SetOpacity(o.Opacity)
+	return obj
 }
 
 // UpdateRenderObject implements RenderObjectWidget.
