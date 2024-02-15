@@ -43,18 +43,18 @@ type Object interface {
 }
 
 type Attacher interface {
-	Attach(owner *PipelineOwner)
-	Detach()
+	PerformAttach(owner *PipelineOwner)
+	PerformDetach()
 }
 
 type ObjectWithChild interface {
 	Object
-	SetChild(child Object)
+	PerformSetChild(child Object)
 }
 
 type ObjectWithChildren interface {
 	Object
-	InsertChild(child Object, after Object)
+	PerformInsertChild(child Object, after Object)
 }
 
 type SizedByParenter interface {
@@ -63,7 +63,7 @@ type SizedByParenter interface {
 }
 
 type Disposable interface {
-	Dispose()
+	PerformDispose()
 }
 
 type ObjectHandle struct {
@@ -198,7 +198,7 @@ func (c *SingleChild) VisitChildren(yield func(Object) bool) {
 	}
 }
 
-func (c *SingleChild) SetChild(child Object) {
+func (c *SingleChild) PerformSetChild(child Object) {
 	c.Child = child
 }
 
@@ -214,7 +214,7 @@ func (c *ManyChildren) VisitChildren(yield func(Object) bool) {
 	}
 }
 
-func (c *ManyChildren) InsertChild(child Object, after Object) {
+func (c *ManyChildren) PerformInsertChild(child Object, after Object) {
 	panic("not implemented") // XXX
 }
 
@@ -329,7 +329,7 @@ func NewRenderer() *Renderer {
 // TODO(dh): evaluate if we actually need Dispose, or if GC does all the work for us
 func Dispose(obj Object) {
 	if obj, ok := obj.(Disposable); ok {
-		obj.Dispose()
+		obj.PerformDispose()
 	}
 }
 
@@ -346,6 +346,6 @@ func ScheduleInitialPaint(obj Object) {
 }
 
 func SetChild(parent ObjectWithChild, child Object) {
-	parent.SetChild(child)
+	parent.PerformSetChild(child)
 	child.Handle().parent = parent
 }
