@@ -54,17 +54,11 @@ func RenderObjectElementPerformRebuild(el RenderObjectElement) {
 	el.Handle().dirty = false
 }
 
-func SingleChildRenderObjectElementAfterUpdate(el interface {
-	SingleChildElement
-	RenderObjectElement
-}, newWidget Widget) {
+func SingleChildRenderObjectElementAfterUpdate(el SingleChildRenderObjectElement, newWidget Widget) {
 	RenderObjectElementAfterUpdate(el, newWidget)
 	el.SetChild(UpdateChild(el, el.GetChild(), el.Handle().widget.(SingleChildWidget).GetChild(), 0))
 }
-func SingleChildRenderObjectElementAfterMount(el interface {
-	SingleChildElement
-	RenderObjectElement
-}, parent Element, newSlot int) {
+func SingleChildRenderObjectElementAfterMount(el SingleChildRenderObjectElement, parent Element, newSlot int) {
 	RenderObjectElementAfterMount(el, parent, newSlot)
 	h := el.Handle()
 	el.SetChild(UpdateChild(el, el.GetChild(), h.widget.(SingleChildWidget).GetChild(), 0))
