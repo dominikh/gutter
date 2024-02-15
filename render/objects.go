@@ -29,13 +29,13 @@ type Clip struct {
 	SingleChild
 }
 
-// PerformLayout implements RenderObject.
+// PerformLayout implements Object.
 func (w *Clip) PerformLayout() f32.Point {
 	Layout(w.Child, w.Handle().Constraints(), true)
 	return w.Child.Handle().Size()
 }
 
-// PerformPaint implements RenderObject.
+// PerformPaint implements Object.
 func (w *Clip) PerformPaint(r *Renderer, ops *op.Ops) {
 	defer FRect{
 		Min: f32.Pt(0, 0),
@@ -66,14 +66,14 @@ func (fc *FillColor) Color() color.NRGBA {
 	return fc.color
 }
 
-// PerformLayout implements RenderObject.
+// PerformLayout implements Object.
 func (c *FillColor) PerformLayout() f32.Point {
 	return c.Handle().Constraints().Min
 }
 
 func (c *FillColor) SizedByParent() {}
 
-// PerformPaint implements RenderObject.
+// PerformPaint implements Object.
 func (c *FillColor) PerformPaint(_ *Renderer, ops *op.Ops) {
 	paint.Fill(ops, c.color)
 }
@@ -112,7 +112,7 @@ func (p *Padding) Inset() Inset {
 	return p.inset
 }
 
-// PerformLayout implements RenderObject.
+// PerformLayout implements Object.
 func (p *Padding) PerformLayout() f32.Point {
 	cs := p.Handle().Constraints()
 	if p.Child == nil {
@@ -130,7 +130,7 @@ func (p *Padding) PerformLayout() f32.Point {
 	return cs.Constrain(childSz.Add(f32.Pt(horiz, vert)))
 }
 
-// PerformPaint implements RenderObject.
+// PerformPaint implements Object.
 func (p *Padding) PerformPaint(r *Renderer, ops *op.Ops) {
 	defer op.Affine(f32.Affine2D{}.Offset(p.Child.Handle().offset)).Push(ops).Pop()
 	r.Paint(p.Child).Add(ops)
@@ -217,7 +217,7 @@ type Opacity struct {
 	Opacity float32
 }
 
-// PerformLayout implements ObjectWithChild.
+// PerformLayout implements Object.
 func (o *Opacity) PerformLayout() (size f32.Point) {
 	if o.Child != nil {
 		return Layout(o.Child, o.constraints, true)
@@ -226,7 +226,7 @@ func (o *Opacity) PerformLayout() (size f32.Point) {
 	}
 }
 
-// PerformPaint implements ObjectWithChild.
+// PerformPaint implements Object.
 func (o *Opacity) PerformPaint(r *Renderer, ops *op.Ops) {
 	switch o.Opacity {
 	case 0:
