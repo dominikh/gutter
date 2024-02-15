@@ -17,13 +17,11 @@ type RenderObjectElement interface {
 }
 
 type SingleChildRenderObjectElement interface {
-	Element
 	SingleChildElement
 	RenderObjectElement
 }
 
 type RenderTreeRootElement interface {
-	Element
 	RenderObjectElement
 }
 

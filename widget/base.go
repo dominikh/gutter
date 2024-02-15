@@ -196,8 +196,6 @@ type Element interface {
 }
 
 type InteriorElement interface {
-	Element
-
 	SingleChildElement
 	WidgetBuilder
 }

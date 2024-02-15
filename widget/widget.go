@@ -18,6 +18,7 @@ var _ RenderObjectWidget = (*ColoredBox)(nil)
 var _ RenderObjectWidget = (*Opacity)(nil)
 var _ RenderObjectWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
+var _ RenderObjectWidget = (*SizedBox)(nil)
 
 var _ SingleChildWidget = (*AnimatedOpacity)(nil)
 var _ SingleChildWidget = (*AnimatedPadding)(nil)
@@ -26,9 +27,12 @@ var _ SingleChildWidget = (*KeyedSubtree)(nil)
 var _ SingleChildWidget = (*Opacity)(nil)
 var _ SingleChildWidget = (*Padding)(nil)
 var _ SingleChildWidget = (*PointerRegion)(nil)
+var _ SingleChildWidget = (*SizedBox)(nil)
 
 var _ StatefulWidget[*AnimatedOpacity] = (*AnimatedOpacity)(nil)
 var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
+
+var _ KeyedWidget = (*KeyedSubtree)(nil)
 
 var _ WidgetBuilder = (*KeyedSubtree)(nil)
 
@@ -155,9 +159,6 @@ func NewSingleChildRenderObjectElement(w interface {
 	el.widget = w
 	return el
 }
-
-var _ RenderObjectWidget = (*SizedBox)(nil)
-var _ SingleChildWidget = (*SizedBox)(nil)
 
 type SizedBox struct {
 	Width, Height float32
