@@ -73,7 +73,7 @@ type ObjectHandle struct {
 	needsPaint                 bool
 	needsLayout                bool
 	needsCompositingBitsUpdate bool
-	parent                     Object
+	Parent                     Object
 	constraints                Constraints
 	relayoutBoundary           Object
 	depth                      int
@@ -94,8 +94,8 @@ func MarkNeedsPaint(obj Object) {
 
 	// We always have to walk the tree up to the parent because our composition of objects is implemented by
 	// parents calling op.CallOp.
-	if h.parent != nil {
-		MarkNeedsPaint(h.parent)
+	if h.Parent != nil {
+		MarkNeedsPaint(h.Parent)
 	} else {
 		if h.owner != nil {
 			h.owner.RequestVisualUpdate()
@@ -110,16 +110,16 @@ func MarkNeedsLayout(obj Object) {
 
 	if h.relayoutBoundary == nil {
 		h.needsLayout = true
-		if h.parent != nil {
-			MarkNeedsLayout(h.parent)
+		if h.Parent != nil {
+			MarkNeedsLayout(h.Parent)
 		}
 		return
 	}
 	if h.relayoutBoundary != obj {
-		if h.parent == nil {
+		if h.Parent == nil {
 			panic(fmt.Sprintf("%[1]T(%[1]p) isn't a relayout boundary but also doesn't have a parent", obj))
 		}
-		MarkNeedsLayout(h.parent)
+		MarkNeedsLayout(h.Parent)
 	} else {
 		h.needsLayout = true
 		h.owner.nodesNeedingLayout.Front = append(h.owner.nodesNeedingLayout.Front, obj)
@@ -127,7 +127,7 @@ func MarkNeedsLayout(obj Object) {
 	}
 }
 
-func (h *ObjectHandle) SetParent(parent Object) { h.parent = parent }
+func (h *ObjectHandle) SetParent(parent Object) { h.Parent = parent }
 
 type Constraints struct {
 	Min, Max f32.Point
@@ -269,7 +269,7 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) f32.Point {
 		// We're the relayout boundary
 		relayoutBoundary = obj
 	} else {
-		relayoutBoundary = h.parent.Handle().relayoutBoundary
+		relayoutBoundary = h.Parent.Handle().relayoutBoundary
 	}
 
 	if !h.needsLayout && cs == h.constraints {
@@ -281,7 +281,7 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) f32.Point {
 				if childh.relayoutBoundary == child {
 					return true
 				}
-				parentRelayoutBoundary := childh.parent.Handle().relayoutBoundary
+				parentRelayoutBoundary := childh.Parent.Handle().relayoutBoundary
 				if parentRelayoutBoundary != childh.relayoutBoundary {
 					childh.relayoutBoundary = parentRelayoutBoundary
 					child.VisitChildren(propagateRelayoutBoundary)
@@ -347,5 +347,5 @@ func ScheduleInitialPaint(obj Object) {
 
 func SetChild(parent ObjectWithChild, child Object) {
 	parent.PerformSetChild(child)
-	child.Handle().parent = parent
+	child.Handle().Parent = parent
 }
