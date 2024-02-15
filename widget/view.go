@@ -6,8 +6,7 @@ import (
 
 var _ SingleChildWidget = (*View)(nil)
 var _ RenderObjectWidget = (*View)(nil)
-var _ RenderTreeRootElement = (*viewElement)(nil)
-var _ SingleChildElement = (*viewElement)(nil)
+var _ SingleChildRenderObjectElement = (*viewElement)(nil)
 
 func NewView(root Widget, po *render.PipelineOwner) *View {
 	return &View{

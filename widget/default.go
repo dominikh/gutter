@@ -21,10 +21,6 @@ type SingleChildRenderObjectElement interface {
 	RenderObjectElement
 }
 
-type RenderTreeRootElement interface {
-	RenderObjectElement
-}
-
 func RenderObjectElementAfterUpdate(el RenderObjectElement, newWidget Widget) {
 	el.Handle().widget.(RenderObjectWidget).UpdateRenderObject(el, el.RenderHandle().RenderObject)
 	forceRebuild(el)
