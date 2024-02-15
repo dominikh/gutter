@@ -34,8 +34,6 @@ var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
 
 var _ KeyedWidget = (*KeyedSubtree)(nil)
 
-var _ WidgetBuilder = (*KeyedSubtree)(nil)
-
 var _ render.Object = (*renderColoredBox)(nil)
 var _ render.ObjectWithChild = (*renderColoredBox)(nil)
 
@@ -368,18 +366,13 @@ type KeyedSubtree struct {
 	Child Widget
 }
 
-// Build implements WidgetBuilder.
-func (k *KeyedSubtree) Build() Widget {
-	return k.Child
-}
-
 func (k *KeyedSubtree) GetKey() any {
 	return k.Key
 }
 
 // CreateElement implements SingleChildWidget.
 func (k *KeyedSubtree) CreateElement() Element {
-	return NewInteriorElement(k)
+	return NewProxyElement(k)
 }
 
 // GetChild implements SingleChildWidget.

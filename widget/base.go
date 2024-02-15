@@ -70,6 +70,51 @@ type StateTransition[W Widget] struct {
 // TODO support "Notification"
 // TODO support global keys
 
+func NewProxyElement[W SingleChildWidget](w W) InteriorElement {
+	el := &ProxyElement{}
+	el.widget = w
+	return el
+}
+
+type ProxyElement struct {
+	ElementHandle
+	child Element
+}
+
+// Build implements InteriorElement.
+func (p *ProxyElement) Build() Widget {
+	return p.widget.(SingleChildWidget).GetChild()
+}
+
+// GetChild implements InteriorElement.
+func (p *ProxyElement) GetChild() Element {
+	return p.child
+}
+
+// PerformRebuild implements InteriorElement.
+func (el *ProxyElement) PerformRebuild() {
+	built := el.Build()
+	el.SetChild(UpdateChild(el, el.GetChild(), built, el.Handle().slot))
+	el.Handle().dirty = false
+}
+
+// SetChild implements InteriorElement.
+func (p *ProxyElement) SetChild(child Element) {
+	p.child = child
+}
+
+// Transition implements InteriorElement.
+func (el *ProxyElement) Transition(t ElementTransition) {
+	switch t.Kind {
+	case ElementMounted:
+		rebuild(el)
+	case ElementActivated:
+		MarkNeedsBuild(el)
+	case ElementUpdated:
+		forceRebuild(el)
+	}
+}
+
 func NewInteriorElement[W Widget](w W) InteriorElement {
 	se := &SimpleInteriorElement[W]{}
 	se.ElementHandle.widget = w
@@ -179,6 +224,7 @@ type KeyedWidget interface {
 
 type StatelessWidget interface {
 	Widget
+	// XXX StatelessWidget and WidgetBuilder disagree about the signature.
 	Build(ctx BuildContext) Widget
 }
 
