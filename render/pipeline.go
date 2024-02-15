@@ -144,7 +144,7 @@ func Attach(obj Object, owner *PipelineOwner) {
 	}
 
 	if aobj, ok := obj.(Attacher); ok {
-		aobj.Attach(owner)
+		aobj.PerformAttach(owner)
 	} else {
 		obj.VisitChildren(func(child Object) bool {
 			Attach(child, owner)
@@ -156,6 +156,6 @@ func Attach(obj Object, owner *PipelineOwner) {
 func Detach(obj Object) {
 	obj.Handle().owner = nil
 	if obj, ok := obj.(Attacher); ok {
-		obj.Detach()
+		obj.PerformDetach()
 	}
 }

@@ -165,7 +165,7 @@ func (c *Constrained) PerformPaint(r *Renderer, ops *op.Ops) {
 	r.Paint(c.Child).Add(ops)
 }
 
-func (c *Constrained) SetChild(child Object) {
+func (c *Constrained) PerformSetChild(child Object) {
 	child.Handle().SetParent(c)
 	c.Child = child
 }

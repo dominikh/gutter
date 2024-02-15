@@ -51,16 +51,16 @@ func (ht *HitTestResult) Add(obj Object, pos f32.Point) {
 }
 
 type HitTester interface {
-	HitTest(res *HitTestResult, pos f32.Point) bool
+	PerformHitTest(res *HitTestResult, pos f32.Point) bool
 }
 
 type ChildrenHitTester interface {
-	HitTestChildren(res *HitTestResult, pos f32.Point) bool
+	PerformHitTestChildren(res *HitTestResult, pos f32.Point) bool
 }
 
 func HitTest(res *HitTestResult, obj Object, pos f32.Point) bool {
 	if ht, ok := obj.(HitTester); ok {
-		return ht.HitTest(res, pos)
+		return ht.PerformHitTest(res, pos)
 	} else {
 		h := obj.Handle()
 		tpos := res.Transform(pos)
@@ -80,7 +80,7 @@ func HitTest(res *HitTestResult, obj Object, pos f32.Point) bool {
 
 func HitTestChildren(res *HitTestResult, obj Object, pos f32.Point) bool {
 	if ht, ok := obj.(ChildrenHitTester); ok {
-		return ht.HitTestChildren(res, pos)
+		return ht.PerformHitTestChildren(res, pos)
 	} else {
 		hit := false
 		obj.VisitChildren(func(o Object) bool {
