@@ -31,7 +31,7 @@ func (w *View) Attach(owner *BuildOwner, element *viewElement) *viewElement {
 		element = w.CreateElement().(*viewElement)
 		element.AssignOwner(owner)
 		owner.BuildScope(element, func() {
-			Mount(element, nil, nil)
+			Mount(element, nil, 0)
 		})
 	} else {
 		MarkNeedsBuild(element)
@@ -99,7 +99,7 @@ func (el *viewElement) SetChild(child Element) {
 }
 
 // AttachRenderObject implements RenderTreeRootElement.
-func (el *viewElement) AttachRenderObject(slot any) {
+func (el *viewElement) AttachRenderObject(slot int) {
 	RenderTreeRootElementAttachRenderObject(el, slot)
 }
 
@@ -120,7 +120,7 @@ func (el *viewElement) ForgetChild(child Element) {
 
 func (el *viewElement) updateChild() {
 	child := el.widget.(*View).Child
-	el.child = UpdateChild(el, el.child, child, nil)
+	el.child = UpdateChild(el, el.child, child, 0)
 }
 
 func (el *viewElement) PerformRebuild() {
@@ -128,15 +128,15 @@ func (el *viewElement) PerformRebuild() {
 	el.updateChild()
 }
 
-func (el *viewElement) InsertRenderObjectChild(child render.Object, slot any) {
+func (el *viewElement) InsertRenderObjectChild(child render.Object, slot int) {
 	render.SetChild(el.RenderObject.(render.ObjectWithChild), child)
 }
 
-func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
+func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot int) {
 	panic("unexpected call")
 }
 
-func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot any) {
+func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot int) {
 	render.SetChild(el.RenderObject.(render.ObjectWithChild), nil)
 }
 

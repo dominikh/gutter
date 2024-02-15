@@ -9,11 +9,11 @@ type RenderObjectElement interface {
 
 	RenderHandle() *RenderObjectElementHandle
 
-	InsertRenderObjectChild(child render.Object, slot any)
-	RemoveRenderObjectChild(child render.Object, slot any)
-	MoveRenderObjectChild(child render.Object, oldSlot, newSlot any)
+	InsertRenderObjectChild(child render.Object, slot int)
+	RemoveRenderObjectChild(child render.Object, slot int)
+	MoveRenderObjectChild(child render.Object, oldSlot, newSlot int)
 
-	AttachRenderObject(slot any)
+	AttachRenderObject(slot int)
 }
 
 type SingleChildRenderObjectElement interface {
@@ -29,7 +29,7 @@ func RenderObjectElementAfterUpdate(el RenderObjectElement, newWidget Widget) {
 	el.Handle().widget.(RenderObjectWidget).UpdateRenderObject(el, el.RenderHandle().RenderObject)
 	forceRebuild(el)
 }
-func RenderObjectElementAfterMount(el RenderObjectElement, parent Element, newSlot any) {
+func RenderObjectElementAfterMount(el RenderObjectElement, parent Element, newSlot int) {
 	h := el.RenderHandle()
 	h.RenderObject = h.widget.(RenderObjectWidget).CreateRenderObject(el)
 	AttachRenderObject(el, newSlot)
@@ -44,7 +44,7 @@ func RenderObjectElementAfterUnmount(el RenderObjectElement) {
 	render.Dispose(h.RenderObject)
 	h.RenderObject = nil
 }
-func RenderObjectElementAttachRenderObject(el RenderObjectElement, slot any) {
+func RenderObjectElementAttachRenderObject(el RenderObjectElement, slot int) {
 	h := el.RenderHandle()
 	h.slot = slot
 	h.ancestorRenderObjectElement = findAncestorRenderObjectElement(el)
@@ -63,20 +63,20 @@ func SingleChildRenderObjectElementAfterUpdate(el interface {
 	RenderObjectElement
 }, newWidget Widget) {
 	RenderObjectElementAfterUpdate(el, newWidget)
-	el.SetChild(UpdateChild(el, el.GetChild(), el.Handle().widget.(SingleChildWidget).GetChild(), nil))
+	el.SetChild(UpdateChild(el, el.GetChild(), el.Handle().widget.(SingleChildWidget).GetChild(), 0))
 }
 func SingleChildRenderObjectElementAfterMount(el interface {
 	SingleChildElement
 	RenderObjectElement
-}, parent Element, newSlot any) {
+}, parent Element, newSlot int) {
 	RenderObjectElementAfterMount(el, parent, newSlot)
 	h := el.Handle()
-	el.SetChild(UpdateChild(el, el.GetChild(), h.widget.(SingleChildWidget).GetChild(), nil))
+	el.SetChild(UpdateChild(el, el.GetChild(), h.widget.(SingleChildWidget).GetChild(), 0))
 }
 func SingleChildRenderObjectElementAfterUnmount(el RenderObjectElement) {
 	RenderObjectElementAfterUnmount(el)
 }
-func SingleChildRenderObjectElementAttachRenderObject(el RenderObjectElement, slot any) {
+func SingleChildRenderObjectElementAttachRenderObject(el RenderObjectElement, slot int) {
 	RenderObjectElementAttachRenderObject(el, slot)
 }
 func SingleChildRenderObjectElementPerformRebuild(el RenderObjectElement) {
@@ -86,13 +86,13 @@ func SingleChildRenderObjectElementPerformRebuild(el RenderObjectElement) {
 func RenderTreeRootElementAfterUpdate(el RenderObjectElement, newWidget Widget) {
 	RenderObjectElementAfterUpdate(el, newWidget)
 }
-func RenderTreeRootElementAfterMount(el RenderObjectElement, parent Element, newSlot any) {
+func RenderTreeRootElementAfterMount(el RenderObjectElement, parent Element, newSlot int) {
 	RenderObjectElementAfterMount(el, parent, newSlot)
 }
 func RenderTreeRootElementAfterUnmount(el RenderObjectElement) {
 	RenderObjectElementAfterUnmount(el)
 }
-func RenderTreeRootElementAttachRenderObject(el RenderObjectElement, newSlot any) {
+func RenderTreeRootElementAttachRenderObject(el RenderObjectElement, newSlot int) {
 	el.Handle().slot = newSlot
 }
 func RenderTreeRootElementPerformRebuild(el RenderObjectElement) {
