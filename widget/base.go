@@ -43,7 +43,7 @@ type ElementTransition struct {
 
 	// The parent and slot for Kind == ElementMounted
 	Parent  Element
-	NewSlot any
+	NewSlot int
 }
 
 type StateTransition[W Widget] struct {
@@ -239,12 +239,12 @@ func MarkNeedsBuild(el Element) {
 	h.BuildOwner.scheduleBuildFor(el)
 }
 
-type RenderObjectAttacher interface {
-	AttachRenderObject(slot any)
-}
+func AttachRenderObject(el Element, slot int) {
+	type renderObjectAttacher interface {
+		AttachRenderObject(slot int)
+	}
 
-func AttachRenderObject(el Element, slot any) {
-	if el, ok := el.(RenderObjectAttacher); ok {
+	if el, ok := el.(renderObjectAttacher); ok {
 		el.AttachRenderObject(slot)
 		return
 	}
@@ -266,19 +266,19 @@ func DetachRenderObject(el Element) {
 		DetachRenderObject(child)
 		return true
 	})
-	el.Handle().slot = nil
+	el.Handle().slot = 0
 	if el, ok := el.(RenderObjectDetacher); ok {
 		el.AfterDetachRenderObject()
 	}
 }
 
 type SlotUpdater interface {
-	AfterUpdateSlot(oldSlot, newSlot any)
+	AfterUpdateSlot(oldSlot, newSlot int)
 }
 
 // UpdateSlot updates the element's slot. If the element implements SlotUpdater, AfterUpdateSlot is called
 // afterwards with the old and new slots.
-func UpdateSlot(el Element, newSlot any) {
+func UpdateSlot(el Element, newSlot int) {
 	h := el.Handle()
 	old := h.slot
 	h.slot = newSlot
@@ -287,7 +287,7 @@ func UpdateSlot(el Element, newSlot any) {
 	}
 }
 
-func UpdateChild(el, child Element, newWidget Widget, newSlot any) Element {
+func UpdateChild(el, child Element, newWidget Widget, newSlot int) Element {
 	if newWidget == nil {
 		if child != nil {
 			deactivateChild(child)
@@ -363,7 +363,7 @@ func Deactivate(el Element) {
 	el.Handle().lifecycleState = ElementLifecycleInactive
 }
 
-func Mount(el, parent Element, newSlot any) {
+func Mount(el, parent Element, newSlot int) {
 	h := el.Handle()
 	h.parent = parent
 	h.slot = newSlot
@@ -459,7 +459,7 @@ func (el *SimpleSingleChildRenderObjectElement) Transition(t ElementTransition) 
 }
 
 // AttachRenderObject implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) AttachRenderObject(slot any) {
+func (el *SimpleSingleChildRenderObjectElement) AttachRenderObject(slot int) {
 	SingleChildRenderObjectElementAttachRenderObject(el, slot)
 }
 
@@ -469,18 +469,18 @@ func (el *SimpleSingleChildRenderObjectElement) PerformRebuild() {
 }
 
 // RemoveRenderObjectChild implements SingleChildRenderObjectElement.
-func (*SimpleSingleChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot any) {
+func (*SimpleSingleChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
 	panic("unimplemented")
 }
 
 func (el *SimpleSingleChildRenderObjectElement) GetChild() Element      { return el.child }
 func (el *SimpleSingleChildRenderObjectElement) SetChild(child Element) { el.child = child }
 
-func (el *SimpleSingleChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot any) {
+func (el *SimpleSingleChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
 	render.SetChild(el.RenderObject.(render.ObjectWithChild), child)
 }
 
-func (el *SimpleSingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot any) {
+func (el *SimpleSingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot int) {
 	panic("unexpected call")
 }
 
@@ -568,7 +568,7 @@ type StateHandle[W Widget] struct {
 
 type ElementHandle struct {
 	parent         Element
-	slot           any
+	slot           int
 	lifecycleState int
 	depth          int
 	BuildOwner     *BuildOwner
@@ -581,7 +581,7 @@ func (h *StateHandle[W]) GetStateHandle() *StateHandle[W] { return h }
 
 func (el *ElementHandle) Handle() *ElementHandle { return el }
 func (el *ElementHandle) Parent() Element        { return el.parent }
-func (el *ElementHandle) Slot() any              { return el.slot }
+func (el *ElementHandle) Slot() int              { return el.slot }
 
 type RenderObjectElementHandle struct {
 	ElementHandle
@@ -593,7 +593,7 @@ func (el *RenderObjectElementHandle) RenderHandle() *RenderObjectElementHandle {
 	return el
 }
 
-func (h *RenderObjectElementHandle) UpdateSlot(oldSlot, newSlot any) {
+func (h *RenderObjectElementHandle) UpdateSlot(oldSlot, newSlot int) {
 	if ancestor := h.ancestorRenderObjectElement; ancestor != nil {
 		ancestor.MoveRenderObjectChild(h.RenderObject, oldSlot, h.slot)
 	}
@@ -604,7 +604,7 @@ func (el *RenderObjectElementHandle) DetachRenderObject() {
 		el.ancestorRenderObjectElement.RemoveRenderObjectChild(el.RenderObject, el.slot)
 		el.ancestorRenderObjectElement = nil
 	}
-	el.slot = nil
+	el.slot = 0
 }
 
 type RenderObjectUnmountNotifyee interface {
@@ -739,7 +739,7 @@ func (g GlobalKey) currentElement() Element {
 	return nil
 }
 
-func InflateWidget(parent Element, widget Widget, slot any) Element {
+func InflateWidget(parent Element, widget Widget, slot int) Element {
 	if widget, ok := widget.(KeyedWidget); ok {
 		key := widget.GetKey()
 		if key, ok := key.(GlobalKey); ok {
@@ -780,7 +780,7 @@ func RetakeInactiveElement(el Element, key GlobalKey, newWidget Widget) Element 
 	return element
 }
 
-func activateWithParent(el, parent Element, newSlot any) {
+func activateWithParent(el, parent Element, newSlot int) {
 	el.Handle().parent = parent
 	updateDepth(el, parent.Handle().depth)
 	activateRecursively(el)
@@ -806,7 +806,7 @@ func activateRecursively(element Element) {
 	})
 }
 
-func updateSlotForChild(el, child Element, newSlot any) {
+func updateSlotForChild(el, child Element, newSlot int) {
 	var visit func(element Element)
 	visit = func(element Element) {
 		UpdateSlot(element, newSlot)
