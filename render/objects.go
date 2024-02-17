@@ -17,8 +17,6 @@ var _ ObjectWithChild = (*Constrained)(nil)
 var _ ObjectWithChild = (*Opacity)(nil)
 var _ ObjectWithChild = (*Padding)(nil)
 
-var _ ObjectWithChildren = (*Row)(nil)
-
 type Box struct {
 	ObjectHandle
 }
@@ -163,47 +161,6 @@ func (c *Constrained) PerformLayout() f32.Point {
 // PerformPaint implements Object.
 func (c *Constrained) PerformPaint(r *Renderer, ops *op.Ops) {
 	r.Paint(c.Child).Add(ops)
-}
-
-// TODO turn this into a proper Flex
-type Row struct {
-	Box
-	ManyChildren
-}
-
-// PerformLayout implements Object.
-func (row *Row) PerformLayout() f32.Point {
-	cs := row.Handle().Constraints()
-	inCs := cs
-	inCs.Min.X = 0
-	off := float32(0)
-	height := cs.Min.Y
-	for _, child := range row.children {
-		child.Handle().offset = f32.Pt(off, 0)
-		Layout(child, inCs, true)
-		sz := child.Handle().Size()
-		inCs.Max.X -= sz.X
-		off += sz.X
-		if sz.Y > height {
-			height = sz.Y
-		}
-	}
-	return f32.Pt(cs.Max.X, height)
-}
-
-func (row *Row) AddChild(child Object) {
-	child.Handle().SetParent(row)
-	row.children = append(row.children, child)
-}
-
-// PerformPaint implements Object.
-func (row *Row) PerformPaint(r *Renderer, ops *op.Ops) {
-	for _, child := range row.children {
-		stack := op.Affine(f32.Affine2D{}.Offset(child.Handle().offset)).Push(ops)
-		call := r.Paint(child)
-		call.Add(ops)
-		stack.Pop()
-	}
 }
 
 type Opacity struct {

@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"unsafe"
 
@@ -37,7 +38,7 @@ type RenderObjectElement interface {
 
 	InsertRenderObjectChild(child render.Object, slot int)
 	RemoveRenderObjectChild(child render.Object, slot int)
-	MoveRenderObjectChild(child render.Object, oldSlot, newSlot int)
+	MoveRenderObjectChild(child render.Object, newSlot int)
 
 	AttachRenderObject(slot int)
 }
@@ -47,11 +48,16 @@ type SingleChildRenderObjectElement interface {
 	RenderObjectElement
 }
 
+type MultiChildRenderObjectElement interface {
+	MultiChildElement
+	RenderObjectElement
+}
+
 type ElementTransition struct {
 	Kind ElementTransitionKind
 
-	// The new widget for Kind == ElementUpdated
-	NewWidget Widget
+	// The old widget for Kind == ElementUpdated
+	OldWidget Widget
 
 	// The parent and slot for Kind == ElementMounted
 	Parent  Element
@@ -233,6 +239,11 @@ type StatefulWidget[W Widget] interface {
 	CreateState() State[W]
 }
 
+type ParentDataWidget interface {
+	Widget
+	ApplyParentData(obj render.Object)
+}
+
 // State is state.
 type State[W Widget] interface {
 	WidgetBuilder
@@ -244,6 +255,11 @@ type State[W Widget] interface {
 type SingleChildWidget interface {
 	Widget
 	GetChild() Widget
+}
+
+type MultiChildWidget interface {
+	Widget
+	GetChildren() []Widget
 }
 
 type RenderObjectWidget interface {
@@ -269,8 +285,9 @@ func DidChangeDependencies(el Element) {
 }
 
 func Update(el Element, newWidget Widget) {
+	oldWidget := el.Handle().widget
 	el.Handle().widget = newWidget
-	el.Transition(ElementTransition{Kind: ElementUpdated, NewWidget: newWidget})
+	el.Transition(ElementTransition{Kind: ElementUpdated, OldWidget: oldWidget})
 }
 
 func RenderObjectAttachingChild(el Element) Element {
@@ -324,7 +341,7 @@ func DetachRenderObject(el Element) {
 		DetachRenderObject(child)
 		return true
 	})
-	el.Handle().slot = 0
+	el.Handle().slot = int(math.MinInt)
 	if el, ok := el.(RenderObjectDetacher); ok {
 		el.AfterDetachRenderObject()
 	}
@@ -461,13 +478,22 @@ type ChildrenVisiter interface {
 }
 
 // VisitChildren visits an element's children, by using its VisitChildren or GetChild methods.
-func VisitChildren(el Element, yield func(Element) bool) {
+func VisitChildren(el Element, yield func(child Element) bool) {
 	switch el := el.(type) {
 	case ChildrenVisiter:
 		el.VisitChildren(yield)
 	case SingleChildElement:
 		if child := el.GetChild(); child != nil {
 			yield(child)
+		}
+	case MultiChildElement:
+		for _, child := range *el.Children() {
+			if _, ok := el.ForgottenChildren()[child]; ok {
+				continue
+			}
+			if !yield(child) {
+				break
+			}
 		}
 	}
 }
@@ -493,6 +519,13 @@ type SingleChildElement interface {
 	SetChild(child Element)
 }
 
+type MultiChildElement interface {
+	Element
+	// XXX figure out a better API
+	Children() *[]Element
+	ForgottenChildren() map[Element]struct{}
+}
+
 type WidgetBuilder interface {
 	Build() Widget
 }
@@ -512,7 +545,7 @@ func (el *SimpleSingleChildRenderObjectElement) Transition(t ElementTransition) 
 	case ElementUnmounted:
 		SingleChildRenderObjectElementAfterUnmount(el)
 	case ElementUpdated:
-		SingleChildRenderObjectElementAfterUpdate(el, t.NewWidget)
+		SingleChildRenderObjectElementAfterUpdate(el, t.OldWidget)
 	}
 }
 
@@ -527,19 +560,82 @@ func (el *SimpleSingleChildRenderObjectElement) PerformRebuild() {
 }
 
 // RemoveRenderObjectChild implements SingleChildRenderObjectElement.
-func (*SimpleSingleChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
-	panic("unimplemented")
+func (el *SimpleSingleChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
+	SingleChildRenderObjectElementRemoveRenderObjectChild(el, child, slot)
 }
 
 func (el *SimpleSingleChildRenderObjectElement) GetChild() Element      { return el.child }
 func (el *SimpleSingleChildRenderObjectElement) SetChild(child Element) { el.child = child }
 
 func (el *SimpleSingleChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
-	render.SetChild(el.RenderObject.(render.ObjectWithChild), child)
+	SingleChildRenderObjectElementInsertRenderObjectChild(el, child, slot)
 }
 
-func (el *SimpleSingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot int) {
-	panic("unexpected call")
+func (el *SimpleSingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, newSlot int) {
+	SingleChildRenderObjectElementMoveRenderObjectChild(el, child, newSlot)
+}
+
+var _ MultiChildRenderObjectElement = (*SimpleMultiChildRenderObjectElement)(nil)
+
+type SimpleMultiChildRenderObjectElement struct {
+	RenderObjectElementHandle
+	children          []Element
+	forgottenChildren map[Element]struct{}
+}
+
+// AttachRenderObject implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) AttachRenderObject(slot int) {
+	MultiChildRenderObjectElementAttachRenderObject(el, slot)
+}
+
+// InsertRenderObjectChild implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
+	MultiChildRenderObjectElementInsertRenderObjectChild(el, child, slot)
+}
+
+// MoveRenderObjectChild implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) MoveRenderObjectChild(child render.Object, newSlot int) {
+	MultiChildRenderObjectElementMoveRenderObjectChild(el, child, newSlot)
+}
+
+// RemoveRenderObjectChild implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
+	MultiChildRenderObjectElementRemoveRenderObjectChild(el, child, slot)
+}
+
+// PerformRebuild implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) PerformRebuild() {
+	MultiChildRenderObjectElementPerformRebuild(el)
+}
+
+func (el *SimpleMultiChildRenderObjectElement) VisitChildren(yield func(el Element) bool) {
+	MultiChildRenderObjectElementVisitChildren(el, yield)
+}
+
+// Children implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) Children() *[]Element {
+	return &el.children
+}
+
+// ForgottenChildren implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) ForgottenChildren() map[Element]struct{} {
+	return el.forgottenChildren
+}
+
+func (el *SimpleMultiChildRenderObjectElement) ForgetChild(child Element) {
+	MultiChildRenderObjectElementForgetChild(el, child)
+}
+
+// Transition implements MultiChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) Transition(t ElementTransition) {
+	switch t.Kind {
+	case ElementMounted:
+		MultiChildRenderObjectElementAfterMount(el, t.Parent, t.NewSlot)
+	case ElementUnmounted:
+		MultiChildRenderObjectElementAfterUnmount(el)
+	case ElementUpdated:
+		MultiChildRenderObjectElementAfterUpdate(el, t.OldWidget.(MultiChildRenderObjectWidget))
+	}
 }
 
 // XXX rename this
@@ -639,7 +735,7 @@ func (h *StateHandle[W]) GetStateHandle() *StateHandle[W] { return h }
 
 func (el *ElementHandle) Handle() *ElementHandle { return el }
 func (el *ElementHandle) Parent() Element        { return el.parent }
-func (el *ElementHandle) Slot() int              { return el.slot }
+func (el *ElementHandle) Slot() any              { return el.slot }
 
 type RenderObjectElementHandle struct {
 	ElementHandle
@@ -653,11 +749,11 @@ func (el *RenderObjectElementHandle) RenderHandle() *RenderObjectElementHandle {
 
 func (h *RenderObjectElementHandle) UpdateSlot(oldSlot, newSlot int) {
 	if ancestor := h.ancestorRenderObjectElement; ancestor != nil {
-		ancestor.MoveRenderObjectChild(h.RenderObject, oldSlot, h.slot)
+		ancestor.MoveRenderObjectChild(h.RenderObject, h.slot)
 	}
 }
 
-func (el *RenderObjectElementHandle) DetachRenderObject() {
+func (el *RenderObjectElementHandle) AfterDetachRenderObject() {
 	if el.ancestorRenderObjectElement != nil {
 		el.ancestorRenderObjectElement.RemoveRenderObjectChild(el.RenderObject, el.slot)
 		el.ancestorRenderObjectElement = nil
@@ -898,4 +994,164 @@ func forceRebuild(el Element) {
 
 type Rebuilder interface {
 	PerformRebuild()
+}
+
+func UpdateChildren(el Element, oldChildren []Element, newWidgets []Widget, forgottenChildren map[Element]struct{}) []Element {
+	replaceWithNilIfForgotten := func(child Element) Element {
+		if _, ok := forgottenChildren[child]; ok {
+			return nil
+		} else {
+			return child
+		}
+	}
+
+	// This attempts to diff the new child list (newWidgets) with
+	// the old child list (oldChildren), and produce a new list of elements to
+	// be the new list of child elements of this element. The called of this
+	// method is expected to update this render object accordingly.
+
+	// The cases it tries to optimize for are:
+	//  - the old list is empty
+	//  - the lists are identical
+	//  - there is an insertion or removal of one or more widgets in
+	//    only one place in the list
+	// If a widget with a key is in both lists, it will be synced.
+	// Widgets without keys might be synced but there is no guarantee.
+
+	// The general approach is to sync the entire new list backwards, as follows:
+	// 1. Walk the lists from the top, syncing nodes, until you no longer have
+	//    matching nodes.
+	// 2. Walk the lists from the bottom, without syncing nodes, until you no
+	//    longer have matching nodes. We'll sync these nodes at the end. We
+	//    don't sync them now because we want to sync all the nodes in order
+	//    from beginning to end.
+	// At this point we narrowed the old and new lists to the point
+	// where the nodes no longer match.
+	// 3. Walk the narrowed part of the old list to get the list of
+	//    keys and sync null with non-keyed items.
+	// 4. Walk the narrowed part of the new list forwards:
+	//     * Sync non-keyed items with null
+	//     * Sync keyed items with the source if it exists, else with null.
+	// 5. Walk the bottom of the list again, syncing the nodes.
+	// 6. Sync null with any items in the list of keys that are still
+	//    mounted.
+
+	newChildrenTop := 0
+	oldChildrenTop := 0
+	newChildrenBottom := len(newWidgets) - 1
+	oldChildrenBottom := len(oldChildren) - 1
+
+	newChildren := make([]Element, len(newWidgets))
+
+	// Update the top of the list.
+	for (oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom) {
+		oldChild := replaceWithNilIfForgotten(oldChildren[oldChildrenTop])
+		newWidget := newWidgets[newChildrenTop]
+		if oldChild == nil || !canUpdate(oldChild.Handle().widget, newWidget) {
+			break
+		}
+		newChild := UpdateChild(el, oldChild, newWidget, newChildrenTop)
+		newChildren[newChildrenTop] = newChild
+		newChildrenTop++
+		oldChildrenTop++
+	}
+
+	// Scan the bottom of the list.
+	for (oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom) {
+		oldChild := replaceWithNilIfForgotten(oldChildren[oldChildrenBottom])
+		newWidget := newWidgets[newChildrenBottom]
+		if oldChild == nil || !canUpdate(oldChild.Handle().widget, newWidget) {
+			break
+		}
+		oldChildrenBottom--
+		newChildrenBottom--
+	}
+
+	Key := func(w Widget) any {
+		if w, ok := w.(KeyedWidget); ok {
+			return w.GetKey()
+		} else {
+			return nil
+		}
+	}
+
+	// Scan the old children in the middle of the list.
+	haveOldChildren := oldChildrenTop <= oldChildrenBottom
+	var oldKeyedChildren map[any]Element
+	if haveOldChildren {
+		oldKeyedChildren = map[any]Element{}
+		for oldChildrenTop <= oldChildrenBottom {
+			oldChild := replaceWithNilIfForgotten(oldChildren[oldChildrenTop])
+			if oldChild != nil {
+				if Key(oldChild.Handle().widget) != nil {
+					oldKeyedChildren[Key(oldChild.Handle().widget)] = oldChild
+				} else {
+					deactivateChild(oldChild)
+				}
+			}
+			oldChildrenTop++
+		}
+	}
+
+	// Update the middle of the list.
+	for newChildrenTop <= newChildrenBottom {
+		var oldChild Element
+		newWidget := newWidgets[newChildrenTop]
+		if haveOldChildren {
+			key := Key(newWidget)
+			if key != nil {
+				oldChild = oldKeyedChildren[key]
+				if oldChild != nil {
+					if canUpdate(oldChild.Handle().widget, newWidget) {
+						// we found a match!
+						// remove it from oldKeyedChildren so we don't unsync it later
+						delete(oldKeyedChildren, key)
+					} else {
+						// Not a match, let's pretend we didn't see it for now.
+						oldChild = nil
+					}
+				}
+			}
+		}
+		newChild := UpdateChild(el, oldChild, newWidget, newChildrenTop)
+		newChildren[newChildrenTop] = newChild
+		newChildrenTop++
+	}
+
+	// We've scanned the whole list.
+	newChildrenBottom = len(newWidgets) - 1
+	oldChildrenBottom = len(oldChildren) - 1
+
+	// Update the bottom of the list.
+	for (oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom) {
+		oldChild := oldChildren[oldChildrenTop]
+		newWidget := newWidgets[newChildrenTop]
+		newChild := UpdateChild(el, oldChild, newWidget, newChildrenTop)
+		newChildren[newChildrenTop] = newChild
+		newChildrenTop++
+		oldChildrenTop++
+	}
+
+	// Clean up any of the remaining middle nodes from the old list.
+	for _, oldChild := range oldKeyedChildren {
+		if _, ok := forgottenChildren[oldChild]; !ok {
+			deactivateChild(oldChild)
+		}
+	}
+	return newChildren
+}
+
+func ApplyParentData(pd ParentDataWidget, childrenOf Element) {
+	var applyParentData func(child Element)
+	applyParentData = func(child Element) {
+		if rto, ok := child.(RenderObjectElement); ok {
+			pd.ApplyParentData(rto.RenderHandle().RenderObject)
+		} else {
+			VisitChildren(child, func(child Element) bool {
+				applyParentData(child)
+				return true
+			})
+		}
+	}
+	applyParentData(childrenOf)
 }

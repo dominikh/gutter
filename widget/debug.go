@@ -25,13 +25,13 @@ func FormatElementTree(root Element) string {
 			statei := state.Interface()
 			if statei != nil {
 				fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T\", fillcolor=yellow, style=filled];\n", statei)
-				fmt.Fprintf(&sb, "n%p -> n%p;\n", el, statei)
+				fmt.Fprintf(&sb, "n%p -> n%p [color=yellow];\n", el, statei)
 			}
 		}
 
 		sb.WriteString("}\n")
 
-		fmt.Fprintf(&sb, "n%p -> n%p;\n", w, el)
+		fmt.Fprintf(&sb, "n%p -> n%p [color=lightgreen];\n", w, el)
 
 		if parent != nil {
 			parentW := parent.Handle().widget
@@ -40,7 +40,7 @@ func FormatElementTree(root Element) string {
 
 		if el, ok := el.(RenderObjectElement); ok {
 			obj := el.RenderHandle().RenderObject
-			fmt.Fprintf(&sb, "n%p -> n%p;\n", el, obj)
+			fmt.Fprintf(&sb, "n%p -> n%p [color=magenta];\n", el, obj)
 
 			if objp := obj.Handle().Parent; objp != nil {
 				fmt.Fprintf(&sb, "n%p -> n%p;\n", objp, obj)

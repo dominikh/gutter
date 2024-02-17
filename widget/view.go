@@ -75,7 +75,7 @@ func (el *viewElement) Transition(t ElementTransition) {
 	case ElementDeactivating:
 		el.pipelineOwner.SetRootNode(nil)
 	case ElementUpdated:
-		RenderTreeRootElementAfterUpdate(el, t.NewWidget)
+		RenderTreeRootElementAfterUpdate(el, t.OldWidget)
 		el.updateChild()
 	case ElementMounted:
 		RenderTreeRootElementAfterMount(el, t.Parent, t.NewSlot)
@@ -131,7 +131,7 @@ func (el *viewElement) InsertRenderObjectChild(child render.Object, slot int) {
 	render.SetChild(el.RenderObject.(render.ObjectWithChild), child)
 }
 
-func (el *viewElement) MoveRenderObjectChild(child render.Object, oldSlot, newSlot int) {
+func (el *viewElement) MoveRenderObjectChild(child render.Object, newSlot int) {
 	panic("unexpected call")
 }
 

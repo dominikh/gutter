@@ -158,6 +158,15 @@ func NewSingleChildRenderObjectElement(w interface {
 	return el
 }
 
+func NewMultiChildRenderObjectElement(w interface {
+	RenderObjectWidget
+	MultiChildWidget
+}) *SimpleMultiChildRenderObjectElement {
+	el := &SimpleMultiChildRenderObjectElement{forgottenChildren: make(map[Element]struct{})}
+	el.widget = w
+	return el
+}
+
 type SizedBox struct {
 	Width, Height float32
 	Child         Widget

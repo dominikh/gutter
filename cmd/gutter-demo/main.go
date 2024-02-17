@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"log"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
@@ -23,17 +21,36 @@ import (
 func main() {
 	runtime.MemProfileRate = 1
 	go func() {
+		cpuf, _ := os.Create("cpu.pprof")
+		pprof.StartCPUProfile(cpuf)
 		w := app.NewWindow(app.CustomInputHandling(true))
 		err := run2(w)
 		if err != nil {
 			log.Fatal(err)
 		}
 		f, _ := os.Create("mem.pprof")
+		pprof.StopCPUProfile()
 		runtime.GC()
 		pprof.WriteHeapProfile(f)
 		os.Exit(0)
 	}()
 	app.Main()
+}
+
+var _ widget.SingleChildWidget = (*PointlessWrapper)(nil)
+
+type PointlessWrapper struct {
+	Child widget.Widget
+}
+
+// GetChild implements widget.SingleChildWidget.
+func (p *PointlessWrapper) GetChild() widget.Widget {
+	return p.Child
+}
+
+// CreateElement implements widget.Widget.
+func (p *PointlessWrapper) CreateElement() widget.Element {
+	return widget.NewProxyElement(p)
 }
 
 var _ widget.Widget = (*Bird)(nil)
@@ -51,60 +68,140 @@ func (w *Bird) CreateState() widget.State[*Bird] {
 
 type BirdState struct {
 	widget.StateHandle[*Bird]
-
-	padding float32
-	c       color.NRGBA
+	swap bool
 }
 
-func (s *BirdState) Transition(t widget.StateTransition[*Bird]) {
-	switch t.Kind {
-	case widget.StateInitializing:
-		s.c = color.NRGBA{0, 255, 0, 255}
-		s.padding = 200
-		// go ticker(1*time.Millisecond, func() {
-		// 	s.c.R += 1
-		// })
-
-	}
-	// XXX tear down the timer when we're done
-}
+func (s *BirdState) Transition(t widget.StateTransition[*Bird]) {}
 
 func (s *BirdState) Build() widget.Widget {
-	return &widget.AnimatedPadding{
-		Duration: 1000 * time.Millisecond,
-		Curve:    animation.EaseOutBounce,
-		Padding:  render.Inset{s.padding, s.padding, s.padding, s.padding},
-		Child: &widget.PointerRegion{
-			OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
-				// fmt.Println("outer:", ev)
+	ws := []widget.Widget{
+		&widget.KeyedSubtree{
+			Key: "red",
+			Child: &widget.Flexible{
+				Flex:  3,
+				Child: &ColorChangingBox{color.NRGBA{255, 0, 0, 255}},
 			},
+		},
+		&widget.KeyedSubtree{
+			Key: "green",
+			Child: &widget.Flexible{
+				Flex:  2,
+				Child: &ColorChangingBox{color.NRGBA{0, 255, 0, 255}},
+			},
+		},
+		&widget.KeyedSubtree{
+			Key: "blue",
+			Child: &widget.Flexible{
+				Flex:  1,
+				Child: &ColorChangingBox{color.NRGBA{0, 0, 255, 255}},
+			},
+		},
+	}
+	if s.swap {
+		// ws = ws[1:]
+		ws = []widget.Widget{ws[0], ws[2]}
+		// ws[0], ws[1] = ws[1], ws[0]
+	}
+	return &widget.PointerRegion{
+		OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
+			s.swap = !s.swap
+			widget.MarkNeedsBuild(s.Element)
+		},
+		Child: &widget.Flex{
+			Direction: render.Vertical,
+			Children:  ws,
+		},
+	}
+}
+
+type ColorChangingBox struct {
+	Color color.NRGBA
+}
+
+func (c *ColorChangingBox) CreateElement() widget.Element {
+	return widget.NewInteriorElement(c)
+}
+
+func (c *ColorChangingBox) CreateState() widget.State[*ColorChangingBox] {
+	return &colorChangingBoxState{c: c.Color}
+}
+
+type colorChangingBoxState struct {
+	widget.StateHandle[*ColorChangingBox]
+	c color.NRGBA
+}
+
+func (cs *colorChangingBoxState) Transition(t widget.StateTransition[*ColorChangingBox]) {}
+
+func (cs *colorChangingBoxState) Build() widget.Widget {
+	return &widget.PointerRegion{
+		OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
+			cs.c.R += 50
+			widget.MarkNeedsBuild(cs.Element)
+		},
+		Child: &widget.SizedBox{
+			Width: 100,
 			Child: &widget.ColoredBox{
-				Color: color.NRGBA{255, 0, 0, 255},
-				Child: &widget.Padding{
-					Padding: render.Inset{200, 200, 200, 200},
-					Child: &widget.PointerRegion{
-						OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
-							if s.padding == 200 {
-								s.padding = 0
-							} else {
-								s.padding = 200
-							}
-							widget.MarkNeedsBuild(s.Element)
-						},
-						OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
-							// fmt.Println("inner:", ev)
-							s.c.G = uint8(hit.Offset.Y)
-							widget.MarkNeedsBuild(s.Element)
-						},
-						Child: &widget.ColoredBox{
-							Color: s.c,
-						},
-					},
-				},
+				Color: cs.c,
 			},
 		},
 	}
 }
+
+// func (s *BirdState) Build() widget.Widget {
+// 	tree := &widget.KeyedSubtree{
+// 		Key: "birdie",
+// 		Child: &widget.AnimatedPadding{
+// 			Duration: 1000 * time.Millisecond,
+// 			Curve:    animation.EaseOutBounce,
+// 			Padding:  render.Inset{s.padding, s.padding, s.padding, s.padding},
+// 			Child: &PointlessWrapper{
+// 				Child: &widget.PointerRegion{
+// 					OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
+// 						// fmt.Println("outer:", ev)
+// 					},
+// 					Child: &widget.ColoredBox{
+// 						Color: color.NRGBA{255, 0, 0, 255},
+// 						Child: &widget.Padding{
+// 							Padding: render.Inset{200, 200, 200, 200},
+// 							Child: &widget.AnimatedOpacity{
+// 								Opacity:  s.opacity,
+// 								Duration: time.Second,
+// 								Child: &PointlessWrapper{
+// 									Child: &widget.PointerRegion{
+// 										OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
+// 											if s.padding == 200 {
+// 												s.padding = 0
+// 											} else {
+// 												s.padding = 200
+// 											}
+// 											if s.opacity == 1 {
+// 												s.opacity = 0
+// 											} else {
+// 												s.opacity = 1
+// 											}
+// 											widget.MarkNeedsBuild(s.Element)
+// 										},
+// 										OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
+// 											// fmt.Println("inner:", ev)
+// 											// s.c.G = uint8(hit.Offset.Y)
+// 											// widget.MarkNeedsBuild(s.Element)
+// 										},
+// 										Child: &widget.ColoredBox{
+// 											Color: s.c,
+// 										},
+// 									},
+// 								},
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		},
+// 	}
+
+// 	return tree
+// }
 
 // Key implements widget.StatefulWidget.
 func (*Bird) Key() any {
@@ -147,7 +244,7 @@ func run2(w *app.Window) error {
 	for {
 		switch e := w.NextEvent().(type) {
 		default:
-			fmt.Printf("%T %v\n", e, e)
+			// fmt.Printf("%T %v\n", e, e)
 		case giopointer.Event:
 			ht.Reset()
 			render.HitTest(&ht, rootElem.RenderHandle().RenderObject, e.Position)
@@ -200,6 +297,8 @@ func run2(w *app.Window) error {
 			po.FlushCompositingBits()
 			po.FlushPaint(&ops)
 			bo.FinalizeTree()
+
+			// fmt.Println(widget.FormatElementTree(rootElem))
 			e.Frame(&ops)
 		}
 	}

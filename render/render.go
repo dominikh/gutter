@@ -3,8 +3,10 @@ package render
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
+	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/f32"
 
 	"gioui.org/op"
@@ -25,12 +27,8 @@ import (
 
 type Object interface {
 	// PerformLayout lays out the object.
-	//
-	// Don't call Object.PerformLayout directly. Use [Layout] instead.
 	PerformLayout() (size f32.Point)
 	// PerformPaint paints the object at the specified offset.
-	//
-	// Don't call Object.PerformPaint directly. Use [Renderer.Paint] instead.
 	PerformPaint(r *Renderer, ops *op.Ops)
 
 	VisitChildren(yield func(Object) bool)
@@ -42,14 +40,25 @@ type Attacher interface {
 	PerformDetach()
 }
 
+// XXX merge ObjectWithChild and ObjectWithChildren
+// XXX also try merging Single and Multi child elements
+
 type ObjectWithChild interface {
 	Object
 	PerformSetChild(child Object)
+	PerformRemoveChild(child Object)
 }
 
 type ObjectWithChildren interface {
 	Object
-	PerformInsertChild(child Object, after Object)
+	PerformInsertChild(child Object, after int)
+	PerformMoveChild(child Object, after int)
+	PerformRemoveChild(child Object)
+}
+
+type ChildRemover interface {
+	Object
+	PerformRemoveChild(child Object)
 }
 
 type SizedByParenter interface {
@@ -61,14 +70,21 @@ type Disposable interface {
 	PerformDispose()
 }
 
+type ParentDataSetuper interface {
+	PerformSetupParentData(child Object)
+}
+
 type ObjectHandle struct {
 	size f32.Point
-	// the object's position as a relative offset from the parent object's origin.
+	// The object's position as a relative offset from the parent object's origin. Having to configure a
+	// child's offset is so common that we have a dedicated field for it, instead of requiring the use of
+	// parentData.
 	offset                     f32.Point
+	ParentData                 any
 	needsPaint                 bool
 	needsLayout                bool
 	needsCompositingBitsUpdate bool
-	parent                     Object
+	Parent                     Object
 	constraints                Constraints
 	relayoutBoundary           Object
 	depth                      int
@@ -89,8 +105,8 @@ func MarkNeedsPaint(obj Object) {
 
 	// We always have to walk the tree up to the parent because our composition of objects is implemented by
 	// parents calling op.CallOp.
-	if h.parent != nil {
-		MarkNeedsPaint(h.parent)
+	if h.Parent != nil {
+		MarkNeedsPaint(h.Parent)
 	} else {
 		if h.owner != nil {
 			h.owner.RequestVisualUpdate()
@@ -105,16 +121,16 @@ func MarkNeedsLayout(obj Object) {
 
 	if h.relayoutBoundary == nil {
 		h.needsLayout = true
-		if h.parent != nil {
-			MarkNeedsLayout(h.parent)
+		if h.Parent != nil {
+			MarkNeedsLayout(h.Parent)
 		}
 		return
 	}
 	if h.relayoutBoundary != obj {
-		if h.parent == nil {
+		if h.Parent == nil {
 			panic(fmt.Sprintf("%[1]T(%[1]p) isn't a relayout boundary but also doesn't have a parent", obj))
 		}
-		MarkNeedsLayout(h.parent)
+		MarkNeedsLayout(h.Parent)
 	} else {
 		h.needsLayout = true
 		h.owner.nodesNeedingLayout.Front = append(h.owner.nodesNeedingLayout.Front, obj)
@@ -122,7 +138,7 @@ func MarkNeedsLayout(obj Object) {
 	}
 }
 
-func (h *ObjectHandle) SetParent(parent Object) { h.parent = parent }
+func (h *ObjectHandle) SetParent(parent Object) { h.Parent = parent }
 
 type Constraints struct {
 	Min, Max f32.Point
@@ -197,6 +213,11 @@ func (c *SingleChild) PerformSetChild(child Object) {
 	c.Child = child
 }
 
+func (c *SingleChild) PerformRemoveChild(child Object) {
+	debug.Assert(c.Child == child)
+	c.Child = nil
+}
+
 type ManyChildren struct {
 	children []Object
 }
@@ -209,8 +230,28 @@ func (c *ManyChildren) VisitChildren(yield func(Object) bool) {
 	}
 }
 
-func (c *ManyChildren) InsertChild(child Object, after Object) {
-	panic("not implemented") // XXX
+func (c *ManyChildren) PerformInsertChild(child Object, after int) {
+	if len(c.children) < after {
+		c.children = slices.Grow(c.children, after-len(c.children))[:after]
+	}
+	c.children = slices.Insert(c.children, after+1, child)
+}
+func (c *ManyChildren) PerformMoveChild(child Object, after int) {
+	idx := slices.Index(c.children, child)
+	if after == idx {
+		return
+	}
+	if after > idx {
+		c.children = slices.Delete(c.children, idx, idx+1)
+		c.children = slices.Insert(c.children, after, child)
+	} else {
+		c.children = slices.Delete(c.children, idx, idx+1)
+		c.children = slices.Insert(c.children, after+1, child)
+	}
+}
+func (c *ManyChildren) PerformRemoveChild(child Object) {
+	idx := slices.Index(c.children, child)
+	c.children = slices.Delete(c.children, idx, idx+1)
 }
 
 type Renderer struct {
@@ -264,7 +305,7 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) f32.Point {
 		// We're the relayout boundary
 		relayoutBoundary = obj
 	} else {
-		relayoutBoundary = h.parent.Handle().relayoutBoundary
+		relayoutBoundary = h.Parent.Handle().relayoutBoundary
 	}
 
 	if !h.needsLayout && cs == h.constraints {
@@ -276,7 +317,7 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) f32.Point {
 				if childh.relayoutBoundary == child {
 					return true
 				}
-				parentRelayoutBoundary := childh.parent.Handle().relayoutBoundary
+				parentRelayoutBoundary := childh.Parent.Handle().relayoutBoundary
 				if parentRelayoutBoundary != childh.relayoutBoundary {
 					childh.relayoutBoundary = parentRelayoutBoundary
 					child.VisitChildren(propagateRelayoutBoundary)
@@ -342,5 +383,40 @@ func ScheduleInitialPaint(obj Object) {
 
 func SetChild(parent ObjectWithChild, child Object) {
 	parent.PerformSetChild(child)
-	child.Handle().parent = parent
+	child.Handle().Parent = parent
+	adoptChild(parent, child)
+}
+
+func InsertChild(parent ObjectWithChildren, child Object, after int) {
+	parent.PerformInsertChild(child, after)
+	child.Handle().Parent = parent
+	adoptChild(parent, child)
+}
+
+func MoveChild(parent ObjectWithChildren, child Object, after int) {
+	parent.PerformMoveChild(child, after)
+	MarkNeedsLayout(parent)
+}
+
+func RemoveChild(parent ChildRemover, child Object) {
+	parent.PerformRemoveChild(child)
+	dropChild(parent, child)
+}
+
+func adoptChild(parent, child Object) {
+	if parent, ok := parent.(ParentDataSetuper); ok {
+		parent.PerformSetupParentData(child)
+	}
+	MarkNeedsLayout(parent)
+}
+
+func dropChild(parent, child Object) {
+	// child._cleanRelayoutBoundary();
+	// child.parentData!.detach();
+	child.Handle().ParentData = nil
+	child.Handle().Parent = nil
+	// if attached {
+	Detach(child)
+	// }
+	MarkNeedsLayout(parent)
 }
