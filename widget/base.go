@@ -34,7 +34,7 @@ const (
 )
 
 type RenderObjectElement interface {
-	Element
+	HasChildElement
 
 	RenderHandle() *RenderObjectElementHandle
 
@@ -43,12 +43,6 @@ type RenderObjectElement interface {
 	MoveRenderObjectChild(child render.Object, newSlot int)
 
 	AttachRenderObject(slot int)
-}
-
-// XXX find better name
-type HasChildRenderObjectElement interface {
-	HasChildElement
-	RenderObjectElement
 }
 
 type ElementTransition struct {
@@ -158,9 +152,6 @@ func NewInteriorElement[W Widget](w W) InteriorElement {
 	}
 	return se
 }
-
-// var _ InteriorElement = (*SimpleInteriorElement)(nil)
-// var _ WidgetBuilder = (*SimpleInteriorElement)(nil)
 
 type SimpleInteriorElement[W Widget] struct {
 	ElementHandle
@@ -560,65 +551,65 @@ type WidgetBuilder interface {
 	Build() Widget
 }
 
-var _ HasChildRenderObjectElement = (*SimpleMultiChildRenderObjectElement)(nil)
+var _ RenderObjectElement = (*SimpleRenderObjectElement)(nil)
 
-type SimpleMultiChildRenderObjectElement struct {
+type SimpleRenderObjectElement struct {
 	RenderObjectElementHandle
 	children          []Element
 	forgottenChildren map[Element]struct{}
 }
 
 // SetChildren implements HasChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) SetChildren(children []Element) {
+func (el *SimpleRenderObjectElement) SetChildren(children []Element) {
 	el.children = children
 	clear(el.forgottenChildren)
 }
 
 // AttachRenderObject implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) AttachRenderObject(slot int) {
+func (el *SimpleRenderObjectElement) AttachRenderObject(slot int) {
 	MultiChildRenderObjectElementAttachRenderObject(el, slot)
 }
 
 // InsertRenderObjectChild implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
+func (el *SimpleRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
 	MultiChildRenderObjectElementInsertRenderObjectChild(el, child, slot)
 }
 
 // MoveRenderObjectChild implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) MoveRenderObjectChild(child render.Object, newSlot int) {
+func (el *SimpleRenderObjectElement) MoveRenderObjectChild(child render.Object, newSlot int) {
 	MultiChildRenderObjectElementMoveRenderObjectChild(el, child, newSlot)
 }
 
 // RemoveRenderObjectChild implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
+func (el *SimpleRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
 	MultiChildRenderObjectElementRemoveRenderObjectChild(el, child, slot)
 }
 
 // PerformRebuild implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) PerformRebuild() {
+func (el *SimpleRenderObjectElement) PerformRebuild() {
 	MultiChildRenderObjectElementPerformRebuild(el)
 }
 
-func (el *SimpleMultiChildRenderObjectElement) VisitChildren(yield func(el Element) bool) {
+func (el *SimpleRenderObjectElement) VisitChildren(yield func(el Element) bool) {
 	MultiChildRenderObjectElementVisitChildren(el, yield)
 }
 
 // Children implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) Children() []Element {
+func (el *SimpleRenderObjectElement) Children() []Element {
 	return el.children
 }
 
 // ForgottenChildren implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) ForgottenChildren() map[Element]struct{} {
+func (el *SimpleRenderObjectElement) ForgottenChildren() map[Element]struct{} {
 	return el.forgottenChildren
 }
 
-func (el *SimpleMultiChildRenderObjectElement) ForgetChild(child Element) {
+func (el *SimpleRenderObjectElement) ForgetChild(child Element) {
 	MultiChildRenderObjectElementForgetChild(el, child)
 }
 
 // Transition implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) Transition(t ElementTransition) {
+func (el *SimpleRenderObjectElement) Transition(t ElementTransition) {
 	switch t.Kind {
 	case ElementMounted:
 		MultiChildRenderObjectElementAfterMount(el, t.Parent, t.NewSlot)

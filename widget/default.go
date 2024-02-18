@@ -49,22 +49,22 @@ func RenderObjectElementPerformRebuild(el RenderObjectElement) {
 	el.Handle().dirty = false
 }
 
-func MultiChildRenderObjectElementInsertRenderObjectChild(el HasChildRenderObjectElement, child render.Object, slot int) {
+func MultiChildRenderObjectElementInsertRenderObjectChild(el RenderObjectElement, child render.Object, slot int) {
 	if slot >= 0 {
 		slot--
 	}
 	render.InsertChild(el.RenderHandle().RenderObject.(render.ObjectWithChildren), child, slot)
 }
-func MultiChildRenderObjectElementMoveRenderObjectChild(el HasChildRenderObjectElement, child render.Object, newSlot int) {
+func MultiChildRenderObjectElementMoveRenderObjectChild(el RenderObjectElement, child render.Object, newSlot int) {
 	if newSlot >= 0 {
 		newSlot--
 	}
 	render.MoveChild(el.RenderHandle().RenderObject.(render.ObjectWithChildren), child, newSlot)
 }
-func MultiChildRenderObjectElementRemoveRenderObjectChild(el HasChildRenderObjectElement, child render.Object, slot int) {
+func MultiChildRenderObjectElementRemoveRenderObjectChild(el RenderObjectElement, child render.Object, slot int) {
 	render.RemoveChild(el.RenderHandle().RenderObject.(render.ChildRemover), child)
 }
-func MultiChildRenderObjectElementVisitChildren(el HasChildRenderObjectElement, yield func(el Element) bool) {
+func MultiChildRenderObjectElementVisitChildren(el RenderObjectElement, yield func(el Element) bool) {
 	forgotten := el.ForgottenChildren()
 	for _, child := range el.Children() {
 		if _, ok := forgotten[child]; !ok {
@@ -74,10 +74,10 @@ func MultiChildRenderObjectElementVisitChildren(el HasChildRenderObjectElement, 
 		}
 	}
 }
-func MultiChildRenderObjectElementForgetChild(el HasChildRenderObjectElement, child Element) {
+func MultiChildRenderObjectElementForgetChild(el RenderObjectElement, child Element) {
 	el.ForgottenChildren()[child] = struct{}{}
 }
-func MultiChildRenderObjectElementAfterMount(el HasChildRenderObjectElement, parent Element, newSlot int) {
+func MultiChildRenderObjectElementAfterMount(el RenderObjectElement, parent Element, newSlot int) {
 	RenderObjectElementAfterMount(el, parent, newSlot)
 
 	// OPT(dh): optimize for the single child case, which doesn't need iterators and slices.
@@ -89,7 +89,7 @@ func MultiChildRenderObjectElementAfterMount(el HasChildRenderObjectElement, par
 	})
 	el.SetChildren(children)
 }
-func MultiChildRenderObjectElementAfterUpdate(el HasChildRenderObjectElement, oldWidget RenderObjectWidget) {
+func MultiChildRenderObjectElementAfterUpdate(el RenderObjectElement, oldWidget RenderObjectWidget) {
 	RenderObjectElementAfterUpdate(el, oldWidget)
 
 	// OPT(dh): optimize for the case where we had <2 children before and <2 children now. that doesn't need
@@ -97,13 +97,13 @@ func MultiChildRenderObjectElementAfterUpdate(el HasChildRenderObjectElement, ol
 	widget := el.Handle().widget.(RenderObjectWidget)
 	el.SetChildren(UpdateChildren(el, WidgetChildren(widget), el.ForgottenChildren()))
 }
-func MultiChildRenderObjectElementAfterUnmount(el HasChildRenderObjectElement) {
+func MultiChildRenderObjectElementAfterUnmount(el RenderObjectElement) {
 	RenderObjectElementAfterUnmount(el)
 }
-func MultiChildRenderObjectElementAttachRenderObject(el HasChildRenderObjectElement, slot int) {
+func MultiChildRenderObjectElementAttachRenderObject(el RenderObjectElement, slot int) {
 	RenderObjectElementAttachRenderObject(el, slot)
 }
-func MultiChildRenderObjectElementPerformRebuild(el HasChildRenderObjectElement) {
+func MultiChildRenderObjectElementPerformRebuild(el RenderObjectElement) {
 	RenderObjectElementPerformRebuild(el)
 }
 

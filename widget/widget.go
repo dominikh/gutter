@@ -51,7 +51,7 @@ func (p *Padding) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 }
 
 func (p *Padding) CreateElement() Element {
-	return NewMultiChildRenderObjectElement(p)
+	return NewRenderObjectElement(p)
 }
 
 type AnimatedPadding struct {
@@ -102,7 +102,7 @@ func (c *ColoredBox) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 }
 
 func (c *ColoredBox) CreateElement() Element {
-	return NewMultiChildRenderObjectElement(c)
+	return NewRenderObjectElement(c)
 }
 
 type renderColoredBox struct {
@@ -136,8 +136,8 @@ func (r *renderColoredBox) setColor(c color.NRGBA) {
 	}
 }
 
-func NewMultiChildRenderObjectElement(w RenderObjectWidget) *SimpleMultiChildRenderObjectElement {
-	el := &SimpleMultiChildRenderObjectElement{forgottenChildren: make(map[Element]struct{})}
+func NewRenderObjectElement(w RenderObjectWidget) *SimpleRenderObjectElement {
+	el := &SimpleRenderObjectElement{forgottenChildren: make(map[Element]struct{})}
 	el.widget = w
 	return el
 }
@@ -163,7 +163,7 @@ func (box *SizedBox) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 
 // CreateElement implements Widget.
 func (box *SizedBox) CreateElement() Element {
-	return NewMultiChildRenderObjectElement(box)
+	return NewRenderObjectElement(box)
 }
 
 type PointerRegion struct {
@@ -198,7 +198,7 @@ func (p *PointerRegion) UpdateRenderObject(ctx BuildContext, obj render.Object) 
 
 // CreateElement implements Widget.
 func (w *PointerRegion) CreateElement() Element {
-	return NewMultiChildRenderObjectElement(w)
+	return NewRenderObjectElement(w)
 }
 
 type Opacity struct {
@@ -220,7 +220,7 @@ func (o *Opacity) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 
 // CreateElement implements SingleChildWidget.
 func (o *Opacity) CreateElement() Element {
-	return NewMultiChildRenderObjectElement(o)
+	return NewRenderObjectElement(o)
 }
 
 type AnimatedOpacity struct {

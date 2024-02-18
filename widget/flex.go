@@ -36,7 +36,7 @@ func (f *Flex) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 
 // CreateElement implements MultiChildWidget.
 func (f *Flex) CreateElement() Element {
-	return NewMultiChildRenderObjectElement(f)
+	return NewRenderObjectElement(f)
 }
 
 type Flexible struct {
