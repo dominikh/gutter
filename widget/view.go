@@ -9,7 +9,7 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-var _ SingleChildWidget = (*View)(nil)
+var _ Widget = (*View)(nil)
 var _ RenderObjectWidget = (*View)(nil)
 var _ SingleChildRenderObjectElement = (*viewElement)(nil)
 
@@ -23,11 +23,6 @@ func NewView(root Widget, po *render.PipelineOwner) *View {
 type View struct {
 	PipelineOwner *render.PipelineOwner
 	Child         Widget
-}
-
-// GetChild implements SingleChildWidget.
-func (w *View) GetChild() Widget {
-	return w.Child
 }
 
 func (w *View) Attach(owner *BuildOwner, element *viewElement) *viewElement {

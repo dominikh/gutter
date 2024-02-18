@@ -25,14 +25,14 @@ var _ RenderObjectWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
 var _ RenderObjectWidget = (*SizedBox)(nil)
 
-var _ SingleChildWidget = (*AnimatedOpacity)(nil)
-var _ SingleChildWidget = (*AnimatedPadding)(nil)
-var _ SingleChildWidget = (*ColoredBox)(nil)
-var _ SingleChildWidget = (*KeyedSubtree)(nil)
-var _ SingleChildWidget = (*Opacity)(nil)
-var _ SingleChildWidget = (*Padding)(nil)
-var _ SingleChildWidget = (*PointerRegion)(nil)
-var _ SingleChildWidget = (*SizedBox)(nil)
+var _ Widget = (*AnimatedOpacity)(nil)
+var _ Widget = (*AnimatedPadding)(nil)
+var _ Widget = (*ColoredBox)(nil)
+var _ Widget = (*KeyedSubtree)(nil)
+var _ Widget = (*Opacity)(nil)
+var _ Widget = (*Padding)(nil)
+var _ Widget = (*PointerRegion)(nil)
+var _ Widget = (*SizedBox)(nil)
 
 var _ StatefulWidget[*AnimatedOpacity] = (*AnimatedOpacity)(nil)
 var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
@@ -45,10 +45,6 @@ var _ render.ObjectWithChild = (*renderColoredBox)(nil)
 type Padding struct {
 	Padding render.Inset
 	Child   Widget
-}
-
-func (p *Padding) GetChild() Widget {
-	return p.Child
 }
 
 func (p *Padding) CreateRenderObject(ctx BuildContext) render.Object {
@@ -69,11 +65,6 @@ type AnimatedPadding struct {
 
 	Duration time.Duration
 	Curve    func(t float64) float64
-}
-
-// GetChild implements SingleChildWidget.
-func (a *AnimatedPadding) GetChild() Widget {
-	return a.Child
 }
 
 // CreateElement implements StatefulWidget.
@@ -105,10 +96,6 @@ func (a *animatedPaddingState) Build() Widget {
 type ColoredBox struct {
 	Color color.NRGBA
 	Child Widget
-}
-
-func (c *ColoredBox) GetChild() Widget {
-	return c.Child
 }
 
 func (c *ColoredBox) CreateRenderObject(ctx BuildContext) render.Object {
@@ -154,19 +141,13 @@ func (r *renderColoredBox) setColor(c color.NRGBA) {
 	}
 }
 
-func NewSingleChildRenderObjectElement(w interface {
-	RenderObjectWidget
-	SingleChildWidget
-}) *SimpleSingleChildRenderObjectElement {
+func NewSingleChildRenderObjectElement(w RenderObjectWidget) *SimpleSingleChildRenderObjectElement {
 	el := &SimpleSingleChildRenderObjectElement{}
 	el.widget = w
 	return el
 }
 
-func NewMultiChildRenderObjectElement(w interface {
-	RenderObjectWidget
-	MultiChildWidget
-}) *SimpleMultiChildRenderObjectElement {
+func NewMultiChildRenderObjectElement(w RenderObjectWidget) *SimpleMultiChildRenderObjectElement {
 	el := &SimpleMultiChildRenderObjectElement{forgottenChildren: make(map[Element]struct{})}
 	el.widget = w
 	return el
@@ -194,11 +175,6 @@ func (box *SizedBox) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 // CreateElement implements Widget.
 func (box *SizedBox) CreateElement() Element {
 	return NewSingleChildRenderObjectElement(box)
-}
-
-// GetChild implements SingleChildWidget.
-func (box *SizedBox) GetChild() Widget {
-	return box.Child
 }
 
 type PointerRegion struct {
@@ -236,10 +212,6 @@ func (w *PointerRegion) CreateElement() Element {
 	return NewSingleChildRenderObjectElement(w)
 }
 
-func (w *PointerRegion) GetChild() Widget {
-	return w.Child
-}
-
 type Opacity struct {
 	Opacity float32
 	Child   Widget
@@ -262,11 +234,6 @@ func (o *Opacity) CreateElement() Element {
 	return NewSingleChildRenderObjectElement(o)
 }
 
-// GetChild implements SingleChildWidget.
-func (o *Opacity) GetChild() Widget {
-	return o.Child
-}
-
 type AnimatedOpacity struct {
 	Opacity float32 `gutter:"animated"`
 	Child   Widget
@@ -285,11 +252,6 @@ func (a *AnimatedOpacity) CreateState() State[*AnimatedOpacity] {
 // CreateElement implements SingleChildWidget.
 func (a *AnimatedOpacity) CreateElement() Element {
 	return NewInteriorElement(a)
-}
-
-// GetChild implements SingleChildWidget.
-func (a *AnimatedOpacity) GetChild() Widget {
-	return a.Child
 }
 
 type animatedOpacityState struct {
@@ -387,9 +349,4 @@ func (k *KeyedSubtree) GetKey() any {
 // CreateElement implements SingleChildWidget.
 func (k *KeyedSubtree) CreateElement() Element {
 	return NewProxyElement(k)
-}
-
-// GetChild implements SingleChildWidget.
-func (k *KeyedSubtree) GetChild() Widget {
-	return k.Child
 }
