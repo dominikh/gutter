@@ -214,7 +214,7 @@ func (f *Flex) getCrossSize(size f32.Point) float32 {
 }
 
 func (f *Flex) computeSizes() layoutSizes {
-	getFlex := func(child Object) int {
+	getFlex := func(child Object) float32 {
 		d, _ := child.Handle().ParentData.(*FlexParentData)
 		return d.Flex
 	}
@@ -226,7 +226,7 @@ func (f *Flex) computeSizes() layoutSizes {
 	// Determine used flex factor, size inflexible items, calculate free space.
 	cs := f.constraints
 	inf := float32(math.Inf(1))
-	var totalFlex int
+	var totalFlex float32
 	var maxMainSize float32
 	if f.direction == Horizontal {
 		maxMainSize = cs.Max.X
@@ -357,7 +357,7 @@ func (f *Flex) computeSizes() layoutSizes {
 }
 
 type FlexParentData struct {
-	Flex int
+	Flex float32
 	Fit  FlexFit
 }
 
