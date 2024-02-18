@@ -45,7 +45,6 @@ func (w *View) CreateElement() Element {
 
 // CreateRenderObject implements RenderObjectWidget.
 func (w *View) CreateRenderObject(ctx BuildContext) render.Object {
-	// XXX
 	return render.NewView()
 }
 
