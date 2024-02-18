@@ -39,7 +39,7 @@ const (
 )
 
 type RenderObjectElement interface {
-	HasChildElement
+	ParentElement
 
 	RenderHandle() *RenderObjectElementHandle
 
@@ -313,7 +313,7 @@ type Element interface {
 }
 
 type InteriorElement interface {
-	HasChildElement
+	ParentElement
 	WidgetBuilder
 }
 
@@ -533,8 +533,7 @@ func ForgetChild(el Element, child Element) {
 	}
 }
 
-// XXX find a better name
-type HasChildElement interface {
+type ParentElement interface {
 	Element
 	VisitChildren(yield func(e Element) bool)
 	// XXX figure out a better API
@@ -974,7 +973,7 @@ type Rebuilder interface {
 	PerformRebuild()
 }
 
-func UpdateChildren(el HasChildElement, newWidgets []Widget, forgottenChildren map[Element]struct{}) []Element {
+func UpdateChildren(el ParentElement, newWidgets []Widget, forgottenChildren map[Element]struct{}) []Element {
 	oldChildren := el.Children()
 	replaceWithNilIfForgotten := func(child Element) Element {
 		if _, ok := forgottenChildren[child]; ok {
