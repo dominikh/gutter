@@ -218,7 +218,7 @@ func (o *Opacity) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 	obj.(*render.Opacity).SetOpacity(o.Opacity)
 }
 
-// CreateElement implements SingleChildWidget.
+// CreateElement implements Widget.
 func (o *Opacity) CreateElement() Element {
 	return NewRenderObjectElement(o)
 }
@@ -238,7 +238,7 @@ func (a *AnimatedOpacity) CreateState() State[*AnimatedOpacity] {
 	return s
 }
 
-// CreateElement implements SingleChildWidget.
+// CreateElement implements Widget.
 func (a *AnimatedOpacity) CreateElement() Element {
 	return NewInteriorElement(a)
 }
@@ -335,7 +335,7 @@ func (k *KeyedSubtree) GetKey() any {
 	return k.Key
 }
 
-// CreateElement implements SingleChildWidget.
+// CreateElement implements Widget.
 func (k *KeyedSubtree) CreateElement() Element {
 	return NewProxyElement(k)
 }
