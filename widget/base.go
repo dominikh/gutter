@@ -117,15 +117,10 @@ func (p *ProxyElement) Build() Widget {
 	return GetWidgetChild(p.widget)
 }
 
-// GetChild implements InteriorElement.
-func (p *ProxyElement) GetChild() Element {
-	return p.child
-}
-
 // PerformRebuild implements InteriorElement.
 func (el *ProxyElement) PerformRebuild() {
 	built := el.Build()
-	el.child = UpdateChild(el, el.GetChild(), built, el.Handle().slot)
+	el.child = UpdateChild(el, el.child, built, el.Handle().slot)
 	el.Handle().dirty = false
 }
 
@@ -233,10 +228,6 @@ func (el *SimpleInteriorElement[W]) Transition(t ElementTransition) {
 	}
 }
 
-func (el *SimpleInteriorElement[W]) GetChild() Element {
-	return el.child
-}
-
 func (el *SimpleInteriorElement[W]) SetChild(child Element) {
 	el.child = child
 }
@@ -264,7 +255,7 @@ func (el *SimpleInteriorElement[W]) PerformRebuild() {
 		}
 	}
 	built := el.Build()
-	el.SetChild(UpdateChild(el, el.GetChild(), built, el.Handle().slot))
+	el.SetChild(UpdateChild(el, el.child, built, el.Handle().slot))
 	el.Handle().dirty = false
 }
 

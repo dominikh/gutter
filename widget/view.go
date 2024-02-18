@@ -117,16 +117,6 @@ func (el *viewElement) Transition(t ElementTransition) {
 	}
 }
 
-// GetChild implements SingleChildElement.
-func (el *viewElement) GetChild() Element {
-	return el.child
-}
-
-// SetChild implements SingleChildElement.
-func (el *viewElement) SetChild(child Element) {
-	el.child = child
-}
-
 // AttachRenderObject implements RenderTreeRootElement.
 func (el *viewElement) AttachRenderObject(slot int) {
 	RenderTreeRootElementAttachRenderObject(el, slot)
