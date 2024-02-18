@@ -76,40 +76,7 @@ func NewProxyElement[W Widget](w W) InteriorElement {
 
 type ProxyElement struct {
 	ElementHandle
-	child Element
-}
-
-// Children implements InteriorElement.
-func (el *ProxyElement) Children() []Element {
-	if el.child == nil {
-		return nil
-	} else {
-		// OPT(dh)
-		return []Element{el.child}
-	}
-}
-
-// ForgottenChildren implements InteriorElement.
-func (el *ProxyElement) ForgottenChildren() map[Element]struct{} {
-	return nil
-}
-
-// SetChildren implements InteriorElement.
-func (el *ProxyElement) SetChildren(children []Element) {
-	debug.Assert(len(children) < 2)
-	if len(children) == 0 {
-		el.child = nil
-	} else {
-		el.child = children[0]
-	}
-}
-
-// VisitChildren implements InteriorElement.
-func (el *ProxyElement) VisitChildren(yield func(e Element) bool) {
-	if el.child == nil {
-		return
-	}
-	yield(el.child)
+	SingleChildElement
 }
 
 // Build implements InteriorElement.
@@ -120,7 +87,7 @@ func (p *ProxyElement) Build() Widget {
 // PerformRebuild implements InteriorElement.
 func (el *ProxyElement) PerformRebuild() {
 	built := el.Build()
-	el.child = UpdateChild(el, el.child, built, el.Handle().slot)
+	el.SetChild(UpdateChild(el, el.Child(), built, el.Handle().slot))
 	el.Handle().dirty = false
 }
 
@@ -151,43 +118,7 @@ func NewInteriorElement[W Widget](w W) InteriorElement {
 type SimpleInteriorElement[W Widget] struct {
 	ElementHandle
 	State[W]
-
-	child Element
-}
-
-// Children implements InteriorElement.
-func (el *SimpleInteriorElement[W]) Children() []Element {
-	// XXX ProxyElement, viewElement, InteriorElement all have methods in common
-
-	if el.child == nil {
-		return nil
-	} else {
-		// OPT(dh)
-		return []Element{el.child}
-	}
-}
-
-// ForgottenChildren implements InteriorElement.
-func (el *SimpleInteriorElement[W]) ForgottenChildren() map[Element]struct{} {
-	return nil
-}
-
-// SetChildren implements InteriorElement.
-func (el *SimpleInteriorElement[W]) SetChildren(children []Element) {
-	debug.Assert(len(children) < 2)
-	if len(children) == 0 {
-		el.child = nil
-	} else {
-		el.child = children[0]
-	}
-}
-
-// VisitChildren implements InteriorElement.
-func (el *SimpleInteriorElement[W]) VisitChildren(yield func(e Element) bool) {
-	if el.child == nil {
-		return
-	}
-	yield(el.child)
+	SingleChildElement
 }
 
 func (el *SimpleInteriorElement[W]) Transition(t ElementTransition) {
@@ -228,10 +159,6 @@ func (el *SimpleInteriorElement[W]) Transition(t ElementTransition) {
 	}
 }
 
-func (el *SimpleInteriorElement[W]) SetChild(child Element) {
-	el.child = child
-}
-
 func (el *SimpleInteriorElement[W]) GetState() State[W] {
 	return el.State
 }
@@ -255,7 +182,7 @@ func (el *SimpleInteriorElement[W]) PerformRebuild() {
 		}
 	}
 	built := el.Build()
-	el.SetChild(UpdateChild(el, el.child, built, el.Handle().slot))
+	el.SetChild(UpdateChild(el, el.Child(), built, el.Handle().slot))
 	el.Handle().dirty = false
 }
 
@@ -530,7 +457,7 @@ func ForgetChild(el Element, child Element) {
 
 type ParentElement interface {
 	Element
-	VisitChildren(yield func(e Element) bool)
+	ChildrenVisiter
 	// XXX figure out a better API
 	Children() []Element
 	SetChildren(children []Element)
@@ -545,14 +472,7 @@ var _ RenderObjectElement = (*SimpleRenderObjectElement)(nil)
 
 type SimpleRenderObjectElement struct {
 	RenderObjectElementHandle
-	children          []Element
-	forgottenChildren map[Element]struct{}
-}
-
-// SetChildren implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) SetChildren(children []Element) {
-	el.children = children
-	clear(el.forgottenChildren)
+	ManyChildElements
 }
 
 // AttachRenderObject implements RenderObjectElement.
@@ -578,24 +498,6 @@ func (el *SimpleRenderObjectElement) RemoveRenderObjectChild(child render.Object
 // PerformRebuild implements RenderObjectElement.
 func (el *SimpleRenderObjectElement) PerformRebuild() {
 	RenderObjectElementPerformRebuild(el)
-}
-
-func (el *SimpleRenderObjectElement) VisitChildren(yield func(el Element) bool) {
-	RenderObjectElementVisitChildren(el, yield)
-}
-
-// Children implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) Children() []Element {
-	return el.children
-}
-
-// ForgottenChildren implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) ForgottenChildren() map[Element]struct{} {
-	return el.forgottenChildren
-}
-
-func (el *SimpleRenderObjectElement) ForgetChild(child Element) {
-	RenderObjectElementForgetChild(el, child)
 }
 
 // Transition implements RenderObjectElement.
@@ -1198,4 +1100,80 @@ func WidgetChildren(parent Widget) []Widget {
 	} else {
 		panic(fmt.Sprintf("%T does not have children", parent))
 	}
+}
+
+type SingleChildElement struct {
+	child [1]Element
+}
+
+func (s *SingleChildElement) Children() []Element {
+	if s.child[0] == nil {
+		return nil
+	} else {
+		return s.child[:]
+	}
+}
+
+func (s *SingleChildElement) ForgottenChildren() map[Element]struct{} {
+	return nil
+}
+
+func (s *SingleChildElement) SetChildren(children []Element) {
+	debug.Assert(len(children) < 2)
+	if len(children) == 0 {
+		s.child[0] = nil
+	} else {
+		s.child[0] = children[0]
+	}
+}
+
+func (s *SingleChildElement) VisitChildren(yield func(e Element) bool) {
+	if s.child[0] == nil {
+		return
+	}
+	yield(s.child[0])
+}
+
+func (s *SingleChildElement) Child() Element {
+	return s.child[0]
+}
+
+func (s *SingleChildElement) SetChild(child Element) {
+	s.child[0] = child
+}
+
+type ManyChildElements struct {
+	children          []Element
+	forgottenChildren map[Element]struct{}
+}
+
+func (m *ManyChildElements) SetChildren(children []Element) {
+	m.children = children
+	clear(m.forgottenChildren)
+}
+
+func (m *ManyChildElements) VisitChildren(yield func(el Element) bool) {
+	forgotten := m.forgottenChildren
+	for _, child := range m.children {
+		if _, ok := forgotten[child]; !ok {
+			if !yield(child) {
+				break
+			}
+		}
+	}
+}
+
+func (m *ManyChildElements) Children() []Element {
+	return m.children
+}
+
+func (m *ManyChildElements) ForgottenChildren() map[Element]struct{} {
+	return m.forgottenChildren
+}
+
+func (m *ManyChildElements) ForgetChild(child Element) {
+	if m.forgottenChildren == nil {
+		m.forgottenChildren = make(map[Element]struct{})
+	}
+	m.forgottenChildren[child] = struct{}{}
 }

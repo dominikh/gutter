@@ -1,7 +1,6 @@
 package widget
 
 import (
-	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/render"
 )
 
@@ -59,43 +58,9 @@ func (*View) UpdateRenderObject(ctx BuildContext, obj render.Object) {}
 
 type viewElement struct {
 	RenderObjectElementHandle
-	child Element
+	SingleChildElement
 
 	pipelineOwner *render.PipelineOwner
-}
-
-// Children implements RenderObjectElement.
-func (el *viewElement) Children() []Element {
-	if el.child == nil {
-		return nil
-	} else {
-		// OPT(dh): this isn't great
-		return []Element{el.child}
-	}
-}
-
-// ForgottenChildren implements RenderObjectElement.
-func (el *viewElement) ForgottenChildren() map[Element]struct{} {
-	// XXX remove this
-	return nil
-}
-
-// SetChildren implements RenderObjectElement.
-func (el *viewElement) SetChildren(children []Element) {
-	debug.Assert(len(children) < 2)
-	if len(children) == 0 {
-		el.child = nil
-	} else {
-		el.child = children[0]
-	}
-}
-
-// VisitChildren implements RenderObjectElement.
-func (el *viewElement) VisitChildren(yield func(e Element) bool) {
-	if el.child == nil {
-		return
-	}
-	yield(el.child)
 }
 
 func (el *viewElement) Transition(t ElementTransition) {
@@ -134,12 +99,12 @@ func (el *viewElement) SetConfiguration(cs render.ViewConfiguration) {
 }
 
 func (el *viewElement) ForgetChild(child Element) {
-	el.child = nil
+	el.SetChild(nil)
 }
 
 func (el *viewElement) updateChild() {
 	child := el.widget.(*View).Child
-	el.child = UpdateChild(el, el.child, child, 0)
+	el.SetChild(UpdateChild(el, el.Child(), child, 0))
 }
 
 func (el *viewElement) PerformRebuild() {

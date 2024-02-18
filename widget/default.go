@@ -77,19 +77,6 @@ func RenderObjectElementMoveRenderObjectChild(el RenderObjectElement, child rend
 func RenderObjectElementRemoveRenderObjectChild(el RenderObjectElement, child render.Object, slot int) {
 	render.RemoveChild(el.RenderHandle().RenderObject.(render.ChildRemover), child)
 }
-func RenderObjectElementVisitChildren(el RenderObjectElement, yield func(el Element) bool) {
-	forgotten := el.ForgottenChildren()
-	for _, child := range el.Children() {
-		if _, ok := forgotten[child]; !ok {
-			if !yield(child) {
-				break
-			}
-		}
-	}
-}
-func RenderObjectElementForgetChild(el RenderObjectElement, child Element) {
-	el.ForgottenChildren()[child] = struct{}{}
-}
 
 func RenderTreeRootElementAfterUpdate(el RenderObjectElement, oldWidget Widget) {
 	RenderObjectElementAfterUpdate(el, oldWidget)
