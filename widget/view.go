@@ -69,7 +69,7 @@ type viewElement struct {
 	pipelineOwner *render.PipelineOwner
 }
 
-// Children implements HasChildRenderObjectElement.
+// Children implements RenderObjectElement.
 func (el *viewElement) Children() []Element {
 	if el.child == nil {
 		return nil
@@ -79,13 +79,13 @@ func (el *viewElement) Children() []Element {
 	}
 }
 
-// ForgottenChildren implements HasChildRenderObjectElement.
+// ForgottenChildren implements RenderObjectElement.
 func (el *viewElement) ForgottenChildren() map[Element]struct{} {
 	// XXX remove this
 	return nil
 }
 
-// SetChildren implements HasChildRenderObjectElement.
+// SetChildren implements RenderObjectElement.
 func (el *viewElement) SetChildren(children []Element) {
 	debug.Assert(len(children) < 2)
 	if len(children) == 0 {
@@ -95,7 +95,7 @@ func (el *viewElement) SetChildren(children []Element) {
 	}
 }
 
-// VisitChildren implements HasChildRenderObjectElement.
+// VisitChildren implements RenderObjectElement.
 func (el *viewElement) VisitChildren(yield func(e Element) bool) {
 	if el.child == nil {
 		return
