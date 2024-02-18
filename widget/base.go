@@ -7,6 +7,7 @@ import (
 	"slices"
 	"unsafe"
 
+	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/render"
 )
 
@@ -44,13 +45,9 @@ type RenderObjectElement interface {
 	AttachRenderObject(slot int)
 }
 
-type SingleChildRenderObjectElement interface {
-	SingleChildElement
-	RenderObjectElement
-}
-
-type MultiChildRenderObjectElement interface {
-	MultiChildElement
+// XXX find better name
+type HasChildRenderObjectElement interface {
+	HasChildElement
 	RenderObjectElement
 }
 
@@ -88,6 +85,39 @@ type ProxyElement struct {
 	child Element
 }
 
+// Children implements InteriorElement.
+func (el *ProxyElement) Children() []Element {
+	if el.child == nil {
+		return nil
+	} else {
+		// OPT(dh)
+		return []Element{el.child}
+	}
+}
+
+// ForgottenChildren implements InteriorElement.
+func (el *ProxyElement) ForgottenChildren() map[Element]struct{} {
+	return nil
+}
+
+// SetChildren implements InteriorElement.
+func (el *ProxyElement) SetChildren(children []Element) {
+	debug.Assert(len(children) < 2)
+	if len(children) == 0 {
+		el.child = nil
+	} else {
+		el.child = children[0]
+	}
+}
+
+// VisitChildren implements InteriorElement.
+func (el *ProxyElement) VisitChildren(yield func(e Element) bool) {
+	if el.child == nil {
+		return
+	}
+	yield(el.child)
+}
+
 // Build implements InteriorElement.
 func (p *ProxyElement) Build() Widget {
 	return GetWidgetChild(p.widget)
@@ -101,13 +131,8 @@ func (p *ProxyElement) GetChild() Element {
 // PerformRebuild implements InteriorElement.
 func (el *ProxyElement) PerformRebuild() {
 	built := el.Build()
-	el.SetChild(UpdateChild(el, el.GetChild(), built, el.Handle().slot))
+	el.child = UpdateChild(el, el.GetChild(), built, el.Handle().slot)
 	el.Handle().dirty = false
-}
-
-// SetChild implements InteriorElement.
-func (p *ProxyElement) SetChild(child Element) {
-	p.child = child
 }
 
 // Transition implements InteriorElement.
@@ -142,6 +167,41 @@ type SimpleInteriorElement[W Widget] struct {
 	State[W]
 
 	child Element
+}
+
+// Children implements InteriorElement.
+func (el *SimpleInteriorElement[W]) Children() []Element {
+	// XXX ProxyElement, viewElement, InteriorElement all have methods in common
+
+	if el.child == nil {
+		return nil
+	} else {
+		// OPT(dh)
+		return []Element{el.child}
+	}
+}
+
+// ForgottenChildren implements InteriorElement.
+func (el *SimpleInteriorElement[W]) ForgottenChildren() map[Element]struct{} {
+	return nil
+}
+
+// SetChildren implements InteriorElement.
+func (el *SimpleInteriorElement[W]) SetChildren(children []Element) {
+	debug.Assert(len(children) < 2)
+	if len(children) == 0 {
+		el.child = nil
+	} else {
+		el.child = children[0]
+	}
+}
+
+// VisitChildren implements InteriorElement.
+func (el *SimpleInteriorElement[W]) VisitChildren(yield func(e Element) bool) {
+	if el.child == nil {
+		return
+	}
+	yield(el.child)
 }
 
 func (el *SimpleInteriorElement[W]) Transition(t ElementTransition) {
@@ -266,7 +326,7 @@ type Element interface {
 }
 
 type InteriorElement interface {
-	SingleChildElement
+	HasChildElement
 	WidgetBuilder
 }
 
@@ -470,22 +530,8 @@ type ChildrenVisiter interface {
 
 // VisitChildren visits an element's children, by using its VisitChildren or GetChild methods.
 func VisitChildren(el Element, yield func(child Element) bool) {
-	switch el := el.(type) {
-	case ChildrenVisiter:
+	if el, ok := el.(ChildrenVisiter); ok {
 		el.VisitChildren(yield)
-	case SingleChildElement:
-		if child := el.GetChild(); child != nil {
-			yield(child)
-		}
-	case MultiChildElement:
-		for _, child := range *el.Children() {
-			if _, ok := el.ForgottenChildren()[child]; ok {
-				continue
-			}
-			if !yield(child) {
-				break
-			}
-		}
 	}
 }
 
@@ -493,27 +539,20 @@ type ChildForgetter interface {
 	ForgetChild(child Element)
 }
 
-// ForgetChild instructs an element to forget one of its children, either by calling ForgetChild on it or by
-// calling SetChild(nil).
+// ForgetChild instructs an element to forget one of its children by calling ForgetChild if possible.
 func ForgetChild(el Element, child Element) {
-	switch el := el.(type) {
-	case ChildForgetter:
+	if el, ok := el.(ChildForgetter); ok {
 		el.ForgetChild(child)
-	case SingleChildElement:
-		el.SetChild(nil)
 	}
 }
 
-type SingleChildElement interface {
+// XXX find a better name
+type HasChildElement interface {
 	Element
-	GetChild() Element
-	SetChild(child Element)
-}
-
-type MultiChildElement interface {
-	Element
+	VisitChildren(yield func(e Element) bool)
 	// XXX figure out a better API
-	Children() *[]Element
+	Children() []Element
+	SetChildren(children []Element)
 	ForgottenChildren() map[Element]struct{}
 }
 
@@ -521,57 +560,18 @@ type WidgetBuilder interface {
 	Build() Widget
 }
 
-var _ SingleChildRenderObjectElement = (*SimpleSingleChildRenderObjectElement)(nil)
-
-type SimpleSingleChildRenderObjectElement struct {
-	RenderObjectElementHandle
-	child Element
-}
-
-// Transition implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) Transition(t ElementTransition) {
-	switch t.Kind {
-	case ElementMounted:
-		SingleChildRenderObjectElementAfterMount(el, t.Parent, t.NewSlot)
-	case ElementUnmounted:
-		SingleChildRenderObjectElementAfterUnmount(el)
-	case ElementUpdated:
-		SingleChildRenderObjectElementAfterUpdate(el, t.OldWidget)
-	}
-}
-
-// AttachRenderObject implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) AttachRenderObject(slot int) {
-	SingleChildRenderObjectElementAttachRenderObject(el, slot)
-}
-
-// PerformRebuild implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) PerformRebuild() {
-	SingleChildRenderObjectElementPerformRebuild(el)
-}
-
-// RemoveRenderObjectChild implements SingleChildRenderObjectElement.
-func (el *SimpleSingleChildRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
-	SingleChildRenderObjectElementRemoveRenderObjectChild(el, child, slot)
-}
-
-func (el *SimpleSingleChildRenderObjectElement) GetChild() Element      { return el.child }
-func (el *SimpleSingleChildRenderObjectElement) SetChild(child Element) { el.child = child }
-
-func (el *SimpleSingleChildRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
-	SingleChildRenderObjectElementInsertRenderObjectChild(el, child, slot)
-}
-
-func (el *SimpleSingleChildRenderObjectElement) MoveRenderObjectChild(child render.Object, newSlot int) {
-	SingleChildRenderObjectElementMoveRenderObjectChild(el, child, newSlot)
-}
-
-var _ MultiChildRenderObjectElement = (*SimpleMultiChildRenderObjectElement)(nil)
+var _ HasChildRenderObjectElement = (*SimpleMultiChildRenderObjectElement)(nil)
 
 type SimpleMultiChildRenderObjectElement struct {
 	RenderObjectElementHandle
 	children          []Element
 	forgottenChildren map[Element]struct{}
+}
+
+// SetChildren implements HasChildRenderObjectElement.
+func (el *SimpleMultiChildRenderObjectElement) SetChildren(children []Element) {
+	el.children = children
+	clear(el.forgottenChildren)
 }
 
 // AttachRenderObject implements MultiChildRenderObjectElement.
@@ -604,8 +604,8 @@ func (el *SimpleMultiChildRenderObjectElement) VisitChildren(yield func(el Eleme
 }
 
 // Children implements MultiChildRenderObjectElement.
-func (el *SimpleMultiChildRenderObjectElement) Children() *[]Element {
-	return &el.children
+func (el *SimpleMultiChildRenderObjectElement) Children() []Element {
+	return el.children
 }
 
 // ForgottenChildren implements MultiChildRenderObjectElement.
@@ -987,7 +987,8 @@ type Rebuilder interface {
 	PerformRebuild()
 }
 
-func UpdateChildren(el Element, oldChildren []Element, newWidgets []Widget, forgottenChildren map[Element]struct{}) []Element {
+func UpdateChildren(el HasChildElement, newWidgets []Widget, forgottenChildren map[Element]struct{}) []Element {
+	oldChildren := el.Children()
 	replaceWithNilIfForgotten := func(child Element) Element {
 		if _, ok := forgottenChildren[child]; ok {
 			return nil
@@ -1181,7 +1182,7 @@ func WidgetChildrenIter(parent Widget) func(yield func(i int, w Widget) bool) {
 			return func(yield func(i int, w Widget) bool) {}
 		}
 		return func(yield func(i int, w Widget) bool) {
-			yield(0, f.Index(0).Interface().(Widget))
+			yield(0, f.Interface().(Widget))
 		}
 	} else {
 		panic(fmt.Sprintf("%T does not have children", parent))
@@ -1207,7 +1208,13 @@ func WidgetChildren(parent Widget) []Widget {
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Children"); f.IsValid() {
 		return f.Interface().([]Widget)
+	} else if f := v.FieldByName("Child"); f.IsValid() {
+		if f.IsNil() {
+			return nil
+		} else {
+			return []Widget{f.Interface().(Widget)}
+		}
 	} else {
-		panic(fmt.Sprintf("%T does not have multiple children", parent))
+		panic(fmt.Sprintf("%T does not have children", parent))
 	}
 }

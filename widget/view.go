@@ -1,12 +1,13 @@
 package widget
 
 import (
+	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/render"
 )
 
 var _ Widget = (*View)(nil)
 var _ RenderObjectWidget = (*View)(nil)
-var _ SingleChildRenderObjectElement = (*viewElement)(nil)
+var _ HasChildRenderObjectElement = (*viewElement)(nil)
 
 func NewView(root Widget, po *render.PipelineOwner) *View {
 	return &View{
@@ -61,6 +62,40 @@ type viewElement struct {
 	child Element
 
 	pipelineOwner *render.PipelineOwner
+}
+
+// Children implements HasChildRenderObjectElement.
+func (el *viewElement) Children() []Element {
+	if el.child == nil {
+		return nil
+	} else {
+		// OPT(dh): this isn't great
+		return []Element{el.child}
+	}
+}
+
+// ForgottenChildren implements HasChildRenderObjectElement.
+func (el *viewElement) ForgottenChildren() map[Element]struct{} {
+	// XXX remove this
+	return nil
+}
+
+// SetChildren implements HasChildRenderObjectElement.
+func (el *viewElement) SetChildren(children []Element) {
+	debug.Assert(len(children) < 2)
+	if len(children) == 0 {
+		el.child = nil
+	} else {
+		el.child = children[0]
+	}
+}
+
+// VisitChildren implements HasChildRenderObjectElement.
+func (el *viewElement) VisitChildren(yield func(e Element) bool) {
+	if el.child == nil {
+		return
+	}
+	yield(el.child)
 }
 
 func (el *viewElement) Transition(t ElementTransition) {
@@ -123,7 +158,7 @@ func (el *viewElement) PerformRebuild() {
 }
 
 func (el *viewElement) InsertRenderObjectChild(child render.Object, slot int) {
-	render.SetChild(el.RenderObject.(render.ObjectWithChild), child)
+	render.InsertChild(el.RenderObject.(render.ObjectWithChild), child, -1)
 }
 
 func (el *viewElement) MoveRenderObjectChild(child render.Object, newSlot int) {
@@ -131,7 +166,7 @@ func (el *viewElement) MoveRenderObjectChild(child render.Object, newSlot int) {
 }
 
 func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot int) {
-	render.SetChild(el.RenderObject.(render.ObjectWithChild), nil)
+	render.RemoveChild(el.RenderObject.(render.ObjectWithChild), el.RenderObject)
 }
 
 func (el *viewElement) AssignOwner(owner *BuildOwner) {

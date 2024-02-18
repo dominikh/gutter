@@ -45,7 +45,8 @@ type Attacher interface {
 
 type ObjectWithChild interface {
 	Object
-	PerformSetChild(child Object)
+	PerformInsertChild(child Object, after int)
+	PerformMoveChild(child Object, after int)
 	PerformRemoveChild(child Object)
 }
 
@@ -209,13 +210,20 @@ func (c *SingleChild) VisitChildren(yield func(Object) bool) {
 	}
 }
 
-func (c *SingleChild) PerformSetChild(child Object) {
+func (c *SingleChild) PerformInsertChild(child Object, after int) {
+	debug.Assert(after == -1)
 	c.Child = child
 }
 
 func (c *SingleChild) PerformRemoveChild(child Object) {
 	debug.Assert(c.Child == child)
 	c.Child = nil
+}
+
+func (c *SingleChild) PerformMoveChild(child Object, after int) {
+	debug.Assert(c.Child == child)
+	debug.Assert(after == -1)
+	// Nothing to do
 }
 
 type ManyChildren struct {
@@ -379,12 +387,6 @@ func ScheduleInitialLayout(obj Object) {
 func ScheduleInitialPaint(obj Object) {
 	h := obj.Handle()
 	h.needsPaint = true
-}
-
-func SetChild(parent ObjectWithChild, child Object) {
-	parent.PerformSetChild(child)
-	child.Handle().Parent = parent
-	adoptChild(parent, child)
 }
 
 func InsertChild(parent ObjectWithChildren, child Object, after int) {
