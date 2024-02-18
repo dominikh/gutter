@@ -142,7 +142,7 @@ func (r *renderColoredBox) setColor(c color.NRGBA) {
 }
 
 func NewRenderObjectElement(w RenderObjectWidget) *SimpleRenderObjectElement {
-	el := &SimpleRenderObjectElement{forgottenChildren: make(map[Element]struct{})}
+	el := &SimpleRenderObjectElement{}
 	el.widget = w
 	return el
 }
