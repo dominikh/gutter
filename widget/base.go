@@ -3,6 +3,7 @@ package widget
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"slices"
 	"unsafe"
 
@@ -76,7 +77,7 @@ type StateTransition[W Widget] struct {
 // TODO support "Notification"
 // TODO support global keys
 
-func NewProxyElement[W SingleChildWidget](w W) InteriorElement {
+func NewProxyElement[W Widget](w W) InteriorElement {
 	el := &ProxyElement{}
 	el.widget = w
 	return el
@@ -89,7 +90,7 @@ type ProxyElement struct {
 
 // Build implements InteriorElement.
 func (p *ProxyElement) Build() Widget {
-	return p.widget.(SingleChildWidget).GetChild()
+	return GetWidgetChild(p.widget)
 }
 
 // GetChild implements InteriorElement.
@@ -250,16 +251,6 @@ type State[W Widget] interface {
 
 	GetStateHandle() *StateHandle[W]
 	Transition(t StateTransition[W])
-}
-
-type SingleChildWidget interface {
-	Widget
-	GetChild() Widget
-}
-
-type MultiChildWidget interface {
-	Widget
-	GetChildren() []Widget
 }
 
 type RenderObjectWidget interface {
@@ -634,7 +625,7 @@ func (el *SimpleMultiChildRenderObjectElement) Transition(t ElementTransition) {
 	case ElementUnmounted:
 		MultiChildRenderObjectElementAfterUnmount(el)
 	case ElementUpdated:
-		MultiChildRenderObjectElementAfterUpdate(el, t.OldWidget.(MultiChildRenderObjectWidget))
+		MultiChildRenderObjectElementAfterUpdate(el, t.OldWidget.(RenderObjectWidget))
 	}
 }
 
@@ -1154,4 +1145,69 @@ func ApplyParentData(pd ParentDataWidget, childrenOf Element) {
 		}
 	}
 	applyParentData(childrenOf)
+}
+
+func GetWidgetChild(parent Widget) Widget {
+	v := reflect.Indirect(reflect.ValueOf(parent))
+	if f := v.FieldByName("Child"); f.IsValid() {
+		if f.IsNil() {
+			return nil
+		} else {
+			return f.Interface().(Widget)
+		}
+	} else if f := v.FieldByName("Children"); f.IsValid() {
+		return f.Index(0).Interface().(Widget)
+	} else {
+		panic(fmt.Sprintf("%T does not have children", parent))
+	}
+}
+
+func WidgetChildrenIter(parent Widget) func(yield func(i int, w Widget) bool) {
+	v := reflect.Indirect(reflect.ValueOf(parent))
+	if f := v.FieldByName("Children"); f.IsValid() {
+		if f.Len() == 0 {
+			return func(yield func(i int, w Widget) bool) {}
+		}
+		return func(yield func(i int, w Widget) bool) {
+			n := f.Len()
+			for i := range n {
+				if !yield(i, f.Index(i).Interface().(Widget)) {
+					break
+				}
+			}
+		}
+	} else if f := v.FieldByName("Child"); f.IsValid() {
+		if f.IsNil() {
+			return func(yield func(i int, w Widget) bool) {}
+		}
+		return func(yield func(i int, w Widget) bool) {
+			yield(0, f.Index(0).Interface().(Widget))
+		}
+	} else {
+		panic(fmt.Sprintf("%T does not have children", parent))
+	}
+}
+
+func WidgetNumChildren(parent Widget) int {
+	v := reflect.Indirect(reflect.ValueOf(parent))
+	if f := v.FieldByName("Child"); f.IsValid() {
+		if f.IsNil() {
+			return 0
+		} else {
+			return 1
+		}
+	} else if f := v.FieldByName("Children"); f.IsValid() {
+		return f.Len()
+	} else {
+		panic(fmt.Sprintf("%T does not have children", parent))
+	}
+}
+
+func WidgetChildren(parent Widget) []Widget {
+	v := reflect.Indirect(reflect.ValueOf(parent))
+	if f := v.FieldByName("Children"); f.IsValid() {
+		return f.Interface().([]Widget)
+	} else {
+		panic(fmt.Sprintf("%T does not have multiple children", parent))
+	}
 }

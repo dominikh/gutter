@@ -37,15 +37,10 @@ func main() {
 	app.Main()
 }
 
-var _ widget.SingleChildWidget = (*PointlessWrapper)(nil)
+var _ widget.Widget = (*PointlessWrapper)(nil)
 
 type PointlessWrapper struct {
 	Child widget.Widget
-}
-
-// GetChild implements widget.SingleChildWidget.
-func (p *PointlessWrapper) GetChild() widget.Widget {
-	return p.Child
 }
 
 // CreateElement implements widget.Widget.

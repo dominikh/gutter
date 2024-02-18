@@ -4,15 +4,10 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-var _ SingleChildWidget = (*Flexible)(nil)
+var _ Widget = (*Flexible)(nil)
 var _ ParentDataWidget = (*Flexible)(nil)
 
-var _ MultiChildRenderObjectWidget = (*Flex)(nil)
-
-type MultiChildRenderObjectWidget interface {
-	RenderObjectWidget
-	MultiChildWidget
-}
+var _ RenderObjectWidget = (*Flex)(nil)
 
 type Flex struct {
 	Direction          render.Axis
@@ -44,11 +39,6 @@ func (f *Flex) CreateElement() Element {
 	return NewMultiChildRenderObjectElement(f)
 }
 
-// GetChild implements MultiChildWidget.
-func (f *Flex) GetChildren() []Widget {
-	return f.Children
-}
-
 type Flexible struct {
 	Flex  int
 	Fit   render.FlexFit
@@ -58,11 +48,6 @@ type Flexible struct {
 // CreateElement implements SingleChildWidget.
 func (f *Flexible) CreateElement() Element {
 	return NewProxyElement(f)
-}
-
-// GetChild implements SingleChildWidget.
-func (f *Flexible) GetChild() Widget {
-	return f.Child
 }
 
 func (f *Flexible) ApplyParentData(obj render.Object) {

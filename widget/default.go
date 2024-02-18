@@ -51,12 +51,12 @@ func RenderObjectElementPerformRebuild(el RenderObjectElement) {
 
 func SingleChildRenderObjectElementAfterUpdate(el SingleChildRenderObjectElement, oldWidget Widget) {
 	RenderObjectElementAfterUpdate(el, oldWidget)
-	el.SetChild(UpdateChild(el, el.GetChild(), el.Handle().widget.(SingleChildWidget).GetChild(), 0))
+	el.SetChild(UpdateChild(el, el.GetChild(), GetWidgetChild(el.Handle().widget), 0))
 }
 func SingleChildRenderObjectElementAfterMount(el SingleChildRenderObjectElement, parent Element, newSlot int) {
 	RenderObjectElementAfterMount(el, parent, newSlot)
 	h := el.Handle()
-	el.SetChild(UpdateChild(el, el.GetChild(), h.widget.(SingleChildWidget).GetChild(), 0))
+	el.SetChild(UpdateChild(el, el.GetChild(), GetWidgetChild(h.widget), 0))
 }
 func SingleChildRenderObjectElementAfterUnmount(el RenderObjectElement) {
 	RenderObjectElementAfterUnmount(el)
@@ -107,23 +107,20 @@ func MultiChildRenderObjectElementForgetChild(el MultiChildRenderObjectElement, 
 }
 func MultiChildRenderObjectElementAfterMount(el MultiChildRenderObjectElement, parent Element, newSlot int) {
 	RenderObjectElementAfterMount(el, parent, newSlot)
-	w := el.Handle().widget.(MultiChildWidget)
-	children := *el.Children()
-	if cap(children) >= len(w.GetChildren()) {
-		clear(children[:cap(children)])
-		children = children[:len(w.GetChildren())]
-	} else {
-		children = make([]Element, len(w.GetChildren()))
-	}
-	for i, childWidget := range w.GetChildren() {
-		children[i] = InflateWidget(el, childWidget, i)
-	}
+	w := el.Handle().widget
+	var children []Element
+	WidgetChildrenIter(w)(func(i int, childWidget Widget) bool {
+		children = append(children, InflateWidget(el, childWidget, i))
+		return true
+	})
 	*el.Children() = children
 }
-func MultiChildRenderObjectElementAfterUpdate(el MultiChildRenderObjectElement, oldWidget MultiChildRenderObjectWidget) {
+func MultiChildRenderObjectElementAfterUpdate(el MultiChildRenderObjectElement, oldWidget RenderObjectWidget) {
 	RenderObjectElementAfterUpdate(el, oldWidget)
-	widget := el.Handle().widget.(MultiChildRenderObjectWidget)
-	*el.Children() = UpdateChildren(el, *el.Children(), widget.GetChildren(), el.ForgottenChildren())
+	widget := el.Handle().widget.(RenderObjectWidget)
+	// XXX when we combine single and multi child ROEs, only call WidgetChildren if there are >1 children.
+	// this avoids having to create a slice for widgets that can only have a single child.
+	*el.Children() = UpdateChildren(el, *el.Children(), WidgetChildren(widget), el.ForgottenChildren())
 	clear(el.ForgottenChildren())
 }
 func MultiChildRenderObjectElementAfterUnmount(el MultiChildRenderObjectElement) {

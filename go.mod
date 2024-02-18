@@ -1,6 +1,6 @@
 module honnef.co/go/gutter
 
-go 1.21
+go 1.22
 
 require gioui.org v0.4.1
 
