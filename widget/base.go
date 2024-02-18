@@ -567,31 +567,31 @@ func (el *SimpleRenderObjectElement) SetChildren(children []Element) {
 
 // AttachRenderObject implements MultiChildRenderObjectElement.
 func (el *SimpleRenderObjectElement) AttachRenderObject(slot int) {
-	MultiChildRenderObjectElementAttachRenderObject(el, slot)
+	RenderObjectElementAttachRenderObject(el, slot)
 }
 
 // InsertRenderObjectChild implements MultiChildRenderObjectElement.
 func (el *SimpleRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
-	MultiChildRenderObjectElementInsertRenderObjectChild(el, child, slot)
+	RenderObjectElementInsertRenderObjectChild(el, child, slot)
 }
 
 // MoveRenderObjectChild implements MultiChildRenderObjectElement.
 func (el *SimpleRenderObjectElement) MoveRenderObjectChild(child render.Object, newSlot int) {
-	MultiChildRenderObjectElementMoveRenderObjectChild(el, child, newSlot)
+	RenderObjectElementMoveRenderObjectChild(el, child, newSlot)
 }
 
 // RemoveRenderObjectChild implements MultiChildRenderObjectElement.
 func (el *SimpleRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
-	MultiChildRenderObjectElementRemoveRenderObjectChild(el, child, slot)
+	RenderObjectElementRemoveRenderObjectChild(el, child, slot)
 }
 
 // PerformRebuild implements MultiChildRenderObjectElement.
 func (el *SimpleRenderObjectElement) PerformRebuild() {
-	MultiChildRenderObjectElementPerformRebuild(el)
+	RenderObjectElementPerformRebuild(el)
 }
 
 func (el *SimpleRenderObjectElement) VisitChildren(yield func(el Element) bool) {
-	MultiChildRenderObjectElementVisitChildren(el, yield)
+	RenderObjectElementVisitChildren(el, yield)
 }
 
 // Children implements MultiChildRenderObjectElement.
@@ -605,18 +605,18 @@ func (el *SimpleRenderObjectElement) ForgottenChildren() map[Element]struct{} {
 }
 
 func (el *SimpleRenderObjectElement) ForgetChild(child Element) {
-	MultiChildRenderObjectElementForgetChild(el, child)
+	RenderObjectElementForgetChild(el, child)
 }
 
 // Transition implements MultiChildRenderObjectElement.
 func (el *SimpleRenderObjectElement) Transition(t ElementTransition) {
 	switch t.Kind {
 	case ElementMounted:
-		MultiChildRenderObjectElementAfterMount(el, t.Parent, t.NewSlot)
+		RenderObjectElementAfterMount(el, t.Parent, t.NewSlot)
 	case ElementUnmounted:
-		MultiChildRenderObjectElementAfterUnmount(el)
+		RenderObjectElementAfterUnmount(el)
 	case ElementUpdated:
-		MultiChildRenderObjectElementAfterUpdate(el, t.OldWidget.(RenderObjectWidget))
+		RenderObjectElementAfterUpdate(el, t.OldWidget.(RenderObjectWidget))
 	}
 }
 
