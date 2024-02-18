@@ -80,8 +80,8 @@ type ProxyElement struct {
 }
 
 // Build implements InteriorElement.
-func (p *ProxyElement) Build() Widget {
-	return GetWidgetChild(p.widget)
+func (el *ProxyElement) Build() Widget {
+	return GetWidgetChild(el.widget)
 }
 
 // PerformRebuild implements InteriorElement.
@@ -160,6 +160,7 @@ func (el *SimpleInteriorElement[W]) Transition(t ElementTransition) {
 }
 
 func (el *SimpleInteriorElement[W]) GetState() State[W] {
+	// XXX can we delete this?
 	return el.State
 }
 
@@ -251,13 +252,14 @@ func Update(el Element, newWidget Widget) {
 }
 
 func RenderObjectAttachingChild(el Element) Element {
-	// XXX does this work correctlyf or SingleChildRenderObjectElement? RenderObjectElement used to override
-	// AttachingChild to return nil. It doesn't have to anymore, because this function can't find any
-	// children. But what about SingleChildRenderObjectElement? That does have children.
+	if _, ok := el.(RenderObjectElement); ok {
+		return nil
+	}
 	var out Element
 	VisitChildren(el, func(child Element) bool {
+		debug.Assert(out == nil)
 		out = child
-		return false
+		return true
 	})
 	return out
 }
@@ -291,20 +293,21 @@ func AttachRenderObject(el Element, slot int) {
 }
 
 type RenderObjectDetacher interface {
-	AfterDetachRenderObject()
+	PerformDetachRenderObject()
 }
 
 // DetachRenderObject recursively instructs the children of the element to detach their render object.
-// Elements that implement RenderObjectDetacher additionally have their AfterDetachRenderObject method called.
+// Elements that implement RenderObjectDetacher have their AfterDetachRenderObject method called instead.
 func DetachRenderObject(el Element) {
+	if el, ok := el.(RenderObjectDetacher); ok {
+		el.PerformDetachRenderObject()
+		return
+	}
 	VisitChildren(el, func(child Element) bool {
 		DetachRenderObject(child)
 		return true
 	})
 	el.Handle().slot = int(math.MinInt)
-	if el, ok := el.(RenderObjectDetacher); ok {
-		el.AfterDetachRenderObject()
-	}
 }
 
 type SlotUpdater interface {
@@ -356,6 +359,7 @@ func UpdateChild(el, child Element, newWidget Widget, newSlot int) Element {
 
 // Activate activates the element. If it implements Activater, the AfterActivate method will be called afterwards.
 func Activate(el Element) {
+	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
 	// hadDependencies := (el._dependencies != null && el._dependencies.isNotEmpty) || el._hadUnsatisfiedDependencies // XXX implement once we have InheritedWidget
 
 	h := el.Handle()
@@ -414,6 +418,15 @@ func Mount(el, parent Element, newSlot int) {
 		h.BuildOwner = parent.Handle().BuildOwner
 	}
 
+	if widget, ok := h.widget.(KeyedWidget); ok {
+		if key, ok := widget.GetKey().(GlobalKey); ok {
+			h.BuildOwner.RegisterGlobalKey(key, el)
+		}
+	}
+
+	// XXX _updateInheritance
+	// XXX attachNotificationTree
+
 	el.Handle().dirty = true
 	el.Transition(ElementTransition{Kind: ElementMounted, Parent: parent, NewSlot: newSlot})
 }
@@ -422,10 +435,8 @@ func Mount(el, parent Element, newSlot int) {
 func Unmount(el Element) {
 	h := el.Handle()
 	if keyer, ok := h.widget.(KeyedWidget); ok {
-		key := keyer.GetKey()
-		if key, ok := key.(*GlobalKey); ok {
-			_ = key
-			// owner!._unregisterGlobalKey(key, this); // XXX
+		if key, ok := keyer.GetKey().(GlobalKey); ok {
+			h.BuildOwner.UnregisterGlobalKey(key, el)
 		}
 	}
 	h.lifecycleState = ElementLifecycleDefunct
@@ -520,6 +531,36 @@ type BuildOwner struct {
 	OnBuildScheduled            func()
 	scheduledFlushDirtyElements bool
 	PipelineOwner               *render.PipelineOwner
+	globals                     map[GlobalKey]Element
+}
+
+func NewBuildOwner() *BuildOwner {
+	return &BuildOwner{
+		globals: make(map[GlobalKey]Element),
+	}
+}
+
+func (o *BuildOwner) RegisterGlobalKey(key GlobalKey, el Element) {
+	o.globals[key] = el
+}
+
+func (o *BuildOwner) UnregisterGlobalKey(key GlobalKey, el Element) {
+	if o.globals[key] == el {
+		// We have to check the element because of this sequence of events:
+		//
+		// 1. add key with elA
+		// 2. mark elA as inactive
+		// 3. add key with elB
+		// 4. unmount inactive elements
+		//
+		// That is, we mount the new element before we unmount the old one, which causes the key to be
+		// overwritten.
+		delete(o.globals, key)
+	} else {
+		// If the types were identical, then we should've reused the element instead of replacing it with a
+		// new one.
+		debug.Assert(!sameType(el, o.globals[key]))
+	}
 }
 
 func (o *BuildOwner) scheduleBuildFor(el Element) {
@@ -535,7 +576,7 @@ func (o *BuildOwner) scheduleBuildFor(el Element) {
 	el.Handle().inDirtyList = true
 }
 
-func (o *BuildOwner) BuildScope(context Element, callback func()) {
+func (o *BuildOwner) BuildScope(ctx Element, callback func()) {
 	if callback == nil && len(o.dirtyElements) == 0 {
 		return
 	}
@@ -581,8 +622,11 @@ func (o *BuildOwner) FinalizeTree() {
 	o.inactiveElements.unmountAll()
 }
 
+//go:generate stringer -type=Lifecycle --trimprefix=ElementLifecycle
+type Lifecycle uint8
+
 const (
-	ElementLifecycleIdle = iota
+	ElementLifecycleIdle Lifecycle = iota
 	ElementLifecycleActive
 	ElementLifecycleInactive
 	ElementLifecycleDefunct
@@ -597,7 +641,7 @@ type StateHandle[W Widget] struct {
 type ElementHandle struct {
 	parent         Element
 	slot           int
-	lifecycleState int
+	lifecycleState Lifecycle
 	depth          int
 	BuildOwner     *BuildOwner
 	dirty          bool
@@ -621,18 +665,18 @@ func (el *RenderObjectElementHandle) RenderHandle() *RenderObjectElementHandle {
 	return el
 }
 
-func (h *RenderObjectElementHandle) UpdateSlot(oldSlot, newSlot int) {
-	if ancestor := h.ancestorRenderObjectElement; ancestor != nil {
-		ancestor.MoveRenderObjectChild(h.RenderObject, h.slot)
+func (el *RenderObjectElementHandle) AfterUpdateSlot(oldSlot, newSlot int) {
+	if ancestor := el.ancestorRenderObjectElement; ancestor != nil {
+		ancestor.MoveRenderObjectChild(el.RenderObject, el.slot)
 	}
 }
 
-func (el *RenderObjectElementHandle) AfterDetachRenderObject() {
+func (el *RenderObjectElementHandle) PerformDetachRenderObject() {
 	if el.ancestorRenderObjectElement != nil {
 		el.ancestorRenderObjectElement.RemoveRenderObjectChild(el.RenderObject, el.slot)
 		el.ancestorRenderObjectElement = nil
 	}
-	el.slot = 0
+	el.slot = -1
 }
 
 type RenderObjectUnmountNotifyee interface {
@@ -737,6 +781,10 @@ func (els *inactiveElements) deactivateRecursively(el Element) {
 }
 
 func (els *inactiveElements) add(el Element) {
+	debug.Assert(!els.locked)
+	_, ok := els.elements[el]
+	debug.Assert(!ok)
+	debug.Assert(el.Handle().parent == nil)
 	if el.Handle().lifecycleState == ElementLifecycleActive {
 		els.deactivateRecursively(el)
 	}
@@ -762,25 +810,20 @@ type GlobalKey struct {
 	Value any
 }
 
-func (g GlobalKey) currentElement() Element {
-	// XXX implement
-	return nil
-}
-
-func InflateWidget(parent Element, widget Widget, slot int) Element {
+func InflateWidget(parent Element, widget Widget, newSlot int) Element {
 	if widget, ok := widget.(KeyedWidget); ok {
-		key := widget.GetKey()
-		if key, ok := key.(GlobalKey); ok {
+		if key, ok := widget.GetKey().(GlobalKey); ok {
 			newChild := RetakeInactiveElement(parent, key, widget)
 			if newChild != nil {
-				activateWithParent(newChild, parent, slot)
-				updatedChild := UpdateChild(parent, newChild, widget, slot)
+				activateWithParent(newChild, parent, newSlot)
+				updatedChild := UpdateChild(parent, newChild, widget, newSlot)
+				debug.Assert(newChild == updatedChild)
 				return updatedChild
 			}
 		}
 	}
 	newChild := widget.CreateElement()
-	Mount(newChild, parent, slot)
+	Mount(newChild, parent, newSlot)
 
 	return newChild
 }
@@ -792,7 +835,8 @@ func RetakeInactiveElement(el Element, key GlobalKey, newWidget Widget) Element 
 	// element as a child. The only way that assumption could be false is if the
 	// global key is being duplicated, and we'll try to track that using the
 	// _debugTrackElementThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans call below.
-	element := key.currentElement()
+
+	element := el.Handle().BuildOwner.globals[key]
 	if element == nil {
 		return nil
 	}
@@ -809,10 +853,12 @@ func RetakeInactiveElement(el Element, key GlobalKey, newWidget Widget) Element 
 }
 
 func activateWithParent(el, parent Element, newSlot int) {
+	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
 	el.Handle().parent = parent
 	updateDepth(el, parent.Handle().depth)
 	activateRecursively(el)
 	AttachRenderObject(el, newSlot)
+	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
 }
 
 func updateDepth(el Element, parentDepth int) {
@@ -826,24 +872,21 @@ func updateDepth(el Element, parentDepth int) {
 	}
 }
 
-func activateRecursively(element Element) {
-	Activate(element)
-	VisitChildren(element, func(child Element) bool {
+func activateRecursively(el Element) {
+	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
+	Activate(el)
+	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
+	VisitChildren(el, func(child Element) bool {
 		activateRecursively(child)
 		return true
 	})
 }
 
 func updateSlotForChild(el, child Element, newSlot int) {
-	var visit func(element Element)
-	visit = func(element Element) {
-		UpdateSlot(element, newSlot)
-		descendant := RenderObjectAttachingChild(element)
-		if descendant != nil {
-			visit(descendant)
-		}
+	for child != nil {
+		UpdateSlot(child, newSlot)
+		child = RenderObjectAttachingChild(child)
 	}
-	visit(child)
 }
 
 func rebuild(el Element) {
@@ -870,10 +913,10 @@ type Rebuilder interface {
 	PerformRebuild()
 }
 
-func UpdateChildren(el ParentElement, newWidgets []Widget, forgottenChildren map[Element]struct{}) []Element {
+func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 	oldChildren := el.Children()
 	replaceWithNilIfForgotten := func(child Element) Element {
-		if _, ok := forgottenChildren[child]; ok {
+		if _, ok := el.ForgottenChildren()[child]; ok {
 			return nil
 		} else {
 			return child
@@ -918,6 +961,14 @@ func UpdateChildren(el ParentElement, newWidgets []Widget, forgottenChildren map
 
 	newChildren := make([]Element, len(newWidgets))
 
+	Key := func(w Widget) any {
+		if w, ok := w.(KeyedWidget); ok {
+			return w.GetKey()
+		} else {
+			return nil
+		}
+	}
+
 	// Update the top of the list.
 	for (oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom) {
 		oldChild := replaceWithNilIfForgotten(oldChildren[oldChildrenTop])
@@ -938,16 +989,8 @@ func UpdateChildren(el ParentElement, newWidgets []Widget, forgottenChildren map
 		if oldChild == nil || !canUpdate(oldChild.Handle().widget, newWidget) {
 			break
 		}
-		oldChildrenBottom--
 		newChildrenBottom--
-	}
-
-	Key := func(w Widget) any {
-		if w, ok := w.(KeyedWidget); ok {
-			return w.GetKey()
-		} else {
-			return nil
-		}
+		oldChildrenBottom--
 	}
 
 	// Scan the old children in the middle of the list.
@@ -1009,7 +1052,7 @@ func UpdateChildren(el ParentElement, newWidgets []Widget, forgottenChildren map
 
 	// Clean up any of the remaining middle nodes from the old list.
 	for _, oldChild := range oldKeyedChildren {
-		if _, ok := forgottenChildren[oldChild]; !ok {
+		if _, ok := el.ForgottenChildren()[oldChild]; !ok {
 			deactivateChild(oldChild)
 		}
 	}
@@ -1140,6 +1183,11 @@ func (s *SingleChildElement) Child() Element {
 
 func (s *SingleChildElement) SetChild(child Element) {
 	s.child[0] = child
+}
+
+func (s *SingleChildElement) ForgetChild(child Element) {
+	debug.Assert(s.child[0] == child)
+	s.child[0] = nil
 }
 
 type ManyChildElements struct {

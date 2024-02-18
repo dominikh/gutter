@@ -15,10 +15,12 @@ func FormatElementTree(root Element) string {
 		w := el.Handle().widget
 		sb.WriteString("{\nrank=same;\n")
 		fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T\", fillcolor=lightgreen, style=filled];\n", w)
-		fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T\", fillcolor=magenta, style=filled];\n", el)
+		fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T (%s)\", fillcolor=magenta, style=filled];\n", el, el.Handle().lifecycleState)
 		if el, ok := el.(RenderObjectElement); ok {
 			obj := el.RenderHandle().RenderObject
-			fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T\", fillcolor=cyan, style=filled];\n", obj)
+			if obj != nil {
+				fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T\", fillcolor=cyan, style=filled];\n", obj)
+			}
 		}
 
 		if state := reflect.ValueOf(el).Elem().FieldByName("State"); state.IsValid() {
@@ -40,10 +42,14 @@ func FormatElementTree(root Element) string {
 
 		if el, ok := el.(RenderObjectElement); ok {
 			obj := el.RenderHandle().RenderObject
-			fmt.Fprintf(&sb, "n%p -> n%p [color=magenta];\n", el, obj)
+			if obj == nil {
+				fmt.Fprintf(&sb, "n%p -> NIL_RENDER_OBJECT [color=magenta];\n", el)
+			} else {
+				fmt.Fprintf(&sb, "n%p -> n%p [color=magenta];\n", el, obj)
 
-			if objp := obj.Handle().Parent; objp != nil {
-				fmt.Fprintf(&sb, "n%p -> n%p;\n", objp, obj)
+				if objp := obj.Handle().Parent; objp != nil {
+					fmt.Fprintf(&sb, "n%p -> n%p;\n", objp, obj)
+				}
 			}
 		}
 		VisitChildren(el, func(child Element) bool {

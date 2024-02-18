@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"os"
@@ -19,7 +20,7 @@ import (
 )
 
 func main() {
-	runtime.MemProfileRate = 1
+	// runtime.MemProfileRate = 1
 	go func() {
 		cpuf, _ := os.Create("cpu.pprof")
 		pprof.StartCPUProfile(cpuf)
@@ -63,49 +64,74 @@ func (w *Bird) CreateState() widget.State[*Bird] {
 
 type BirdState struct {
 	widget.StateHandle[*Bird]
-	swap bool
+	reparent bool
 }
 
 func (s *BirdState) Transition(t widget.StateTransition[*Bird]) {}
 
 func (s *BirdState) Build() widget.Widget {
-	ws := []widget.Widget{
-		&widget.KeyedSubtree{
-			Key: "red",
-			Child: &widget.Flexible{
-				Flex:  3,
-				Child: &ColorChangingBox{color.NRGBA{255, 0, 0, 255}},
-			},
-		},
-		&widget.KeyedSubtree{
-			Key: "green",
-			Child: &widget.Flexible{
-				Flex:  2,
-				Child: &ColorChangingBox{color.NRGBA{0, 255, 0, 255}},
-			},
-		},
-		&widget.KeyedSubtree{
-			Key: "blue",
-			Child: &widget.Flexible{
-				Flex:  1,
-				Child: &ColorChangingBox{color.NRGBA{0, 0, 255, 255}},
+	left := &widget.KeyedSubtree{
+		Key: widget.GlobalKey{"left"},
+		Child: &widget.Flex{
+			Direction: render.Vertical,
+			Children: []widget.Widget{
+				&widget.Flexible{
+					Flex:  3,
+					Child: &ColorChangingBox{color.NRGBA{255, 0, 0, 255}},
+				},
+				&widget.Flexible{
+					Flex:  1,
+					Child: &ColorChangingBox{color.NRGBA{0, 255, 0, 255}},
+				},
+				&widget.Flexible{
+					Flex:  1,
+					Child: &ColorChangingBox{color.NRGBA{0, 0, 255, 255}},
+				},
 			},
 		},
 	}
-	if s.swap {
-		// ws = ws[1:]
-		ws = []widget.Widget{ws[0], ws[2]}
-		// ws[0], ws[1] = ws[1], ws[0]
+	right := &widget.KeyedSubtree{
+		Key: widget.GlobalKey{"right"},
+		Child: &widget.Flex{
+			Direction: render.Vertical,
+			Children: []widget.Widget{
+				&widget.Flexible{
+					Flex:  3,
+					Child: &ColorChangingBox{color.NRGBA{255, 0, 0, 255}},
+				},
+				&widget.Flexible{
+					Flex:  1,
+					Child: &ColorChangingBox{color.NRGBA{0, 255, 0, 255}},
+				},
+				&widget.Flexible{
+					Flex:  1,
+					Child: &ColorChangingBox{color.NRGBA{0, 0, 255, 255}},
+				},
+			},
+		},
+	}
+	var child widget.Widget
+	if s.reparent {
+		c := &left.Child.(*widget.Flex).Children
+		*c = append(*c, &widget.Flexible{Flex: 2, Child: right})
+		child = &widget.Flex{
+			Direction: render.Horizontal,
+			Children:  []widget.Widget{left},
+		}
+	} else {
+		child = &widget.Flex{
+			Direction: render.Horizontal,
+			Children:  []widget.Widget{left, right},
+		}
 	}
 	return &widget.PointerRegion{
 		OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
-			s.swap = !s.swap
-			widget.MarkNeedsBuild(s.Element)
+			if ev.Priority == pointer.Exclusive {
+				s.reparent = !s.reparent
+				widget.MarkNeedsBuild(s.Element)
+			}
 		},
-		Child: &widget.Flex{
-			Direction: render.Vertical,
-			Children:  ws,
-		},
+		Child: child,
 	}
 }
 
@@ -126,7 +152,8 @@ type colorChangingBoxState struct {
 	c color.NRGBA
 }
 
-func (cs *colorChangingBoxState) Transition(t widget.StateTransition[*ColorChangingBox]) {}
+func (cs *colorChangingBoxState) Transition(t widget.StateTransition[*ColorChangingBox]) {
+}
 
 func (cs *colorChangingBoxState) Build() widget.Widget {
 	return &widget.PointerRegion{
@@ -225,11 +252,11 @@ func run2(w *app.Window) error {
 	var root widget.Widget = &Bird{}
 
 	// This is basically runApp
-	var bo widget.BuildOwner
+	bo := widget.NewBuildOwner()
 	po := render.NewPipelineOwner()
 	bo.PipelineOwner = po
 	wview := widget.NewView(root, po)
-	rootElem := wview.Attach(&bo, nil)
+	rootElem := wview.Attach(bo, nil)
 
 	po.OnNeedVisualUpdate = win.Invalidate
 	bo.OnBuildScheduled = win.Invalidate
@@ -293,8 +320,9 @@ func run2(w *app.Window) error {
 			po.FlushPaint(&ops)
 			bo.FinalizeTree()
 
-			// fmt.Println(widget.FormatElementTree(rootElem))
 			e.Frame(&ops)
+			fmt.Println("--frame--")
+			// fmt.Println(widget.FormatElementTree(rootElem))
 		}
 	}
 }

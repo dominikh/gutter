@@ -18,13 +18,13 @@ func RenderObjectElementAfterUpdate(el RenderObjectElement, oldWidget Widget) {
 	// OPT(dh): optimize for the case where we had <2 children before and <2 children now. that doesn't need
 	// to allocate slices or go through list reconciliation.
 	widget := el.Handle().widget.(RenderObjectWidget)
-	el.SetChildren(UpdateChildren(el, WidgetChildren(widget), el.ForgottenChildren()))
+	el.SetChildren(UpdateChildren(el, WidgetChildren(widget)))
 }
 func RenderObjectElementAfterMount(el RenderObjectElement, parent Element, newSlot int) {
 	h := el.RenderHandle()
 	h.RenderObject = h.widget.(RenderObjectWidget).CreateRenderObject(el)
 	AttachRenderObject(el, newSlot)
-	rebuild(el)
+	el.Handle().dirty = false
 
 	// OPT(dh): optimize for the single child case, which doesn't need iterators and slices.
 	w := el.Handle().widget
@@ -48,9 +48,7 @@ func RenderObjectElementAttachRenderObject(el RenderObjectElement, slot int) {
 	h := el.RenderHandle()
 	h.slot = slot
 	h.ancestorRenderObjectElement = findAncestorRenderObjectElement(el)
-	if h.ancestorRenderObjectElement != nil {
-		h.ancestorRenderObjectElement.InsertRenderObjectChild(h.RenderObject, slot)
-	}
+	h.ancestorRenderObjectElement.InsertRenderObjectChild(h.RenderObject, slot)
 	renderObject := el.RenderHandle().RenderObject
 	ancestorParentDataElements(el)(func(pd ParentDataWidget) bool {
 		pd.ApplyParentData(renderObject)
