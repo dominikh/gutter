@@ -35,7 +35,7 @@ var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
 var _ KeyedWidget = (*KeyedSubtree)(nil)
 
 var _ render.Object = (*renderColoredBox)(nil)
-var _ render.ObjectWithChild = (*renderColoredBox)(nil)
+var _ render.ObjectWithChildren = (*renderColoredBox)(nil)
 
 type Padding struct {
 	Padding render.Inset

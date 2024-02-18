@@ -158,7 +158,7 @@ func (el *viewElement) PerformRebuild() {
 }
 
 func (el *viewElement) InsertRenderObjectChild(child render.Object, slot int) {
-	render.InsertChild(el.RenderObject.(render.ObjectWithChild), child, -1)
+	render.InsertChild(el.RenderObject.(render.ObjectWithChildren), child, -1)
 }
 
 func (el *viewElement) MoveRenderObjectChild(child render.Object, newSlot int) {
@@ -166,7 +166,7 @@ func (el *viewElement) MoveRenderObjectChild(child render.Object, newSlot int) {
 }
 
 func (el *viewElement) RemoveRenderObjectChild(child render.Object, slot int) {
-	render.RemoveChild(el.RenderObject.(render.ObjectWithChild), el.RenderObject)
+	render.RemoveChild(el.RenderObject.(render.ObjectWithChildren), el.RenderObject)
 }
 
 func (el *viewElement) AssignOwner(owner *BuildOwner) {

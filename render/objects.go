@@ -12,10 +12,10 @@ import (
 
 var _ Object = (*FillColor)(nil)
 
-var _ ObjectWithChild = (*Clip)(nil)
-var _ ObjectWithChild = (*Constrained)(nil)
-var _ ObjectWithChild = (*Opacity)(nil)
-var _ ObjectWithChild = (*Padding)(nil)
+var _ ObjectWithChildren = (*Clip)(nil)
+var _ ObjectWithChildren = (*Constrained)(nil)
+var _ ObjectWithChildren = (*Opacity)(nil)
+var _ ObjectWithChildren = (*Padding)(nil)
 
 type Box struct {
 	ObjectHandle

@@ -40,16 +40,6 @@ type Attacher interface {
 	PerformDetach()
 }
 
-// XXX merge ObjectWithChild and ObjectWithChildren
-// XXX also try merging Single and Multi child elements
-
-type ObjectWithChild interface {
-	Object
-	PerformInsertChild(child Object, after int)
-	PerformMoveChild(child Object, after int)
-	PerformRemoveChild(child Object)
-}
-
 type ObjectWithChildren interface {
 	Object
 	PerformInsertChild(child Object, after int)
