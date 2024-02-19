@@ -12,7 +12,6 @@ func ElementAfterUpdate(el Element, oldWidget Widget) {
 
 func RenderObjectElementAfterUpdate(el RenderObjectElement, oldWidget Widget) {
 	ElementAfterUpdate(el, oldWidget)
-	el.Handle().widget.(RenderObjectWidget).UpdateRenderObject(el, el.RenderHandle().RenderObject)
 	forceRebuild(el)
 
 	// OPT(dh): optimize for the case where we had <2 children before and <2 children now. that doesn't need
