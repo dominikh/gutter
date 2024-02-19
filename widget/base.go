@@ -898,9 +898,7 @@ func rebuild(el Element) {
 	if el.Handle().lifecycleState != ElementLifecycleActive || !el.Handle().dirty {
 		return
 	}
-	if el, ok := el.(Rebuilder); ok {
-		el.PerformRebuild()
-	}
+	el.PerformRebuild()
 	el.Handle().dirty = false
 }
 
@@ -908,14 +906,8 @@ func forceRebuild(el Element) {
 	if el.Handle().lifecycleState != ElementLifecycleActive {
 		return
 	}
-	if el, ok := el.(Rebuilder); ok {
-		el.PerformRebuild()
-	}
+	el.PerformRebuild()
 	el.Handle().dirty = false
-}
-
-type Rebuilder interface {
-	PerformRebuild()
 }
 
 func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
