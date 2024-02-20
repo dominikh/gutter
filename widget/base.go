@@ -253,6 +253,9 @@ func DidChangeDependencies(el Element) {
 func Update(el Element, newWidget Widget) {
 	oldWidget := el.Handle().widget
 	el.Handle().widget = newWidget
+	if pd, ok := el.Handle().widget.(ParentDataWidget); ok {
+		ApplyParentData(pd, el)
+	}
 	el.Transition(ElementTransition{Kind: ElementUpdated, OldWidget: oldWidget})
 }
 

@@ -9,14 +9,7 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-func ElementAfterUpdate(el Element, oldWidget Widget) {
-	if pd, ok := el.Handle().widget.(ParentDataWidget); ok {
-		ApplyParentData(pd, el)
-	}
-}
-
 func RenderObjectElementAfterUpdate(el RenderObjectElement, oldWidget Widget) {
-	ElementAfterUpdate(el, oldWidget)
 	forceRebuild(el)
 
 	// OPT(dh): optimize for the case where we had <2 children before and <2 children now. that doesn't need
