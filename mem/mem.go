@@ -19,3 +19,11 @@ type DoubleBufferedSlice[T any] struct {
 func (db *DoubleBufferedSlice[T]) Swap() {
 	db.Front, db.Back = db.Back[:0], db.Front[:0]
 }
+
+func CopyMap[K comparable, V any, M ~map[K]V](m M) M {
+	out := make(M)
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}

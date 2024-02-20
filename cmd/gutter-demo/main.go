@@ -73,7 +73,7 @@ type BirdState struct {
 
 func (s *BirdState) Transition(t widget.StateTransition[*Bird]) {}
 
-func (s *BirdState) Build() widget.Widget {
+func (s *BirdState) Build(ctx widget.BuildContext) widget.Widget {
 	left := &widget.KeyedSubtree{
 		Key: widget.GlobalKey{Value: "left"},
 		Child: &widget.Flex{
@@ -159,7 +159,7 @@ type colorChangingBoxState struct {
 func (cs *colorChangingBoxState) Transition(t widget.StateTransition[*ColorChangingBox]) {
 }
 
-func (cs *colorChangingBoxState) Build() widget.Widget {
+func (cs *colorChangingBoxState) Build(ctx widget.BuildContext) widget.Widget {
 	return &widget.PointerRegion{
 		OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
 			cs.c.R += 50

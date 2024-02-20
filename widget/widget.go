@@ -86,7 +86,7 @@ type animatedPaddingState struct {
 }
 
 // Build implements State.
-func (a *animatedPaddingState) Build() Widget {
+func (a *animatedPaddingState) Build(ctx BuildContext) Widget {
 	return &Padding{
 		Padding: a.AnimatedProperty.Value,
 		Child:   a.Widget.Child,
@@ -255,7 +255,7 @@ type animatedOpacityState struct {
 }
 
 // Build implements State.
-func (a *animatedOpacityState) Build() Widget {
+func (a *animatedOpacityState) Build(ctx BuildContext) Widget {
 	return &Opacity{
 		Opacity: a.AnimatedProperty.Value,
 		Child:   a.Widget.Child,
@@ -343,4 +343,20 @@ func (k *KeyedSubtree) GetKey() any {
 // CreateElement implements Widget.
 func (k *KeyedSubtree) CreateElement() Element {
 	return NewProxyElement(k)
+}
+
+var _ StatelessWidget = (*Builder)(nil)
+
+type Builder struct {
+	Builder func(ctx BuildContext) Widget
+}
+
+// Build implements StatelessWidget.
+func (b *Builder) Build(ctx BuildContext) Widget {
+	return b.Builder(ctx)
+}
+
+// CreateElement implements StatelessWidget.
+func (b *Builder) CreateElement() Element {
+	return NewInteriorElement(b)
 }

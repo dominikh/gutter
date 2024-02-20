@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/mem"
 	"honnef.co/go/gutter/render"
 )
 
@@ -69,9 +70,7 @@ type StateTransition[W Widget] struct {
 }
 
 // TODO MediaQuery
-// TODO support inheritance (cf inheritedElements in framework.dart)
 // TODO support "Notification"
-// TODO support global keys
 
 func NewProxyElement[W Widget](w W) InteriorElement {
 	el := &ProxyElement{}
@@ -105,7 +104,50 @@ func (el *ProxyElement) Transition(t ElementTransition) {
 		MarkNeedsBuild(el)
 	case ElementUpdated:
 		forceRebuild(el)
+		// notifyClients(el, t.OldWidget)
 	}
+}
+
+func NewInheritedElement[W Widget](w W) InheritedElement {
+	se := &SimpleInheritedElement{}
+	se.ElementHandle.widget = w
+	// XXX do we care about StatefulWidget here, analogous to NewInteriorElement?
+	return se
+}
+
+type InheritedElement interface {
+	InteriorElement
+	UpdateInheritance()
+}
+
+type SimpleInheritedElement struct {
+	ProxyElement
+}
+
+func updateInheritance(el Element) {
+	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
+	if el, ok := el.(InheritedElement); ok {
+		el.UpdateInheritance()
+		return
+	}
+	h := el.Handle()
+	if p := h.parent; p != nil {
+		h.inheritedElements = p.Handle().inheritedElements
+	} else {
+		h.inheritedElements = nil
+	}
+}
+
+func (el *SimpleInheritedElement) UpdateInheritance() {
+	var incomingWidgets map[reflect.Type]InheritedElement
+	h := el.Handle()
+	if p := h.parent; p != nil {
+		incomingWidgets = mem.CopyMap(p.Handle().inheritedElements)
+	} else {
+		incomingWidgets = map[reflect.Type]InheritedElement{}
+	}
+	incomingWidgets[reflect.TypeOf(h.widget)] = el
+	h.inheritedElements = incomingWidgets
 }
 
 func NewInteriorElement[W Widget](w W) InteriorElement {
@@ -171,9 +213,9 @@ func (el *SimpleInteriorElement[W]) GetState() State[W] {
 
 func (el *SimpleInteriorElement[W]) Build() Widget {
 	if s := el.State; s != nil {
-		return s.Build()
+		return s.Build(el)
 	} else if w, ok := el.widget.(WidgetBuilder); ok {
-		return w.Build()
+		return w.Build(el)
 	} else {
 		panic(fmt.Sprintf("widget %T needs to implement WidgetBuilder or StatefulWidget", el.widget))
 	}
@@ -192,7 +234,27 @@ func (el *SimpleInteriorElement[W]) PerformRebuild() {
 	el.Handle().dirty = false
 }
 
-type BuildContext interface{}
+func DependOnWidgetOfExactType[W Widget](bc BuildContext) W {
+	el := bc.(Element)
+	h := el.Handle()
+	if ancestor := h.inheritedElements[reflect.TypeOf(*new(W))]; ancestor != nil {
+		if h.dependencies == nil {
+			h.dependencies = make(map[InheritedElement]struct{})
+		}
+		h.dependencies[ancestor] = struct{}{}
+		ah := ancestor.Handle()
+		if ah.dependents == nil {
+			ah.dependents = make(map[Element]struct{})
+		}
+		ah.dependents[el] = struct{}{}
+		return ah.widget.(W)
+	}
+	h.hadUnsatisfiedDependencies = true
+	return *new(W)
+}
+
+type BuildContext interface {
+}
 
 type Widget interface {
 	CreateElement() Element
@@ -242,7 +304,7 @@ type Element interface {
 
 type InteriorElement interface {
 	ParentElement
-	WidgetBuilder
+	Build() Widget
 }
 
 func DidChangeDependencies(el Element) {
@@ -251,10 +313,15 @@ func DidChangeDependencies(el Element) {
 }
 
 func Update(el Element, newWidget Widget) {
-	oldWidget := el.Handle().widget
-	el.Handle().widget = newWidget
-	if pd, ok := el.Handle().widget.(ParentDataWidget); ok {
+	h := el.Handle()
+	oldWidget := h.widget
+	h.widget = newWidget
+	if pd, ok := h.widget.(ParentDataWidget); ok {
 		ApplyParentData(pd, el)
+	}
+	for dependent := range h.dependents {
+		// OPT(dh): introduce UpdateShouldNotify
+		DidChangeDependencies(dependent)
 	}
 	el.Transition(ElementTransition{Kind: ElementUpdated, OldWidget: oldWidget})
 }
@@ -368,25 +435,22 @@ func UpdateChild(el, child Element, newWidget Widget, newSlot int) Element {
 // Activate activates the element. If it implements Activater, the AfterActivate method will be called afterwards.
 func Activate(el Element) {
 	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
-	// hadDependencies := (el._dependencies != null && el._dependencies.isNotEmpty) || el._hadUnsatisfiedDependencies // XXX implement once we have InheritedWidget
+	hadDependencies := len(el.Handle().dependencies) != 0 || el.Handle().hadUnsatisfiedDependencies
 
 	h := el.Handle()
 	h.lifecycleState = ElementLifecycleActive
 	// We unregistered our dependencies in deactivate, but never cleared the list.
 	// Since we're going to be reused, let's clear our list now.
-	// XXX
-	// if el._dependencies != nil {
-	// 	el._dependencies.clear()
-	// }
-	// el._hadUnsatisfiedDependencies = false
-	// el._updateInheritance()
+	clear(el.Handle().dependencies)
+	el.Handle().hadUnsatisfiedDependencies = false
+	updateInheritance(el)
 	// el.attachNotificationTree()
 	if h.dirty {
 		h.BuildOwner.scheduleBuildFor(el)
 	}
-	// if hadDependencies {
-	// 	el.didChangeDependencies()
-	// }
+	if hadDependencies {
+		DidChangeDependencies(el)
+	}
 
 	el.Transition(ElementTransition{Kind: ElementActivated})
 }
@@ -394,19 +458,17 @@ func Activate(el Element) {
 func Deactivate(el Element) {
 	el.Transition(ElementTransition{Kind: ElementDeactivating})
 
-	// XXX
-	// if (_dependencies != null && _dependencies!.isNotEmpty) {
-	//   for (final InheritedElement dependency in _dependencies!) {
-	//     dependency.removeDependent(this);
-	//   }
-	//   // For expediency, we don't actually clear the list here, even though it's
-	//   // no longer representative of what we are registered with. If we never
-	//   // get re-used, it doesn't matter. If we do, then we'll clear the list in
-	//   // activate(). The benefit of this is that it allows Element's activate()
-	//   // implementation to decide whether to rebuild based on whether we had
-	//   // dependencies here.
-	// }
-	// _inheritedElements = null;
+	for dependency := range el.Handle().dependencies {
+		delete(dependency.Handle().dependents, el)
+		// For expediency, we don't actually clear the list here, even though it's
+		// no longer representative of what we are registered with. If we never
+		// get re-used, it doesn't matter. If we do, then we'll clear the list in
+		// activate(). The benefit of this is that it allows Element's activate()
+		// implementation to decide whether to rebuild based on whether we had
+		// dependencies here.
+	}
+	el.Handle().inheritedElements = nil
+
 	el.Handle().lifecycleState = ElementLifecycleInactive
 }
 
@@ -416,7 +478,7 @@ func Mount(el, parent Element, newSlot int) {
 	h.slot = newSlot
 	h.lifecycleState = ElementLifecycleActive
 	if parent != nil {
-		h.depth = parent.Handle().depth
+		h.depth = parent.Handle().depth + 1
 	} else {
 		h.depth = 1
 	}
@@ -432,7 +494,8 @@ func Mount(el, parent Element, newSlot int) {
 		}
 	}
 
-	// XXX _updateInheritance
+	updateInheritance(el)
+
 	// XXX attachNotificationTree
 
 	el.Handle().dirty = true
@@ -484,7 +547,7 @@ type ParentElement interface {
 }
 
 type WidgetBuilder interface {
-	Build() Widget
+	Build(ctx BuildContext) Widget
 }
 
 var _ RenderObjectElement = (*SimpleRenderObjectElement)(nil)
@@ -655,6 +718,11 @@ type ElementHandle struct {
 	dirty          bool
 	inDirtyList    bool
 	widget         Widget
+	// OPT(dh): use a persistent data structure for inheritedElements
+	inheritedElements          map[reflect.Type]InheritedElement
+	dependencies               map[InheritedElement]struct{}
+	dependents                 map[Element]struct{}
+	hadUnsatisfiedDependencies bool
 }
 
 func (h *StateHandle[W]) GetStateHandle() *StateHandle[W] { return h }
