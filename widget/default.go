@@ -45,7 +45,9 @@ func RenderObjectElementAttachRenderObject(el RenderObjectElement, slot int) {
 	h := el.RenderHandle()
 	h.slot = slot
 	h.ancestorRenderObjectElement = findAncestorRenderObjectElement(el)
-	h.ancestorRenderObjectElement.InsertRenderObjectChild(h.RenderObject, slot)
+	if h.ancestorRenderObjectElement != nil {
+		h.ancestorRenderObjectElement.InsertRenderObjectChild(h.RenderObject, slot)
+	}
 	renderObject := el.RenderHandle().RenderObject
 	ancestorParentDataElements(el)(func(pd ParentDataWidget) bool {
 		pd.ApplyParentData(renderObject)

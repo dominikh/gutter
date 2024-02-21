@@ -20,50 +20,46 @@ type HitTestEntry struct {
 	Offset f32.Point
 }
 
-type HitTestResult struct {
-	Hits           []HitTestEntry
+type hitTestResult struct {
+	hits           []HitTestEntry
 	transform      f32.Affine2D
 	transformStack []f32.Affine2D
 }
 
-func (ht *HitTestResult) Reset() {
-	clear(ht.Hits[:cap(ht.Hits)])
-	ht.Hits = ht.Hits[:0]
+func (ht *hitTestResult) Reset() {
+	clear(ht.hits[:cap(ht.hits)])
+	ht.hits = ht.hits[:0]
 }
 
-func (ht *HitTestResult) PushTransform(trans f32.Affine2D) {
+func (ht *hitTestResult) PushTransform(trans f32.Affine2D) {
 	ht.transformStack = append(ht.transformStack, ht.transform)
 	ht.transform = ht.transform.Mul(trans)
 }
 
-func (ht *HitTestResult) PopTransform() {
+func (ht *hitTestResult) PopTransform() {
 	if len(ht.transformStack) > 0 {
 		ht.transform = ht.transformStack[len(ht.transformStack)-1]
 		ht.transformStack = ht.transformStack[:len(ht.transformStack)-1]
 	}
 }
 
-func (ht *HitTestResult) Transform(p f32.Point) f32.Point {
+func (ht *hitTestResult) Transform(p f32.Point) f32.Point {
 	return ht.transform.Transform(p)
 }
 
-func (ht *HitTestResult) PushOffset(offset f32.Point) {
+func (ht *hitTestResult) PushOffset(offset f32.Point) {
 	ht.PushTransform(f32.Affine2D{}.Offset(offset).Invert())
 }
 
-func (ht *HitTestResult) Add(obj Object, pos f32.Point) {
-	ht.Hits = append(ht.Hits, HitTestEntry{obj, pos})
+func (ht *hitTestResult) Add(obj Object, pos f32.Point) {
+	ht.hits = append(ht.hits, HitTestEntry{obj, pos})
 }
 
 type HitTester interface {
-	PerformHitTest(res *HitTestResult, pos f32.Point) bool
+	PerformHitTest(res *hitTestResult, pos f32.Point) bool
 }
 
-type ChildrenHitTester interface {
-	PerformHitTestChildren(res *HitTestResult, pos f32.Point) bool
-}
-
-func HitTest(res *HitTestResult, obj Object, pos f32.Point) bool {
+func hitTest(res *hitTestResult, obj Object, pos f32.Point) bool {
 	if ht, ok := obj.(HitTester); ok {
 		return ht.PerformHitTest(res, pos)
 	} else {
@@ -73,7 +69,7 @@ func HitTest(res *HitTestResult, obj Object, pos f32.Point) bool {
 			return false
 		}
 		// If we hit a child, or are opaque, then we've been hit
-		hit := HitTestChildren(res, obj, pos) || h.HitTestBehavior == Opaque
+		hit := hitTestChildren(res, obj, pos) || h.HitTestBehavior == Opaque
 		// If we're translucent then we're still part of the result, but don't prevent other objects from
 		// being hit.
 		if hit || h.HitTestBehavior == Translucent {
@@ -83,21 +79,17 @@ func HitTest(res *HitTestResult, obj Object, pos f32.Point) bool {
 	}
 }
 
-func HitTestChildren(res *HitTestResult, obj Object, pos f32.Point) bool {
-	if ht, ok := obj.(ChildrenHitTester); ok {
-		return ht.PerformHitTestChildren(res, pos)
-	} else {
-		hit := false
-		obj.VisitChildren(func(o Object) bool {
-			res.PushOffset(o.Handle().offset)
-			defer res.PopTransform()
-			if HitTest(res, o, pos) {
-				hit = true
-			}
-			return true
-		})
-		return hit
-	}
+func hitTestChildren(res *hitTestResult, obj Object, pos f32.Point) bool {
+	hit := false
+	obj.VisitChildren(func(o Object) bool {
+		res.PushOffset(o.Handle().offset)
+		defer res.PopTransform()
+		if hitTest(res, o, pos) {
+			hit = true
+		}
+		return true
+	})
+	return hit
 }
 
 type HitTestBehavior uint8

@@ -13,7 +13,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
@@ -255,78 +254,22 @@ func run2(w *app.Window) error {
 
 	var root widget.Widget = &Bird{}
 
-	// This is basically runApp
-	bo := widget.NewBuildOwner()
-	po := render.NewPipelineOwner()
-	bo.PipelineOwner = po
-	wview := widget.NewView(root, po)
-	rootElem := wview.Attach(bo, nil)
+	b := widget.RunApp(w, root)
 
-	po.OnNeedVisualUpdate = win.Invalidate
-	bo.OnBuildScheduled = win.Invalidate
-
-	var ht render.HitTestResult
 	var ops op.Ops
 	for {
 		switch e := w.NextEvent().(type) {
 		default:
 			// fmt.Printf("%T %v\n", e, e)
 		case giopointer.Event:
-			ht.Reset()
-			render.HitTest(&ht, rootElem.RenderHandle().RenderObject, e.Position)
-			n := 0
-			for _, hit := range ht.Hits {
-				if _, ok := hit.Object.(render.PointerEventHandler); ok {
-					n++
-					if n >= 2 {
-						break
-					}
-				}
-			}
-			var kind pointer.Priority
-			if n < 2 {
-				kind = pointer.Exclusive
-			} else {
-				kind = pointer.Shared
-			}
-			first := true
-			for _, hit := range ht.Hits {
-				if obj, ok := hit.Object.(render.PointerEventHandler); ok {
-					prio := kind
-					if first && prio == pointer.Shared {
-						prio = pointer.Foremost
-					}
-					first = false
-					ev := pointer.FromRaw(e)
-					ev.Priority = prio
-					obj.HandlePointerEvent(hit, ev)
-				}
-			}
-
-			// fmt.Println(ht)
+			b.RenderBinding.HandlePointerEvent(e)
 		case app.DestroyEvent:
 			return e.Err
 		case CallbackEvent:
 			e.cb()
 		case app.FrameEvent:
-			ops.Reset()
-			cs := render.ViewConfiguration{
-				Min: f32.FPt(e.Size),
-				Max: f32.FPt(e.Size),
-			}
-			rootElem.SetConfiguration(cs)
-
-			po.RunFrameCallbacks(e.Now)
-
-			bo.BuildScope(rootElem, nil)
-			po.FlushLayout()
-			po.FlushCompositingBits()
-			po.FlushPaint(&ops)
-			bo.FinalizeTree()
-
-			e.Frame(&ops)
 			fmt.Println("--frame--")
-			// fmt.Println(widget.FormatElementTree(rootElem))
+			b.DrawFrame(e, &ops)
 		}
 	}
 }

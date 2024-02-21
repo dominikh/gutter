@@ -647,7 +647,7 @@ func (o *BuildOwner) scheduleBuildFor(el Element) {
 	el.Handle().inDirtyList = true
 }
 
-func (o *BuildOwner) BuildScope(ctx Element, callback func()) {
+func (o *BuildOwner) BuildScope(callback func()) {
 	if callback == nil && len(o.dirtyElements) == 0 {
 		return
 	}
