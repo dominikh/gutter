@@ -28,6 +28,7 @@ const (
 	ElementUnmounted
 )
 
+//go:generate stringer -type=StateTransitionKind
 type StateTransitionKind uint8
 
 const (
