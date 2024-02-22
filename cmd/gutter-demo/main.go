@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math/rand"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -39,103 +40,6 @@ func main() {
 		os.Exit(0)
 	}()
 	app.Main()
-}
-
-var _ widget.Widget = (*PointlessWrapper)(nil)
-
-type PointlessWrapper struct {
-	Child widget.Widget
-}
-
-// CreateElement implements widget.Widget.
-func (p *PointlessWrapper) CreateElement() widget.Element {
-	return widget.NewProxyElement(p)
-}
-
-var _ widget.Widget = (*Bird)(nil)
-
-type Bird struct {
-}
-
-func (w *Bird) CreateElement() widget.Element {
-	return widget.NewInteriorElement(w)
-}
-
-func (w *Bird) CreateState() widget.State[*Bird] {
-	return &BirdState{}
-}
-
-type BirdState struct {
-	widget.StateHandle[*Bird]
-	reparent bool
-}
-
-func (s *BirdState) Transition(t widget.StateTransition[*Bird]) {}
-
-func (s *BirdState) Build(ctx widget.BuildContext) widget.Widget {
-	left := &widget.KeyedSubtree{
-		Key: widget.GlobalKey{Value: "left"},
-		Child: &widget.Flex{
-			Direction: render.Vertical,
-			Children: []widget.Widget{
-				&widget.Flexible{
-					Flex:  3,
-					Child: &ColorChangingBox{color.NRGBA{255, 0, 0, 255}},
-				},
-				&widget.Flexible{
-					Flex:  1,
-					Child: &ColorChangingBox{color.NRGBA{0, 255, 0, 255}},
-				},
-				&widget.Flexible{
-					Flex:  1,
-					Child: &ColorChangingBox{color.NRGBA{0, 0, 255, 255}},
-				},
-			},
-		},
-	}
-	right := &widget.KeyedSubtree{
-		Key: widget.GlobalKey{Value: "right"},
-		Child: &widget.Flex{
-			Direction: render.Vertical,
-			Children: []widget.Widget{
-				&widget.Flexible{
-					Flex:  3,
-					Child: &ColorChangingBox{color.NRGBA{255, 0, 0, 255}},
-				},
-				&widget.Flexible{
-					Flex:  1,
-					Child: &ColorChangingBox{color.NRGBA{0, 255, 0, 255}},
-				},
-				&widget.Flexible{
-					Flex:  1,
-					Child: &ColorChangingBox{color.NRGBA{0, 0, 255, 255}},
-				},
-			},
-		},
-	}
-	var child widget.Widget
-	if s.reparent {
-		c := &left.Child.(*widget.Flex).Children
-		*c = append(*c, &widget.Flexible{Flex: 2, Child: right})
-		child = &widget.Flex{
-			Direction: render.Horizontal,
-			Children:  []widget.Widget{left},
-		}
-	} else {
-		child = &widget.Flex{
-			Direction: render.Horizontal,
-			Children:  []widget.Widget{left, right},
-		}
-	}
-	return &widget.PointerRegion{
-		OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
-			if ev.Priority == pointer.Exclusive {
-				s.reparent = !s.reparent
-				widget.MarkNeedsBuild(s.Element)
-			}
-		},
-		Child: child,
-	}
 }
 
 type ColorChangingBox struct {
@@ -173,86 +77,32 @@ func (cs *colorChangingBoxState) Build(ctx widget.BuildContext) widget.Widget {
 	}
 }
 
-// func (s *BirdState) Build() widget.Widget {
-// 	tree := &widget.KeyedSubtree{
-// 		Key: "birdie",
-// 		Child: &widget.AnimatedPadding{
-// 			Duration: 1000 * time.Millisecond,
-// 			Curve:    animation.EaseOutBounce,
-// 			Padding:  render.Inset{s.padding, s.padding, s.padding, s.padding},
-// 			Child: &PointlessWrapper{
-// 				Child: &widget.PointerRegion{
-// 					OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
-// 						// fmt.Println("outer:", ev)
-// 					},
-// 					Child: &widget.ColoredBox{
-// 						Color: color.NRGBA{255, 0, 0, 255},
-// 						Child: &widget.Padding{
-// 							Padding: render.Inset{200, 200, 200, 200},
-// 							Child: &widget.AnimatedOpacity{
-// 								Opacity:  s.opacity,
-// 								Duration: time.Second,
-// 								Child: &PointlessWrapper{
-// 									Child: &widget.PointerRegion{
-// 										OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
-// 											if s.padding == 200 {
-// 												s.padding = 0
-// 											} else {
-// 												s.padding = 200
-// 											}
-// 											if s.opacity == 1 {
-// 												s.opacity = 0
-// 											} else {
-// 												s.opacity = 1
-// 											}
-// 											widget.MarkNeedsBuild(s.Element)
-// 										},
-// 										OnMove: func(hit render.HitTestEntry, ev pointer.Event) {
-// 											// fmt.Println("inner:", ev)
-// 											// s.c.G = uint8(hit.Offset.Y)
-// 											// widget.MarkNeedsBuild(s.Element)
-// 										},
-// 										Child: &widget.ColoredBox{
-// 											Color: s.c,
-// 										},
-// 									},
-// 								},
-// 							},
-// 						},
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
-
-// 	return tree
-// }
-
-// Key implements widget.StatefulWidget.
-func (*Bird) Key() any {
-	return nil
-}
-
 var win *app.Window
-
-func ticker(interval time.Duration, fn func()) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for range t.C {
-		win.EmitEvent(CallbackEvent{fn})
-	}
-}
-
-type CallbackEvent struct {
-	cb func()
-}
-
-func (CallbackEvent) ImplementsEvent() {}
 
 func run2(w *app.Window) error {
 	win = w
 
-	var root widget.Widget = &Bird{}
+	ch := make(chan color.NRGBA)
+	go func() {
+		t := time.NewTicker(500 * time.Millisecond)
+		for range t.C {
+			ch <- color.NRGBA{
+				uint8(rand.Int()),
+				uint8(rand.Int()),
+				uint8(rand.Int()),
+				255,
+			}
+		}
+	}()
+	root := &widget.ChannelBuilder[color.NRGBA]{
+		Channel: ch,
+		Builder: func(ctx widget.BuildContext, _ widget.Widget, v color.NRGBA) widget.Widget {
+			fmt.Println(v)
+			return &widget.ColoredBox{
+				Color: v,
+			}
+		},
+	}
 
 	b := widget.RunApp(w, root)
 
@@ -265,8 +115,8 @@ func run2(w *app.Window) error {
 			b.RenderBinding.HandlePointerEvent(e)
 		case app.DestroyEvent:
 			return e.Err
-		case CallbackEvent:
-			e.cb()
+		case widget.CallbackEvent:
+			e()
 		case app.FrameEvent:
 			fmt.Println("--frame--")
 			b.DrawFrame(e, &ops)

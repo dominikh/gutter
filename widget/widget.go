@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
@@ -360,3 +361,87 @@ func (b *Builder) Build(ctx BuildContext) Widget {
 func (b *Builder) CreateElement() Element {
 	return NewInteriorElement(b)
 }
+
+var _ StatefulWidget[*ChannelBuilder[int]] = (*ChannelBuilder[int])(nil)
+
+type ChannelBuilder[E any] struct {
+	Channel chan E
+	Builder func(ctx BuildContext, child Widget, v E) Widget
+	Child   Widget
+}
+
+// CreateElement implements StatefulWidget.
+func (c *ChannelBuilder[E]) CreateElement() Element {
+	return NewInteriorElement(c)
+}
+
+// CreateState implements StatefulWidget.
+func (c *ChannelBuilder[E]) CreateState() State[*ChannelBuilder[E]] {
+	return &channelBuilderState[E]{}
+}
+
+type channelBuilderState[E any] struct {
+	StateHandle[*ChannelBuilder[E]]
+	value E
+	g     chan struct{}
+}
+
+// Build implements State.
+func (c *channelBuilderState[E]) Build(ctx BuildContext) Widget {
+	return c.Widget.Builder(ctx, c.Widget.Child, c.value)
+}
+
+// Transition implements State.
+func (c *channelBuilderState[E]) Transition(t StateTransition[*ChannelBuilder[E]]) {
+	switch t.Kind {
+	case StateInitializing:
+		c.startGoroutine()
+	case StateActivating:
+		c.startGoroutine()
+	case StateDeactivating:
+		c.stopGoroutine()
+	case StateUpdatedWidget:
+		if t.OldWidget.Channel != c.Widget.Channel {
+			c.restartGoroutine()
+		}
+	}
+}
+
+func (c *channelBuilderState[E]) startGoroutine() {
+	debug.Assert(c.g == nil)
+	g := make(chan struct{})
+	c.g = g
+	ch := c.Widget.Channel
+	debug.Assert(ch != nil)
+	go func() {
+		// Read g and ch instead of c.g and c.Widget.Channel to avoid racing with updates to the widget tree.
+		for {
+			select {
+			case <-g:
+				return
+			case v, ok := <-ch:
+				if !ok {
+					return
+				}
+				c.Element.Handle().BuildOwner.PipelineOwner.EmitEvent(CallbackEvent(func() {
+					c.value = v
+					MarkNeedsBuild(c.Element)
+				}))
+			}
+		}
+	}()
+}
+
+func (c *channelBuilderState[E]) stopGoroutine() {
+	close(c.g)
+	c.g = nil
+}
+
+func (c *channelBuilderState[E]) restartGoroutine() {
+	c.stopGoroutine()
+	c.startGoroutine()
+}
+
+type CallbackEvent func()
+
+func (CallbackEvent) ImplementsEvent() {}

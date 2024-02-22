@@ -18,15 +18,16 @@ import (
 )
 
 type Binding struct {
-	pipelineOwner *PipelineOwner
+	PipelineOwner *PipelineOwner
 	htr           hitTestResult
 }
 
 func NewBinding(win *app.Window) *Binding {
 	b := &Binding{
-		pipelineOwner: NewPipelineOwner(),
+		PipelineOwner: NewPipelineOwner(),
 	}
-	b.pipelineOwner.OnNeedVisualUpdate = win.Invalidate
+	b.PipelineOwner.OnNeedVisualUpdate = win.Invalidate
+	b.PipelineOwner.EmitEvent = win.EmitEvent
 	v := NewView()
 	b.SetView(v)
 	v.PrepareInitialFrame()
@@ -34,31 +35,31 @@ func NewBinding(win *app.Window) *Binding {
 }
 
 func (b *Binding) RunFrameCallbacks(now time.Time) {
-	b.pipelineOwner.RunFrameCallbacks(now)
+	b.PipelineOwner.RunFrameCallbacks(now)
 }
 
 func (b *Binding) DrawFrame(e app.FrameEvent, ops *op.Ops) {
 	debug.Assert(b.View() != nil)
 	b.View().SetConfiguration(ViewConfiguration{Min: f32.FPt(e.Size), Max: f32.FPt(e.Size)})
-	b.pipelineOwner.FlushLayout()
-	b.pipelineOwner.FlushCompositingBits()
-	b.pipelineOwner.FlushPaint(ops)
+	b.PipelineOwner.FlushLayout()
+	b.PipelineOwner.FlushCompositingBits()
+	b.PipelineOwner.FlushPaint(ops)
 	e.Frame(ops)
 
 }
 
 func (b *Binding) View() *View {
-	return b.pipelineOwner.rootNode.(*View)
+	return b.PipelineOwner.rootNode.(*View)
 }
 
 func (b *Binding) SetView(v *View) {
 	debug.Assert(v != nil)
-	b.pipelineOwner.SetRootNode(v)
+	b.PipelineOwner.SetRootNode(v)
 }
 
 func (b *Binding) HandlePointerEvent(e giopointer.Event) {
 	b.htr.Reset()
-	hitTest(&b.htr, b.pipelineOwner.rootNode, e.Position)
+	hitTest(&b.htr, b.PipelineOwner.rootNode, e.Position)
 	hits := b.htr.hits
 	n := 0
 	for _, hit := range hits {

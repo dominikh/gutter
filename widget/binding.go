@@ -29,6 +29,7 @@ func NewBinding(win *app.Window) *Binding {
 		buildOwner:    NewBuildOwner(),
 		RenderBinding: render.NewBinding(win),
 	}
+	b.buildOwner.PipelineOwner = b.RenderBinding.PipelineOwner
 	b.buildOwner.OnBuildScheduled = win.Invalidate
 	return b
 }

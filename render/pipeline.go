@@ -11,6 +11,7 @@ import (
 
 	"honnef.co/go/gutter/mem"
 
+	"gioui.org/io/event"
 	"gioui.org/op"
 )
 
@@ -21,6 +22,7 @@ type PipelineOwner struct {
 	nodesNeedingCompositingBitsUpdate []Object
 	shouldMergeDirtyNodes             bool
 	OnNeedVisualUpdate                func()
+	EmitEvent                         func(ev event.Event)
 
 	NextFrameCallbacks mem.DoubleBufferedSlice[func(now time.Time)]
 }
