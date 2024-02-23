@@ -8,12 +8,13 @@ package widget
 import (
 	"gioui.org/app"
 	"gioui.org/op"
+	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/render"
 )
 
 func RunApp(win *app.Window, app Widget) *Binding {
 	b := NewBinding(win)
-	b.AttachRootWidget(app)
+	b.rootWidget = app
 	// b.scheduleWarmUpFrame()
 	return b
 }
@@ -22,6 +23,10 @@ type Binding struct {
 	renderViewElement *RenderObjectToWidgetElement
 	buildOwner        *BuildOwner
 	RenderBinding     *render.Binding
+	currentFrameEvent app.FrameEvent
+	rootWidget        Widget
+
+	mediaQuery *MediaQuery
 }
 
 func NewBinding(win *app.Window) *Binding {
@@ -35,6 +40,10 @@ func NewBinding(win *app.Window) *Binding {
 }
 
 func (b *Binding) DrawFrame(e app.FrameEvent, ops *op.Ops) {
+	debug.Assert(!b.buildOwner.inDrawFrame)
+	b.buildOwner.inDrawFrame = true
+	b.currentFrameEvent = e
+	b.AttachRootWidget(b.rootWidget)
 	ops.Reset()
 	b.RenderBinding.RunFrameCallbacks(e.Now)
 	if b.renderViewElement != nil {
@@ -42,12 +51,20 @@ func (b *Binding) DrawFrame(e app.FrameEvent, ops *op.Ops) {
 	}
 	b.RenderBinding.DrawFrame(e, ops)
 	b.buildOwner.FinalizeTree()
+	b.buildOwner.inDrawFrame = false
 }
 
 func (b *Binding) AttachRootWidget(rootWidget Widget) {
+	data := MediaQueryDataFromEvent(b.currentFrameEvent)
+	if b.mediaQuery == nil || b.mediaQuery.Data != data {
+		b.mediaQuery = &MediaQuery{
+			Data:  data,
+			Child: rootWidget,
+		}
+	}
 	b.renderViewElement = (&RenderObjectToWidgetAdapter{
 		Container: b.RenderBinding.View(),
-		Child:     rootWidget,
+		Child:     b.mediaQuery,
 	}).AttachToRenderTree(b.buildOwner, b.renderViewElement)
 }
 

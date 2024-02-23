@@ -5,7 +5,6 @@
 package main
 
 import (
-	"fmt"
 	"image/color"
 	"log"
 	"math/rand"
@@ -24,6 +23,7 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.Lmicroseconds)
 	// runtime.MemProfileRate = 1
 	go func() {
 		cpuf, _ := os.Create("cpu.pprof")
@@ -82,24 +82,13 @@ var win *app.Window
 func run2(w *app.Window) error {
 	win = w
 
-	ch := make(chan color.NRGBA)
-	go func() {
-		t := time.NewTicker(500 * time.Millisecond)
-		for range t.C {
-			ch <- color.NRGBA{
-				uint8(rand.Int()),
-				uint8(rand.Int()),
-				uint8(rand.Int()),
-				255,
-			}
-		}
-	}()
-	root := &widget.ChannelBuilder[color.NRGBA]{
-		Channel: ch,
-		Builder: func(ctx widget.BuildContext, _ widget.Widget, v color.NRGBA) widget.Widget {
-			fmt.Println(v)
+	root := &widget.Builder{
+		Builder: func(ctx widget.BuildContext, _ widget.Widget) widget.Widget {
+			_ = widget.DependOnWidgetOfExactType[*widget.MediaQuery](ctx).Data.Size.X
+			now := rand.Int()
 			return &widget.ColoredBox{
-				Color: v,
+				Color: color.NRGBA{uint8(now), 0, 0, 255},
+				// Color: color.NRGBA{uint8(rand.Int()), 0, 0, 255},
 			}
 		},
 	}
@@ -107,8 +96,15 @@ func run2(w *app.Window) error {
 	b := widget.RunApp(w, root)
 
 	var ops op.Ops
+	prev := time.Now()
+	prevRender := time.Now()
 	for {
-		switch e := w.NextEvent().(type) {
+		e := w.NextEvent()
+		now := time.Now()
+		d := now.Sub(prev)
+		log.Printf("%T; %s since last event", e, d)
+		prev = now
+		switch e := e.(type) {
 		default:
 			// fmt.Printf("%T %v\n", e, e)
 		case giopointer.Event:
@@ -118,8 +114,13 @@ func run2(w *app.Window) error {
 		case widget.CallbackEvent:
 			e()
 		case app.FrameEvent:
-			fmt.Println("--frame--")
+			// log.Println("--frame--", e.Size)
+			d := now.Sub(prevRender)
+			prevRender = now
+			log.Println(d, "since last frame")
+			t := time.Now()
 			b.DrawFrame(e, &ops)
+			log.Println("drew frame in", time.Since(t))
 		}
 	}
 }

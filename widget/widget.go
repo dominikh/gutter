@@ -308,7 +308,6 @@ func (p *AnimatedProperty[T, W, S]) Transition(t StateTransition[W]) {
 			// XXX this should use the event's now, not time.Now
 			p.animation.Start(time.Now(), w.FieldByName("Duration").Interface().(time.Duration), p.Value, w.Field(p.field).Interface().(T))
 			p.updateAnimation(time.Now())
-			MarkNeedsBuild(sh.Element)
 		}
 	}
 }
@@ -349,12 +348,13 @@ func (k *KeyedSubtree) CreateElement() Element {
 var _ StatelessWidget = (*Builder)(nil)
 
 type Builder struct {
-	Builder func(ctx BuildContext) Widget
+	Child   Widget
+	Builder func(ctx BuildContext, child Widget) Widget
 }
 
 // Build implements StatelessWidget.
 func (b *Builder) Build(ctx BuildContext) Widget {
-	return b.Builder(ctx)
+	return b.Builder(ctx, b.Child)
 }
 
 // CreateElement implements StatelessWidget.

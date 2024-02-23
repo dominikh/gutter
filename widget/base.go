@@ -12,7 +12,10 @@ import (
 	"slices"
 	"unsafe"
 
+	"gioui.org/app"
+	"gioui.org/unit"
 	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/mem"
 	"honnef.co/go/gutter/render"
 )
@@ -70,7 +73,6 @@ type StateTransition[W Widget] struct {
 	OldWidget W
 }
 
-// TODO MediaQuery
 // TODO support "Notification"
 
 func NewProxyElement[W Widget](w W) InteriorElement {
@@ -604,6 +606,7 @@ type BuildOwner struct {
 	scheduledFlushDirtyElements bool
 	PipelineOwner               *render.PipelineOwner
 	globals                     map[GlobalKey]Element
+	inDrawFrame                 bool
 }
 
 func NewBuildOwner() *BuildOwner {
@@ -640,7 +643,7 @@ func (o *BuildOwner) scheduleBuildFor(el Element) {
 		o.dirtyElementsNeedsResorting = true
 		return
 	}
-	if !o.scheduledFlushDirtyElements && o.OnBuildScheduled != nil {
+	if !o.inDrawFrame && !o.scheduledFlushDirtyElements && o.OnBuildScheduled != nil {
 		o.scheduledFlushDirtyElements = true
 		o.OnBuildScheduled()
 	}
@@ -1293,4 +1296,27 @@ func (m *ManyChildElements) ForgetChild(child Element) {
 		m.forgottenChildren = make(map[Element]struct{})
 	}
 	m.forgottenChildren[child] = struct{}{}
+}
+
+var _ Widget = (*MediaQuery)(nil)
+
+type MediaQuery struct {
+	Data  MediaQueryData
+	Child Widget
+}
+
+func (m *MediaQuery) CreateElement() Element {
+	return NewInheritedElement(m)
+}
+
+type MediaQueryData struct {
+	Metric unit.Metric
+	Size   f32.Point
+}
+
+func MediaQueryDataFromEvent(e app.FrameEvent) MediaQueryData {
+	return MediaQueryData{
+		Metric: e.Metric,
+		Size:   f32.FPt(e.Size),
+	}
 }
