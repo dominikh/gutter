@@ -11,9 +11,11 @@ require (
 	gioui.org v0.4.1
 	github.com/go-json-experiment/json v0.0.0-20240815175050-ebd3a8989ca1
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
+	golang.org/x/sys v0.21.0
 	honnef.co/go/color v0.0.0-20240902224312-bee6d5d40ebe
 	honnef.co/go/curve v0.0.0-20240818152704-b58745d40a16
 	honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219
+	honnef.co/go/libwayland v0.0.0-20240816012442-83394039f572
 )
 
 require (
@@ -22,7 +24,6 @@ require (
 	github.com/go-text/typesetting v0.0.0-20230803102845-24e03d8b5372 // indirect
 	golang.org/x/exp/shiny v0.0.0-20220827204233-334a2380cb91 // indirect
 	golang.org/x/image v0.5.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2 // indirect
 )
