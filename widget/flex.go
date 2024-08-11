@@ -45,7 +45,7 @@ func (f *Flex) CreateElement() Element {
 }
 
 type Flexible struct {
-	Flex  float32
+	Flex  float64
 	Fit   render.FlexFit
 	Child Widget
 }

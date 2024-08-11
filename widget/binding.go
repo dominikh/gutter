@@ -6,14 +6,17 @@
 package widget
 
 import (
-	"gioui.org/app"
-	"gioui.org/op"
+	"time"
+
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/render"
+	"honnef.co/go/gutter/wsi"
+	"honnef.co/go/jello"
 )
 
-func RunApp(win *app.Window, app Widget) *Binding {
-	b := NewBinding(win)
+func RunApp(sys *wsi.System, win wsi.Window, app Widget) *Binding {
+	b := NewBinding(sys, win)
 	b.rootWidget = app
 	// b.scheduleWarmUpFrame()
 	return b
@@ -23,39 +26,51 @@ type Binding struct {
 	renderViewElement *RenderObjectToWidgetElement
 	buildOwner        *BuildOwner
 	RenderBinding     *render.Binding
-	currentFrameEvent app.FrameEvent
 	rootWidget        Widget
 
 	mediaQuery *MediaQuery
 }
 
-func NewBinding(win *app.Window) *Binding {
+func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 	b := &Binding{
 		buildOwner:    NewBuildOwner(),
-		RenderBinding: render.NewBinding(win),
+		RenderBinding: render.NewBinding(sys, win),
 	}
 	b.buildOwner.PipelineOwner = b.RenderBinding.PipelineOwner
-	b.buildOwner.OnBuildScheduled = win.Invalidate
+	b.buildOwner.OnBuildScheduled = func() {
+		// XXX surely there's a better way to rebuild than to ask (and wait!)
+		// for a frame from wayland
+		//
+		// this is not just a matter of performance, but also correctness. we
+		// should rebuild the tree immediately after every event that
+		// invalidates it, so that consecutive events can observe updates to the
+		// tree.
+		win.RequestFrame()
+	}
 	return b
 }
 
-func (b *Binding) DrawFrame(e app.FrameEvent, ops *op.Ops) {
+func (b *Binding) DrawFrame(scene *jello.Scene) {
 	debug.Assert(!b.buildOwner.inDrawFrame)
 	b.buildOwner.inDrawFrame = true
-	b.currentFrameEvent = e
 	b.AttachRootWidget(b.rootWidget)
-	ops.Reset()
-	b.RenderBinding.RunFrameCallbacks(e.Now)
+	// XXX get the proper frame time
+	now := time.Now()
+	b.RenderBinding.RunFrameCallbacks(now)
 	if b.renderViewElement != nil {
 		b.buildOwner.BuildScope(nil)
 	}
-	b.RenderBinding.DrawFrame(e, ops)
+	b.RenderBinding.DrawFrame(scene)
 	b.buildOwner.FinalizeTree()
 	b.buildOwner.inDrawFrame = false
 }
 
 func (b *Binding) AttachRootWidget(rootWidget Widget) {
-	data := MediaQueryDataFromEvent(b.currentFrameEvent)
+	// XXX get the actual dimensions and scale
+	data := MediaQueryData{
+		Scale: 1.0,
+		Size:  curve.Sz(500, 500),
+	}
 	if b.mediaQuery == nil || b.mediaQuery.Data != data {
 		b.mediaQuery = &MediaQuery{
 			Data:  data,

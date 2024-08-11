@@ -5,51 +5,47 @@
 package pointer
 
 import (
-	"fmt"
 	"time"
 
-	"honnef.co/go/gutter/f32"
-
-	"gioui.org/io/key"
-	giopointer "gioui.org/io/pointer"
+	"honnef.co/go/curve"
 )
 
 type Event struct {
-	Kind      Kind
-	Priority  Priority
-	Time      time.Duration
-	Buttons   Buttons
-	Position  f32.Point
-	Scroll    f32.Point
-	Modifiers key.Modifiers
+	Kind     Kind
+	Priority Priority
+	Time     time.Duration
+	Buttons  Buttons
+	Position curve.Point
+	Scroll   curve.Vec2
+	// Modifiers key.Modifiers
 }
 
-func FromRaw(ev giopointer.Event) Event {
-	var kind Kind
-	switch ev.Kind {
-	case giopointer.Cancel:
-		kind = Cancel
-	case giopointer.Press:
-		kind = Press
-	case giopointer.Release:
-		kind = Release
-	case giopointer.Move:
-		kind = Move
-	case giopointer.Scroll:
-		kind = Scroll
-	default:
-		panic(fmt.Sprintf("unhandled kind %#x", ev.Kind))
-	}
+// func FromRaw(ev giopointer.Event) Event {
+// 	var kind Kind
+// 	switch ev.Kind {
+// 	case giopointer.Cancel:
+// 		kind = Cancel
+// 	case giopointer.Press:
+// 		kind = Press
+// 	case giopointer.Release:
+// 		kind = Release
+// 	case giopointer.Move:
+// 		kind = Move
+// 	case giopointer.Scroll:
+// 		kind = Scroll
+// 	default:
+// 		panic(fmt.Sprintf("unhandled kind %#x", ev.Kind))
+// 	}
 
-	return Event{
-		Kind:      kind,
-		Time:      ev.Time,
-		Buttons:   Buttons(ev.Buttons),
-		Position:  f32.Point(ev.Position),
-		Scroll:    f32.Point(ev.Scroll),
-		Modifiers: ev.Modifiers,
-	}
-}
+// 	return Event{
+// 		Kind:      kind,
+// 		Time:      ev.Time,
+// 		Buttons:   Buttons(ev.Buttons),
+// 		Position:  curve.Point(ev.Position),
+// 		Scroll:    curve.Vec2(ev.Scroll),
+// 		Modifiers: ev.Modifiers,
+// 	}
+// }
 
 type Kind uint8
 

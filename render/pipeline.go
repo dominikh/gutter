@@ -9,10 +9,10 @@ import (
 	"slices"
 	"time"
 
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/mem"
-
-	"gioui.org/io/event"
-	"gioui.org/op"
+	"honnef.co/go/gutter/wsi"
+	"honnef.co/go/jello"
 )
 
 type PipelineOwner struct {
@@ -22,7 +22,7 @@ type PipelineOwner struct {
 	nodesNeedingCompositingBitsUpdate []Object
 	shouldMergeDirtyNodes             bool
 	OnNeedVisualUpdate                func()
-	EmitEvent                         func(ev event.Event)
+	EmitEvent                         func(ev wsi.Event)
 
 	NextFrameCallbacks mem.DoubleBufferedSlice[func(now time.Time)]
 }
@@ -107,9 +107,9 @@ func layoutWithoutResize(obj Object) {
 	MarkNeedsPaint(obj)
 }
 
-func (o *PipelineOwner) FlushPaint(ops *op.Ops) {
+func (o *PipelineOwner) FlushPaint(scene *jello.Scene) {
 	if o.rootNode != nil {
-		o.renderer.Paint(o.rootNode).Add(ops)
+		o.renderer.PaintAt(o.rootNode, scene, curve.Point{})
 	}
 }
 

@@ -6,13 +6,11 @@
 package render
 
 import (
-	"image/color"
-
+	"honnef.co/go/color"
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
-	"honnef.co/go/gutter/f32"
-
-	"gioui.org/op"
-	"gioui.org/op/paint"
+	"honnef.co/go/jello"
+	"honnef.co/go/jello/gfx"
 )
 
 var _ Object = (*FillColor)(nil)
@@ -33,18 +31,21 @@ type Clip struct {
 }
 
 // PerformLayout implements Object.
-func (w *Clip) PerformLayout() f32.Point {
+func (w *Clip) PerformLayout() curve.Size {
 	Layout(w.Child, w.Handle().Constraints(), true)
 	return w.Child.Handle().Size()
 }
 
 // PerformPaint implements Object.
-func (w *Clip) PerformPaint(r *Renderer, ops *op.Ops) {
-	defer FRect{
-		Min: f32.Pt(0, 0),
-		Max: w.Handle().Size(),
-	}.Op(ops).Push(ops).Pop()
-	r.Paint(w.Child).Add(ops)
+func (w *Clip) PerformPaint(r *Renderer, scene *jello.Scene) {
+	scene.PushLayer(
+		gfx.BlendMode{},
+		1,
+		curve.Identity,
+		curve.NewRectFromPoints(curve.Pt(0, 0), curve.Point(w.Handle().Size().AsVec2())).Path(0.1),
+	)
+	defer scene.PopLayer()
+	r.PaintAt(w.Child, scene, curve.Point{})
 }
 
 // FillColor fills an infinite plane with the provided color.
@@ -52,37 +53,43 @@ func (w *Clip) PerformPaint(r *Renderer, ops *op.Ops) {
 // In layout, it takes up the least amount of space possible.
 type FillColor struct {
 	Box
-	color color.NRGBA
+	color color.Color
 }
 
 // VisitChildren implements Object.
 func (*FillColor) VisitChildren(yield func(Object) bool) {}
 
-func (fc *FillColor) SetColor(c color.NRGBA) {
+func (fc *FillColor) SetColor(c color.Color) {
 	if fc.color != c {
 		fc.color = c
 		MarkNeedsPaint(fc)
 	}
 }
 
-func (fc *FillColor) Color() color.NRGBA {
+func (fc *FillColor) Color() color.Color {
 	return fc.color
 }
 
 // PerformLayout implements Object.
-func (c *FillColor) PerformLayout() f32.Point {
+func (c *FillColor) PerformLayout() curve.Size {
 	return c.Handle().Constraints().Min
 }
 
 func (c *FillColor) SizedByParent() {}
 
 // PerformPaint implements Object.
-func (c *FillColor) PerformPaint(_ *Renderer, ops *op.Ops) {
-	paint.Fill(ops, c.color)
+func (c *FillColor) PerformPaint(_ *Renderer, scene *jello.Scene) {
+	scene.Fill(
+		gfx.NonZero,
+		curve.Identity,
+		gfx.SolidBrush{Color: c.color},
+		curve.Identity,
+		curve.NewRectFromPoints(curve.Pt(-1e9, -1e9), curve.Pt(1e9, 1e9)).Path(0.1),
+	)
 }
 
 type Inset struct {
-	Left, Top, Right, Bottom float32
+	Left, Top, Right, Bottom float64
 }
 
 func LerpInset(start, end Inset, t float64) Inset {
@@ -116,27 +123,26 @@ func (p *Padding) Inset() Inset {
 }
 
 // PerformLayout implements Object.
-func (p *Padding) PerformLayout() f32.Point {
+func (p *Padding) PerformLayout() curve.Size {
 	cs := p.Handle().Constraints()
 	if p.Child == nil {
-		return cs.Constrain(f32.Pt(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom))
+		return cs.Constrain(curve.Sz(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom))
 	}
 	horiz := p.inset.Left + p.inset.Right
 	vert := p.inset.Top + p.inset.Bottom
-	newMin := f32.Pt(max(0, cs.Min.X-horiz), max(0, cs.Min.Y-vert))
+	newMin := curve.Sz(max(0, cs.Min.Width-horiz), max(0, cs.Min.Height-vert))
 	innerCs := Constraints{
 		Min: newMin,
-		Max: f32.Pt(max(newMin.X, cs.Max.X-horiz), max(newMin.Y, cs.Max.Y-vert)),
+		Max: curve.Sz(max(newMin.Width, cs.Max.Width-horiz), max(newMin.Height, cs.Max.Height-vert)),
 	}
 	childSz := Layout(p.Child, innerCs, true)
-	p.Child.Handle().offset = f32.Pt(p.inset.Left, p.inset.Top)
-	return cs.Constrain(childSz.Add(f32.Pt(horiz, vert)))
+	p.Child.Handle().offset = curve.Pt(p.inset.Left, p.inset.Top)
+	return cs.Constrain(childSz.Add(curve.Vec(horiz, vert)))
 }
 
 // PerformPaint implements Object.
-func (p *Padding) PerformPaint(r *Renderer, ops *op.Ops) {
-	defer op.Affine(f32.Affine2D{}.Offset(p.Child.Handle().offset)).Push(ops).Pop()
-	r.Paint(p.Child).Add(ops)
+func (p *Padding) PerformPaint(r *Renderer, scene *jello.Scene) {
+	r.PaintAt(p.Child, scene, p.Child.Handle().offset)
 }
 
 type Constrained struct {
@@ -157,15 +163,15 @@ func (c *Constrained) ExtraConstraints() Constraints {
 }
 
 // PerformLayout implements Object.
-func (c *Constrained) PerformLayout() f32.Point {
+func (c *Constrained) PerformLayout() curve.Size {
 	cs := c.extraConstraints.Enforce(c.Handle().Constraints())
 	Layout(c.Child, cs, true)
 	return c.Child.Handle().Size()
 }
 
 // PerformPaint implements Object.
-func (c *Constrained) PerformPaint(r *Renderer, ops *op.Ops) {
-	r.Paint(c.Child).Add(ops)
+func (c *Constrained) PerformPaint(r *Renderer, scene *jello.Scene) {
+	r.PaintAt(c.Child, scene, curve.Point{})
 }
 
 type Opacity struct {
@@ -175,24 +181,25 @@ type Opacity struct {
 }
 
 // PerformLayout implements Object.
-func (o *Opacity) PerformLayout() (size f32.Point) {
+func (o *Opacity) PerformLayout() curve.Size {
 	if o.Child != nil {
 		return Layout(o.Child, o.constraints, true)
 	} else {
-		return o.constraints.Constrain(f32.Pt(0, 0))
+		return o.constraints.Constrain(curve.Sz(0, 0))
 	}
 }
 
 // PerformPaint implements Object.
-func (o *Opacity) PerformPaint(r *Renderer, ops *op.Ops) {
+func (o *Opacity) PerformPaint(r *Renderer, scene *jello.Scene) {
 	switch o.opacity {
 	case 0:
 		return
 	case 1:
-		r.Paint(o.Child).Add(ops)
+		r.PaintAt(o.Child, scene, curve.Point{})
 	default:
-		defer paint.PushOpacity(ops, o.opacity).Pop()
-		r.Paint(o.Child).Add(ops)
+		scene.PushLayer(gfx.BlendMode{}, o.opacity, curve.Identity, nil)
+		defer scene.PopLayer()
+		r.PaintAt(o.Child, scene, curve.Point{})
 	}
 }
 

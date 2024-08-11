@@ -8,13 +8,10 @@ package render
 import (
 	"time"
 
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/gutter/f32"
-	"honnef.co/go/gutter/io/pointer"
-
-	"gioui.org/app"
-	giopointer "gioui.org/io/pointer"
-	"gioui.org/op"
+	"honnef.co/go/gutter/wsi"
+	"honnef.co/go/jello"
 )
 
 type Binding struct {
@@ -22,12 +19,15 @@ type Binding struct {
 	htr           hitTestResult
 }
 
-func NewBinding(win *app.Window) *Binding {
+func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 	b := &Binding{
 		PipelineOwner: NewPipelineOwner(),
 	}
-	b.PipelineOwner.OnNeedVisualUpdate = win.Invalidate
-	b.PipelineOwner.EmitEvent = win.EmitEvent
+	b.PipelineOwner.OnNeedVisualUpdate = win.RequestFrame
+	// TODO(dh): add a wsi.Window.EmitEvent method
+	b.PipelineOwner.EmitEvent = func(ev wsi.Event) {
+		sys.EmitEvent(win, ev)
+	}
 	v := NewView()
 	b.SetView(v)
 	v.PrepareInitialFrame()
@@ -38,14 +38,11 @@ func (b *Binding) RunFrameCallbacks(now time.Time) {
 	b.PipelineOwner.RunFrameCallbacks(now)
 }
 
-func (b *Binding) DrawFrame(e app.FrameEvent, ops *op.Ops) {
+func (b *Binding) DrawFrame(scene *jello.Scene) {
 	debug.Assert(b.View() != nil)
-	b.View().SetConfiguration(ViewConfiguration{Min: f32.FPt(e.Size), Max: f32.FPt(e.Size)})
 	b.PipelineOwner.FlushLayout()
 	b.PipelineOwner.FlushCompositingBits()
-	b.PipelineOwner.FlushPaint(ops)
-	e.Frame(ops)
-
+	b.PipelineOwner.FlushPaint(scene)
 }
 
 func (b *Binding) View() *View {
@@ -57,39 +54,39 @@ func (b *Binding) SetView(v *View) {
 	b.PipelineOwner.SetRootNode(v)
 }
 
-func (b *Binding) HandlePointerEvent(e giopointer.Event) {
-	b.htr.Reset()
-	hitTest(&b.htr, b.PipelineOwner.rootNode, e.Position)
-	hits := b.htr.hits
-	n := 0
-	for _, hit := range hits {
-		if _, ok := hit.Object.(PointerEventHandler); ok {
-			n++
-			if n >= 2 {
-				break
-			}
-		}
-	}
-	var kind pointer.Priority
-	if n < 2 {
-		kind = pointer.Exclusive
-	} else {
-		kind = pointer.Shared
-	}
-	first := true
-	for _, hit := range hits {
-		if obj, ok := hit.Object.(PointerEventHandler); ok {
-			prio := kind
-			if first && prio == pointer.Shared {
-				prio = pointer.Foremost
-			}
-			first = false
-			ev := pointer.FromRaw(e)
-			ev.Priority = prio
-			obj.HandlePointerEvent(hit, ev)
-		}
-	}
-}
+// func (b *Binding) HandlePointerEvent(e giopointer.Event) {
+// 	b.htr.Reset()
+// 	hitTest(&b.htr, b.PipelineOwner.rootNode, e.Position)
+// 	hits := b.htr.hits
+// 	n := 0
+// 	for _, hit := range hits {
+// 		if _, ok := hit.Object.(PointerEventHandler); ok {
+// 			n++
+// 			if n >= 2 {
+// 				break
+// 			}
+// 		}
+// 	}
+// 	var kind pointer.Priority
+// 	if n < 2 {
+// 		kind = pointer.Exclusive
+// 	} else {
+// 		kind = pointer.Shared
+// 	}
+// 	first := true
+// 	for _, hit := range hits {
+// 		if obj, ok := hit.Object.(PointerEventHandler); ok {
+// 			prio := kind
+// 			if first && prio == pointer.Shared {
+// 				prio = pointer.Foremost
+// 			}
+// 			first = false
+// 			ev := pointer.FromRaw(e)
+// 			ev.Priority = prio
+// 			obj.HandlePointerEvent(hit, ev)
+// 		}
+// 	}
+// }
 
 var _ Object = (*View)(nil)
 
@@ -98,7 +95,6 @@ type View struct {
 	SingleChild
 
 	r             *Renderer
-	ops           op.Ops
 	configuration ViewConfiguration
 }
 
@@ -108,9 +104,9 @@ func NewView() *View {
 	}
 }
 
-func (v *View) PerformPaint(r *Renderer, ops *op.Ops) {
+func (v *View) PerformPaint(r *Renderer, scene *jello.Scene) {
 	if v.Child != nil {
-		r.Paint(v.Child).Add(ops)
+		scene.Append(r.Paint(v.Child), curve.Identity)
 	}
 }
 
@@ -134,7 +130,7 @@ func (v *View) constraints() Constraints {
 	return v.configuration
 }
 
-func (v *View) PerformLayout() f32.Point {
+func (v *View) PerformLayout() curve.Size {
 	sizedByChild := !v.constraints().Tight()
 	if v.Child != nil {
 		Layout(v.Child, v.constraints(), sizedByChild)

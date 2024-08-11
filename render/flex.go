@@ -8,8 +8,8 @@ package render
 import (
 	"math"
 
-	"gioui.org/f32"
-	"gioui.org/op"
+	"honnef.co/go/curve"
+	"honnef.co/go/jello"
 )
 
 type FlexFit uint8
@@ -101,7 +101,7 @@ func (f *Flex) PerformSetupParentData(child Object) {
 	child.Handle().ParentData = &FlexParentData{}
 }
 
-func (f *Flex) PerformLayout() (size f32.Point) {
+func (f *Flex) PerformLayout() (size curve.Size) {
 	cs := f.constraints
 	sizes := f.computeSizes()
 
@@ -112,18 +112,18 @@ func (f *Flex) PerformLayout() (size f32.Point) {
 	// Align items along the main axis.
 	switch f.direction {
 	case Horizontal:
-		size = cs.Constrain(f32.Pt(actualSize, crossSize))
-		actualSize = size.X
-		crossSize = size.Y
+		size = cs.Constrain(curve.Sz(actualSize, crossSize))
+		actualSize = size.Width
+		crossSize = size.Height
 	case Vertical:
-		size = cs.Constrain(f32.Pt(crossSize, actualSize))
-		actualSize = size.Y
-		crossSize = size.X
+		size = cs.Constrain(curve.Sz(crossSize, actualSize))
+		actualSize = size.Height
+		crossSize = size.Width
 	}
 	actualSizeDelta := actualSize - allocatedSize
 	remainingSpace := max(0.0, actualSizeDelta)
-	var leadingSpace float32
-	var betweenSpace float32
+	var leadingSpace float64
+	var betweenSpace float64
 	switch f.mainAxisAlignment {
 	case MainAxisAlignStart:
 		leadingSpace = 0.0
@@ -137,20 +137,20 @@ func (f *Flex) PerformLayout() (size f32.Point) {
 	case MainAxisAlignSpaceBetween:
 		leadingSpace = 0.0
 		if len(f.children) > 1 {
-			betweenSpace = remainingSpace / float32(len(f.children)-1)
+			betweenSpace = remainingSpace / float64(len(f.children)-1)
 		} else {
 			betweenSpace = 0.0
 		}
 	case MainAxisAlignSpaceAround:
 		if len(f.children) > 0 {
-			betweenSpace = remainingSpace / float32(len(f.children))
+			betweenSpace = remainingSpace / float64(len(f.children))
 		} else {
 			betweenSpace = 0.0
 		}
 		leadingSpace = betweenSpace / 2.0
 	case MainAxisAlignSpaceEvenly:
 		if len(f.children) > 0 {
-			betweenSpace = remainingSpace / float32(len(f.children)+1)
+			betweenSpace = remainingSpace / float64(len(f.children)+1)
 		} else {
 			betweenSpace = 0.0
 		}
@@ -160,7 +160,7 @@ func (f *Flex) PerformLayout() (size f32.Point) {
 	// Position elements
 	childMainPosition := leadingSpace
 	for _, child := range f.children {
-		var childCrossPosition float32
+		var childCrossPosition float64
 		switch f.crossAxisAlignment {
 		case CrossAxisAlignStart:
 		case CrossAxisAlignEnd:
@@ -176,9 +176,9 @@ func (f *Flex) PerformLayout() (size f32.Point) {
 		}
 		switch f.direction {
 		case Horizontal:
-			child.Handle().offset = f32.Pt(childMainPosition, childCrossPosition)
+			child.Handle().offset = curve.Pt(childMainPosition, childCrossPosition)
 		case Vertical:
-			child.Handle().offset = f32.Pt(childCrossPosition, childMainPosition)
+			child.Handle().offset = curve.Pt(childCrossPosition, childMainPosition)
 		}
 		childMainPosition += f.getMainSize(child.Handle().size) + betweenSpace
 	}
@@ -186,40 +186,38 @@ func (f *Flex) PerformLayout() (size f32.Point) {
 }
 
 // PerformPaint implements ObjectWithChildren.
-func (f *Flex) PerformPaint(r *Renderer, ops *op.Ops) {
+func (f *Flex) PerformPaint(r *Renderer, scene *jello.Scene) {
 	for _, child := range f.children {
-		stack := op.Affine(f32.Affine2D{}.Offset(child.Handle().offset)).Push(ops)
-		r.Paint(child).Add(ops)
-		stack.Pop()
+		r.PaintAt(child, scene, child.Handle().offset)
 	}
 }
 
-func (f *Flex) getMainSize(size f32.Point) float32 {
+func (f *Flex) getMainSize(size curve.Size) float64 {
 	// XXX copy Gio's Axis abstraction and methods
 	switch f.direction {
 	case Horizontal:
-		return size.X
+		return size.Width
 	case Vertical:
-		return size.Y
+		return size.Height
 	default:
 		panic("unreachable")
 	}
 }
 
-func (f *Flex) getCrossSize(size f32.Point) float32 {
+func (f *Flex) getCrossSize(size curve.Size) float64 {
 	// XXX copy Gio's Axis abstraction and methods
 	switch f.direction {
 	case Horizontal:
-		return size.Y
+		return size.Height
 	case Vertical:
-		return size.X
+		return size.Width
 	default:
 		panic("unreachable")
 	}
 }
 
 func (f *Flex) computeSizes() layoutSizes {
-	getFlex := func(child Object) float32 {
+	getFlex := func(child Object) float64 {
 		d, _ := child.Handle().ParentData.(*FlexParentData)
 		return d.Flex
 	}
@@ -230,19 +228,19 @@ func (f *Flex) computeSizes() layoutSizes {
 
 	// Determine used flex factor, size inflexible items, calculate free space.
 	cs := f.constraints
-	inf := float32(math.Inf(1))
-	var totalFlex float32
-	var maxMainSize float32
+	inf := float64(math.Inf(1))
+	var totalFlex float64
+	var maxMainSize float64
 	if f.direction == Horizontal {
-		maxMainSize = cs.Max.X
+		maxMainSize = cs.Max.Width
 	} else {
-		maxMainSize = cs.Max.Y
+		maxMainSize = cs.Max.Height
 	}
 	canFlex := maxMainSize < inf
 
-	var crossSize float32
+	var crossSize float64
 	// Sum of the sizes of the non-flexible children.
-	var allocatedSize float32
+	var allocatedSize float64
 	var lastFlexChild Object
 	for _, child := range f.children {
 		flex := getFlex(child)
@@ -255,26 +253,26 @@ func (f *Flex) computeSizes() layoutSizes {
 				switch f.direction {
 				case Horizontal:
 					innerCs = Constraints{
-						Min: f32.Pt(0, cs.Max.Y),
-						Max: f32.Pt(inf, cs.Max.Y),
+						Min: curve.Sz(0, cs.Max.Height),
+						Max: curve.Sz(inf, cs.Max.Height),
 					}
 				case Vertical:
 					innerCs = Constraints{
-						Min: f32.Pt(cs.Max.X, 0),
-						Max: f32.Pt(cs.Max.X, inf),
+						Min: curve.Sz(cs.Max.Width, 0),
+						Max: curve.Sz(cs.Max.Width, inf),
 					}
 				}
 			} else {
 				switch f.direction {
 				case Horizontal:
 					innerCs = Constraints{
-						Min: f32.Pt(0, 0),
-						Max: f32.Pt(inf, cs.Max.Y),
+						Min: curve.Sz(0, 0),
+						Max: curve.Sz(inf, cs.Max.Height),
 					}
 				case Vertical:
 					innerCs = Constraints{
-						Min: f32.Pt(0, 0),
-						Max: f32.Pt(cs.Max.X, inf),
+						Min: curve.Sz(0, 0),
+						Max: curve.Sz(cs.Max.Width, inf),
 					}
 				}
 			}
@@ -285,26 +283,26 @@ func (f *Flex) computeSizes() layoutSizes {
 	}
 
 	// Distribute free space to flexible children.
-	var freeSpace float32
+	var freeSpace float64
 	if canFlex {
 		freeSpace = max(0.0, maxMainSize-allocatedSize)
 	}
-	var allocatedFlexSpace float32
+	var allocatedFlexSpace float64
 	if totalFlex > 0 {
-		spacePerFlex := freeSpace / float32(totalFlex)
+		spacePerFlex := freeSpace / float64(totalFlex)
 		for _, child := range f.children {
 			if flex := getFlex(child); flex > 0 {
-				var maxChildExtent float32
+				var maxChildExtent float64
 				if canFlex {
 					if child == lastFlexChild {
 						maxChildExtent = freeSpace - allocatedFlexSpace
 					} else {
-						maxChildExtent = spacePerFlex * float32(flex)
+						maxChildExtent = spacePerFlex * float64(flex)
 					}
 				} else {
 					maxChildExtent = inf
 				}
-				var minChildExtent float32
+				var minChildExtent float64
 				switch getFit(child) {
 				case FlexFitTight:
 					minChildExtent = maxChildExtent
@@ -316,26 +314,26 @@ func (f *Flex) computeSizes() layoutSizes {
 					switch f.direction {
 					case Horizontal:
 						innerConstraints = Constraints{
-							Min: f32.Pt(minChildExtent, cs.Max.Y),
-							Max: f32.Pt(maxChildExtent, cs.Max.Y),
+							Min: curve.Sz(minChildExtent, cs.Max.Height),
+							Max: curve.Sz(maxChildExtent, cs.Max.Height),
 						}
 					case Vertical:
 						innerConstraints = Constraints{
-							Min: f32.Pt(cs.Max.X, minChildExtent),
-							Max: f32.Pt(cs.Max.X, maxChildExtent),
+							Min: curve.Sz(cs.Max.Width, minChildExtent),
+							Max: curve.Sz(cs.Max.Width, maxChildExtent),
 						}
 					}
 				} else {
 					switch f.direction {
 					case Horizontal:
 						innerConstraints = Constraints{
-							Min: f32.Pt(minChildExtent, 0),
-							Max: f32.Pt(maxChildExtent, cs.Max.Y),
+							Min: curve.Sz(minChildExtent, 0),
+							Max: curve.Sz(maxChildExtent, cs.Max.Height),
 						}
 					case Vertical:
 						innerConstraints = Constraints{
-							Min: f32.Pt(0, minChildExtent),
-							Max: f32.Pt(cs.Max.X, maxChildExtent),
+							Min: curve.Sz(0, minChildExtent),
+							Max: curve.Sz(cs.Max.Width, maxChildExtent),
 						}
 					}
 				}
@@ -348,7 +346,7 @@ func (f *Flex) computeSizes() layoutSizes {
 		}
 	}
 
-	var idealSize float32
+	var idealSize float64
 	if canFlex && f.mainAxisSize == MainAxisSizeMax {
 		idealSize = maxMainSize
 	} else {
@@ -362,12 +360,12 @@ func (f *Flex) computeSizes() layoutSizes {
 }
 
 type FlexParentData struct {
-	Flex float32
+	Flex float64
 	Fit  FlexFit
 }
 
 type layoutSizes struct {
-	mainSize      float32
-	crossSize     float32
-	allocatedSize float32
+	mainSize      float64
+	crossSize     float64
+	allocatedSize float64
 }

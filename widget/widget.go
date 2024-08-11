@@ -6,18 +6,17 @@
 package widget
 
 import (
-	"image/color"
 	"reflect"
 	"time"
 
+	"honnef.co/go/color"
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/render"
-
-	"gioui.org/op"
-	"gioui.org/op/paint"
+	"honnef.co/go/jello"
+	"honnef.co/go/jello/gfx"
 )
 
 var _ RenderObjectWidget = (*ColoredBox)(nil)
@@ -95,7 +94,7 @@ func (a *animatedPaddingState) Build(ctx BuildContext) Widget {
 }
 
 type ColoredBox struct {
-	Color color.NRGBA
+	Color color.Color
 	Child Widget
 }
 
@@ -114,28 +113,34 @@ func (c *ColoredBox) CreateElement() Element {
 type renderColoredBox struct {
 	render.Box
 	render.SingleChild
-	color color.NRGBA
+	color color.Color
 }
 
 // PerformLayout implements render.Object.
-func (c *renderColoredBox) PerformLayout() (size f32.Point) {
+func (c *renderColoredBox) PerformLayout() (size curve.Size) {
 	if c.Child == nil {
 		return c.Constraints().Min
 	}
 	return render.Layout(c.Child, c.Constraints(), true)
 }
 
-func (c *renderColoredBox) PerformPaint(r *render.Renderer, ops *op.Ops) {
+func (c *renderColoredBox) PerformPaint(r *render.Renderer, scene *jello.Scene) {
 	sz := c.Size()
-	if sz != f32.Pt(0, 0) {
-		paint.FillShape(ops, c.color, render.FRect{Max: sz}.Op(ops))
+	if sz != curve.Sz(0, 0) {
+		scene.Fill(
+			gfx.NonZero,
+			curve.Identity,
+			gfx.SolidBrush{Color: c.color},
+			curve.Identity,
+			curve.NewRectFromOrigin(curve.Pt(0, 0), sz).Path(0.1),
+		)
 	}
 	if c.Child != nil {
-		r.Paint(c.Child).Add(ops)
+		scene.Append(r.Paint(c.Child), curve.Identity)
 	}
 }
 
-func (r *renderColoredBox) setColor(c color.NRGBA) {
+func (r *renderColoredBox) setColor(c color.Color) {
 	if r.color != c {
 		r.color = c
 		render.MarkNeedsPaint(r)
@@ -149,21 +154,21 @@ func NewRenderObjectElement(w RenderObjectWidget) *SimpleRenderObjectElement {
 }
 
 type SizedBox struct {
-	Width, Height float32
+	Width, Height float64
 	Child         Widget
 }
 
 // CreateRenderObject implements RenderObjectWidget.
 func (box *SizedBox) CreateRenderObject(ctx BuildContext) render.Object {
 	obj := &render.Constrained{}
-	cs := render.Constraints{Min: f32.Pt(box.Width, box.Height), Max: f32.Pt(box.Width, box.Height)}
+	cs := render.Constraints{Min: curve.Sz(box.Width, box.Height), Max: curve.Sz(box.Width, box.Height)}
 	obj.SetExtraConstraints(cs)
 	return obj
 }
 
 // UpdateRenderObject implements RenderObjectWidget.
 func (box *SizedBox) UpdateRenderObject(ctx BuildContext, obj render.Object) {
-	cs := render.Constraints{Min: f32.Pt(box.Width, box.Height), Max: f32.Pt(box.Width, box.Height)}
+	cs := render.Constraints{Min: curve.Sz(box.Width, box.Height), Max: curve.Sz(box.Width, box.Height)}
 	obj.(*render.Constrained).SetExtraConstraints(cs)
 }
 

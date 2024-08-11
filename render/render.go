@@ -11,10 +11,10 @@ import (
 	"slices"
 	"strings"
 
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/gutter/f32"
-
-	"gioui.org/op"
+	"honnef.co/go/jello"
+	"honnef.co/go/jello/jmath"
 )
 
 // TODO implement support for multiple layers
@@ -32,9 +32,8 @@ import (
 
 type Object interface {
 	// PerformLayout lays out the object.
-	PerformLayout() (size f32.Point)
-	// PerformPaint paints the object at the specified offset.
-	PerformPaint(r *Renderer, ops *op.Ops)
+	PerformLayout() (size curve.Size)
+	PerformPaint(r *Renderer, scene *jello.Scene)
 
 	VisitChildren(yield func(Object) bool)
 	Handle() *ObjectHandle
@@ -71,11 +70,11 @@ type ParentDataSetuper interface {
 }
 
 type ObjectHandle struct {
-	size f32.Point
+	size curve.Size
 	// The object's position as a relative offset from the parent object's origin. Having to configure a
 	// child's offset is so common that we have a dedicated field for it, instead of requiring the use of
 	// parentData.
-	offset                     f32.Point
+	offset                     curve.Point
 	ParentData                 any
 	needsPaint                 bool
 	needsLayout                bool
@@ -89,7 +88,7 @@ type ObjectHandle struct {
 }
 
 func (h *ObjectHandle) Handle() *ObjectHandle    { return h }
-func (h *ObjectHandle) Size() f32.Point          { return h.size }
+func (h *ObjectHandle) Size() curve.Size         { return h.size }
 func (h *ObjectHandle) Constraints() Constraints { return h.constraints }
 
 func MarkNeedsPaint(obj Object) {
@@ -99,8 +98,8 @@ func MarkNeedsPaint(obj Object) {
 	}
 	h.needsPaint = true
 
-	// We always have to walk the tree up to the parent because our composition of objects is implemented by
-	// parents calling op.CallOp.
+	// We always have to walk the tree up to the parent because our composition
+	// of objects is implemented by parents appending to a jello.Scene.
 	if h.Parent != nil {
 		MarkNeedsPaint(h.Parent)
 	} else {
@@ -137,39 +136,39 @@ func MarkNeedsLayout(obj Object) {
 func (h *ObjectHandle) SetParent(parent Object) { h.Parent = parent }
 
 type Constraints struct {
-	Min, Max f32.Point
+	Min, Max curve.Size
 }
 
 func (c Constraints) Tight() bool {
-	return c.Min == c.Max && float64(c.Max.X) != math.Inf(1) && float64(c.Max.Y) != math.Inf(1)
+	return c.Min == c.Max && float64(c.Max.Width) != math.Inf(1) && float64(c.Max.Height) != math.Inf(1)
 }
 
 func (c Constraints) Enforce(oc Constraints) Constraints {
 	return Constraints{
-		Min: f32.Point{
-			X: f32.Clamp(c.Min.X, oc.Min.X, oc.Max.X),
-			Y: f32.Clamp(c.Min.Y, oc.Min.Y, oc.Max.Y),
+		Min: curve.Size{
+			Width:  jmath.Clamp(c.Min.Width, oc.Min.Width, oc.Max.Width),
+			Height: jmath.Clamp(c.Min.Height, oc.Min.Height, oc.Max.Height),
 		},
-		Max: f32.Point{
-			X: f32.Clamp(c.Max.X, oc.Min.X, oc.Max.X),
-			Y: f32.Clamp(c.Max.Y, oc.Min.Y, oc.Max.Y),
+		Max: curve.Size{
+			Width:  jmath.Clamp(c.Max.Width, oc.Min.Width, oc.Max.Width),
+			Height: jmath.Clamp(c.Max.Height, oc.Min.Height, oc.Max.Height),
 		},
 	}
 }
 
 // Constrain a size so each dimension is in the range [min;max].
-func (c Constraints) Constrain(size f32.Point) f32.Point {
-	if min := c.Min.X; size.X < min {
-		size.X = min
+func (c Constraints) Constrain(size curve.Size) curve.Size {
+	if min := c.Min.Width; size.Width < min {
+		size.Width = min
 	}
-	if min := c.Min.Y; size.Y < min {
-		size.Y = min
+	if min := c.Min.Height; size.Height < min {
+		size.Height = min
 	}
-	if max := c.Max.X; size.X > max {
-		size.X = max
+	if max := c.Max.Width; size.Width > max {
+		size.Width = max
 	}
-	if max := c.Max.Y; size.Y > max {
-		size.Y = max
+	if max := c.Max.Height; size.Height > max {
+		size.Height = max
 	}
 	return size
 }
@@ -259,37 +258,35 @@ func (c *ManyChildren) PerformRemoveChild(child Object) {
 
 type Renderer struct {
 	// XXX delete from map when objects disappear
-	ops map[Object]cachedOps
+	ops map[Object]*jello.Scene
 	// needsLayout []Object
 	// needsPaint  []Object
 }
 
-type cachedOps struct {
-	ops  *op.Ops
-	call op.CallOp
-}
-
-func (r *Renderer) Paint(obj Object) op.CallOp {
-	var ops *op.Ops
+func (r *Renderer) Paint(obj Object) *jello.Scene {
+	var scene *jello.Scene
 	if obj.Handle().needsPaint {
 		obj.Handle().needsPaint = false
 		if cached, ok := r.ops[obj]; ok {
-			ops = cached.ops
-			ops.Reset()
+			cached.Reset()
+			scene = cached
 		} else {
-			ops = new(op.Ops)
+			scene = &jello.Scene{}
 		}
 	} else if cached, ok := r.ops[obj]; ok {
-		return cached.call
+		return cached
 	} else {
-		ops = new(op.Ops)
+		scene = &jello.Scene{}
 	}
 
-	m := op.Record(ops)
-	obj.PerformPaint(r, ops)
-	call := m.Stop()
-	r.ops[obj] = cachedOps{ops, call}
-	return call
+	obj.PerformPaint(r, scene)
+	r.ops[obj] = scene
+	return scene
+}
+
+func (r *Renderer) PaintAt(obj Object, scene *jello.Scene, offset curve.Point) {
+	fragment := r.Paint(obj)
+	scene.Append(fragment, curve.Translate(curve.Vec2(offset)))
 }
 
 func isType[T any](obj any) bool {
@@ -297,8 +294,8 @@ func isType[T any](obj any) bool {
 	return ok
 }
 
-func Layout(obj Object, cs Constraints, parentUsesSize bool) f32.Point {
-	if cs.Min.X > cs.Max.X || cs.Min.Y > cs.Max.Y || cs.Min.X < 0 || cs.Min.Y < 0 {
+func Layout(obj Object, cs Constraints, parentUsesSize bool) curve.Size {
+	if cs.Min.Width > cs.Max.Width || cs.Min.Height > cs.Max.Height || cs.Min.Width < 0 || cs.Min.Height < 0 {
 		panic(fmt.Sprintf("constraints %v are malformed", cs))
 	}
 
@@ -343,7 +340,7 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) f32.Point {
 	MarkNeedsPaint(obj)
 
 	sz := obj.Handle().Size()
-	if sz.X < cs.Min.X || sz.X > cs.Max.X || sz.Y < cs.Min.Y || sz.Y > cs.Max.Y {
+	if sz.Width < cs.Min.Width || sz.Width > cs.Max.Width || sz.Height < cs.Min.Height || sz.Height > cs.Max.Height {
 		panic(fmt.Sprintf("(%[1]T)(%[1]p).Layout violated constraints %v by computing size %v", obj, cs, sz))
 	}
 
@@ -361,7 +358,7 @@ func cleanRelayoutBoundary(child Object) bool {
 
 func NewRenderer() *Renderer {
 	return &Renderer{
-		ops: make(map[Object]cachedOps),
+		ops: make(map[Object]*jello.Scene),
 	}
 }
 

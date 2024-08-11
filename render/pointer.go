@@ -6,10 +6,9 @@
 package render
 
 import (
-	"honnef.co/go/gutter/f32"
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/io/pointer"
-
-	"gioui.org/op"
+	"honnef.co/go/jello"
 )
 
 var _ Object = (*PointerRegion)(nil)
@@ -17,13 +16,13 @@ var _ PointerEventHandler = (*PointerRegion)(nil)
 
 type HitTestEntry struct {
 	Object Object
-	Offset f32.Point
+	Offset curve.Point
 }
 
 type hitTestResult struct {
 	hits           []HitTestEntry
-	transform      f32.Affine2D
-	transformStack []f32.Affine2D
+	transform      curve.Affine
+	transformStack []curve.Affine
 }
 
 func (ht *hitTestResult) Reset() {
@@ -31,7 +30,7 @@ func (ht *hitTestResult) Reset() {
 	ht.hits = ht.hits[:0]
 }
 
-func (ht *hitTestResult) PushTransform(trans f32.Affine2D) {
+func (ht *hitTestResult) PushTransform(trans curve.Affine) {
 	ht.transformStack = append(ht.transformStack, ht.transform)
 	ht.transform = ht.transform.Mul(trans)
 }
@@ -43,29 +42,29 @@ func (ht *hitTestResult) PopTransform() {
 	}
 }
 
-func (ht *hitTestResult) Transform(p f32.Point) f32.Point {
-	return ht.transform.Transform(p)
+func (ht *hitTestResult) Transform(p curve.Point) curve.Point {
+	return p.Transform(ht.transform)
 }
 
-func (ht *hitTestResult) PushOffset(offset f32.Point) {
-	ht.PushTransform(f32.Affine2D{}.Offset(offset).Invert())
+func (ht *hitTestResult) PushOffset(offset curve.Point) {
+	ht.PushTransform(curve.Translate(curve.Vec2(offset)).Invert())
 }
 
-func (ht *hitTestResult) Add(obj Object, pos f32.Point) {
+func (ht *hitTestResult) Add(obj Object, pos curve.Point) {
 	ht.hits = append(ht.hits, HitTestEntry{obj, pos})
 }
 
 type HitTester interface {
-	PerformHitTest(res *hitTestResult, pos f32.Point) bool
+	PerformHitTest(res *hitTestResult, pos curve.Point) bool
 }
 
-func hitTest(res *hitTestResult, obj Object, pos f32.Point) bool {
+func hitTest(res *hitTestResult, obj Object, pos curve.Point) bool {
 	if ht, ok := obj.(HitTester); ok {
 		return ht.PerformHitTest(res, pos)
 	} else {
 		h := obj.Handle()
 		tpos := res.Transform(pos)
-		if !(f32.Rectangle{Min: f32.Pt(0, 0), Max: h.size}).Contains(tpos) {
+		if !curve.NewRectFromPoints(curve.Pt(0, 0), curve.Point(h.size.AsVec2())).Contains(tpos) {
 			return false
 		}
 		// If we hit a child, or are opaque, then we've been hit
@@ -79,7 +78,7 @@ func hitTest(res *hitTestResult, obj Object, pos f32.Point) bool {
 	}
 }
 
-func hitTestChildren(res *hitTestResult, obj Object, pos f32.Point) bool {
+func hitTestChildren(res *hitTestResult, obj Object, pos curve.Point) bool {
 	hit := false
 	obj.VisitChildren(func(o Object) bool {
 		res.PushOffset(o.Handle().offset)
@@ -115,7 +114,7 @@ type PointerRegion struct {
 }
 
 // PerformLayout implements render.Object.
-func (c *PointerRegion) PerformLayout() (size f32.Point) {
+func (c *PointerRegion) PerformLayout() curve.Size {
 	if c.Child != nil {
 		return Layout(c.Child, c.Constraints(), true)
 	} else {
@@ -124,9 +123,9 @@ func (c *PointerRegion) PerformLayout() (size f32.Point) {
 }
 
 // PerformPaint implements render.Object.
-func (c *PointerRegion) PerformPaint(r *Renderer, ops *op.Ops) {
+func (c *PointerRegion) PerformPaint(r *Renderer, scene *jello.Scene) {
 	if c.Child != nil {
-		r.Paint(c.Child).Add(ops)
+		r.PaintAt(c.Child, scene, curve.Point{})
 	}
 }
 

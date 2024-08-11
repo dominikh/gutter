@@ -12,10 +12,8 @@ import (
 	"slices"
 	"unsafe"
 
-	"gioui.org/app"
-	"gioui.org/unit"
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/gutter/f32"
 	"honnef.co/go/gutter/mem"
 	"honnef.co/go/gutter/render"
 )
@@ -1310,13 +1308,6 @@ func (m *MediaQuery) CreateElement() Element {
 }
 
 type MediaQueryData struct {
-	Metric unit.Metric
-	Size   f32.Point
-}
-
-func MediaQueryDataFromEvent(e app.FrameEvent) MediaQueryData {
-	return MediaQueryData{
-		Metric: e.Metric,
-		Size:   f32.FPt(e.Size),
-	}
+	Scale float64
+	Size  curve.Size
 }
