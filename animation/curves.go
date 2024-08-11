@@ -4,7 +4,12 @@
 
 package animation
 
-import "math"
+import (
+	"math"
+
+	"honnef.co/go/curve"
+	"honnef.co/go/jello/jmath"
+)
 
 func EaseInSine(t float64) float64 {
 	return 1 - math.Cos((t*math.Pi)/2)
@@ -214,5 +219,61 @@ func EaseInOutBack(t float64) float64 {
 		return (2 * t * 2 * t * ((c2+1)*2*t - c2)) / 2
 	} else {
 		return ((2*t-2)*(2*t-2)*((c2+1)*(t*2-2)+c2) + 2) / 2
+	}
+}
+
+// EaseCubicBezier uses a cubic Bézier curve to map the input t to an output t′,
+// similar to cubic Bézier easing functions in CSS and many other tools.
+//
+// The first and last control points are fixed to (0, 0) and (1, 1), and the x
+// coordinates of the remaining two control points are constrained to [0, 1).
+// This ensures that x(t) is monotonically increasing.
+type EaseCubicBezier struct {
+	// We'll call the argument p (for progress) instead of the usual t to avoid
+	// confusion with the conventional use of t in Bézier curves, which
+	// describes the progress along the curve. We'll use p′ for the output
+	// value.
+	//
+	// A Bézier curve is described by two parametric functions x(t) and y(t).
+	// The x axis corresponds to values of p and the y axis corresponds to
+	// values of p′. To evaluate the curve at p, we're trying to solve x(t) =
+	// p for t. This value is plugged into y(t) to get p′. Solving for t boils
+	// down to intersecting the curve with a vertical line at x = p, which is
+	// equivalent to cubic root finding. This process is only possible because
+	// we've ensured monotonically increasing x(t), which means that for any
+	// value of p, there is only one possible value of t for which x(t) = p.
+
+	P1, P2 curve.Point
+}
+
+func (ecb EaseCubicBezier) Ease(p float64) float64 {
+	p0 := curve.Pt(0, 0)
+	p1 := curve.Pt(jmath.Clamp(ecb.P1.X, 0, 1), ecb.P1.Y)
+	p2 := curve.Pt(jmath.Clamp(ecb.P2.X, 0, 1), ecb.P2.Y)
+	p3 := curve.Pt(1, 1)
+
+	cb := curve.CubicBez{
+		P0: p0,
+		P1: p1,
+		P2: p2,
+		P3: p3,
+	}
+
+	l := curve.Line{
+		P0: curve.Pt(p, 0),
+		P1: curve.Pt(p, 1),
+	}
+	intersections, n := cb.IntersectLine(l)
+	if n == 0 {
+		// This should be impossible.
+		return p
+	} else {
+		// There should be exactly one intersection, but we'll silently ignore
+		// any additional ones.
+
+		// Clamp to [0, 1) because the value might be slightly outside those
+		// bounds at the edges.
+		t := jmath.Clamp(intersections[0].SegmentT, 0, 1)
+		return cb.Eval(t).Y
 	}
 }

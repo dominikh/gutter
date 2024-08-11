@@ -41,8 +41,8 @@ type Animation[T any] struct {
 	EndTime    time.Time
 	StartValue T
 	EndValue   T
-	Compute    func(start, end T, t float64) T
-	Curve      func(t float64) float64
+	Compute    Tween[T]
+	Curve      Ease
 }
 
 func (anim *Animation[T]) Start(now time.Time, d time.Duration, start, end T) {
