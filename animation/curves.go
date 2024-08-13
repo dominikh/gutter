@@ -11,6 +11,10 @@ import (
 	"honnef.co/go/jello/jmath"
 )
 
+func EaseIdentity(t float64) float64 {
+	return t
+}
+
 func EaseInSine(t float64) float64 {
 	return 1 - math.Cos((t*math.Pi)/2)
 }
@@ -251,6 +255,10 @@ func (ecb EaseCubicBezier) Ease(p float64) float64 {
 	p1 := curve.Pt(jmath.Clamp(ecb.P1.X, 0, 1), ecb.P1.Y)
 	p2 := curve.Pt(jmath.Clamp(ecb.P2.X, 0, 1), ecb.P2.Y)
 	p3 := curve.Pt(1, 1)
+
+	if p1 == curve.Pt(0, 0) && p2 == curve.Pt(1, 1) {
+		return p
+	}
 
 	cb := curve.CubicBez{
 		P0: p0,

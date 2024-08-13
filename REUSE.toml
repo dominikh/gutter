@@ -3,3 +3,9 @@ version = 1
 path = ["**/*_string.go"]
 SPDX-FileCopyrightText = "none"
 SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = ["**/testdata/zipper.json"]
+SPDX-FileCopyrightText = "Google LLC"
+SPDX-License-Identifier = "CC-BY-4.0"
+SPDX-FileAttributionText = "This is the :zipper-face: emote from https://googlefonts.github.io/noto-emoji-animation/"

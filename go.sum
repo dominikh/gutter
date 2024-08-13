@@ -33,8 +33,8 @@ golang.org/x/sys v0.0.0-20201119102817-f84b799fce68/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.0.0-20220825204002-c680a09ffe64 h1:UiNENfZ8gDvpiWw7IpOMQ27spWmThO1RwwdQVbJahJM=
-golang.org/x/sys v0.0.0-20220825204002-c680a09ffe64/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.21.0 h1:rF+pYz3DAGSQAxAu1CbC7catZg4ebC4UIeIhKxBZvws=
+golang.org/x/sys v0.21.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
@@ -46,7 +46,11 @@ golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e/go.mod h1:n7NCudcB/nEzxVGm
 golang.org/x/tools v0.0.0-20191119224855-298f0cb1881e/go.mod h1:b+2E5dAYhXwXZwtnZ6UAqBI28+e2cm9otk0dWdXHAEo=
 golang.org/x/tools v0.1.12/go.mod h1:hNGJHUnrk76NpqgfD5Aqm5Crs+Hm0VOH/i9J2+nxYbc=
 golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+honnef.co/go/color v0.0.0-20240902224312-bee6d5d40ebe h1:7haS695lfcYn4dgrzjI4GX9PoQP2sBagyUYtWnip6Hw=
+honnef.co/go/color v0.0.0-20240902224312-bee6d5d40ebe/go.mod h1:oOmaoGfEfvILH1ofpWB1DIuSDjyrkPJrKFIDVIuENfk=
 honnef.co/go/curve v0.0.0-20240818152704-b58745d40a16 h1:0Gy4TuDHCDLk2FylcDXr9BXQXbwHyik/o8NFfv3hAXc=
 honnef.co/go/curve v0.0.0-20240818152704-b58745d40a16/go.mod h1:qoI+1aKyxvS7Ni/ZX2NKQe2S6PfL08gR3hTHK3/E+io=
 honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219 h1:eAfH4ggfmuaBXEiGgh7fgOwb3TkMF4DjIMd2jZFhNjY=
 honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219/go.mod h1:VihtG2+1umnYcb4D0uf5UZEZwgAejiRdB7EX/9VUyhk=
+honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2 h1:EdPfUaQ2twptNroHDLF0kACfXJB0LbEyHzw8iJwoT+8=
+honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2/go.mod h1:6TmSwH8eepkcwN0dPPAkTpxwjEJzgJq5Bv2HD3HHAP8=
