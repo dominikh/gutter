@@ -9,6 +9,7 @@ toolchain go1.23.0
 
 require (
 	gioui.org v0.4.1
+	github.com/go-json-experiment/json v0.0.0-20240815175050-ebd3a8989ca1
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
 	honnef.co/go/curve v0.0.0-20240818152704-b58745d40a16
 	honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219
