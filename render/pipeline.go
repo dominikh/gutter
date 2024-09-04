@@ -15,7 +15,7 @@ import (
 )
 
 type PipelineOwner struct {
-	renderer                          *Renderer
+	painter                           *Painter
 	rootNode                          Object
 	nodesNeedingLayout                mem.DoubleBufferedSlice[Object]
 	nodesNeedingCompositingBitsUpdate []Object
@@ -26,7 +26,7 @@ type PipelineOwner struct {
 
 func NewPipelineOwner() *PipelineOwner {
 	return &PipelineOwner{
-		renderer: NewRenderer(),
+		painter: NewPainter(),
 	}
 }
 
@@ -92,7 +92,7 @@ func layoutWithoutResize(obj Object) {
 
 func (o *PipelineOwner) FlushPaint(scene *jello.Scene) {
 	if o.rootNode != nil {
-		o.renderer.PaintAt(o.rootNode, scene, curve.Point{})
+		o.painter.PaintAt(o.rootNode, scene, curve.Point{})
 	}
 }
 

@@ -186,9 +186,9 @@ func (f *Flex) PerformLayout() (size curve.Size) {
 }
 
 // PerformPaint implements ObjectWithChildren.
-func (f *Flex) PerformPaint(r *Renderer, scene *jello.Scene) {
+func (f *Flex) PerformPaint(p *Painter, scene *jello.Scene) {
 	for _, child := range f.children {
-		r.PaintAt(child, scene, child.Handle().offset)
+		p.PaintAt(child, scene, child.Handle().offset)
 	}
 }
 

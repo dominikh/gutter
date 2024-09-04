@@ -124,7 +124,7 @@ func (c *renderColoredBox) PerformLayout() (size curve.Size) {
 	return render.Layout(c.Child, c.Constraints(), true)
 }
 
-func (c *renderColoredBox) PerformPaint(r *render.Renderer, scene *jello.Scene) {
+func (c *renderColoredBox) PerformPaint(p *render.Painter, scene *jello.Scene) {
 	sz := c.Size()
 	if sz != curve.Sz(0, 0) {
 		scene.Fill(
@@ -136,7 +136,7 @@ func (c *renderColoredBox) PerformPaint(r *render.Renderer, scene *jello.Scene) 
 		)
 	}
 	if c.Child != nil {
-		scene.Append(r.Paint(c.Child), curve.Identity)
+		scene.Append(p.Paint(c.Child), curve.Identity)
 	}
 }
 

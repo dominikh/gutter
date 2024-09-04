@@ -37,7 +37,7 @@ func (w *Clip) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements Object.
-func (w *Clip) PerformPaint(r *Renderer, scene *jello.Scene) {
+func (w *Clip) PerformPaint(p *Painter, scene *jello.Scene) {
 	scene.PushLayer(
 		gfx.BlendMode{},
 		1,
@@ -45,7 +45,7 @@ func (w *Clip) PerformPaint(r *Renderer, scene *jello.Scene) {
 		curve.NewRectFromPoints(curve.Pt(0, 0), curve.Point(w.Handle().Size().AsVec2())).Path(0.1),
 	)
 	defer scene.PopLayer()
-	r.PaintAt(w.Child, scene, curve.Point{})
+	p.PaintAt(w.Child, scene, curve.Point{})
 }
 
 // FillColor fills an infinite plane with the provided color.
@@ -78,7 +78,7 @@ func (c *FillColor) PerformLayout() curve.Size {
 func (c *FillColor) SizedByParent() {}
 
 // PerformPaint implements Object.
-func (c *FillColor) PerformPaint(_ *Renderer, scene *jello.Scene) {
+func (c *FillColor) PerformPaint(_ *Painter, scene *jello.Scene) {
 	scene.Fill(
 		gfx.NonZero,
 		curve.Identity,
@@ -111,38 +111,38 @@ func NewPadding(padding Inset) *Padding {
 	return &Padding{inset: padding}
 }
 
-func (p *Padding) SetInset(ins Inset) {
-	if p.inset != ins {
-		p.inset = ins
-		MarkNeedsLayout(p)
+func (pad *Padding) SetInset(ins Inset) {
+	if pad.inset != ins {
+		pad.inset = ins
+		MarkNeedsLayout(pad)
 	}
 }
 
-func (p *Padding) Inset() Inset {
-	return p.inset
+func (pad *Padding) Inset() Inset {
+	return pad.inset
 }
 
 // PerformLayout implements Object.
-func (p *Padding) PerformLayout() curve.Size {
-	cs := p.Handle().Constraints()
-	if p.Child == nil {
-		return cs.Constrain(curve.Sz(p.inset.Left+p.inset.Right, p.inset.Top+p.inset.Bottom))
+func (pad *Padding) PerformLayout() curve.Size {
+	cs := pad.Handle().Constraints()
+	if pad.Child == nil {
+		return cs.Constrain(curve.Sz(pad.inset.Left+pad.inset.Right, pad.inset.Top+pad.inset.Bottom))
 	}
-	horiz := p.inset.Left + p.inset.Right
-	vert := p.inset.Top + p.inset.Bottom
+	horiz := pad.inset.Left + pad.inset.Right
+	vert := pad.inset.Top + pad.inset.Bottom
 	newMin := curve.Sz(max(0, cs.Min.Width-horiz), max(0, cs.Min.Height-vert))
 	innerCs := Constraints{
 		Min: newMin,
 		Max: curve.Sz(max(newMin.Width, cs.Max.Width-horiz), max(newMin.Height, cs.Max.Height-vert)),
 	}
-	childSz := Layout(p.Child, innerCs, true)
-	p.Child.Handle().offset = curve.Pt(p.inset.Left, p.inset.Top)
+	childSz := Layout(pad.Child, innerCs, true)
+	pad.Child.Handle().offset = curve.Pt(pad.inset.Left, pad.inset.Top)
 	return cs.Constrain(childSz.Add(curve.Vec(horiz, vert)))
 }
 
 // PerformPaint implements Object.
-func (p *Padding) PerformPaint(r *Renderer, scene *jello.Scene) {
-	r.PaintAt(p.Child, scene, p.Child.Handle().offset)
+func (pad *Padding) PerformPaint(p *Painter, scene *jello.Scene) {
+	p.PaintAt(pad.Child, scene, pad.Child.Handle().offset)
 }
 
 type Constrained struct {
@@ -170,8 +170,8 @@ func (c *Constrained) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements Object.
-func (c *Constrained) PerformPaint(r *Renderer, scene *jello.Scene) {
-	r.PaintAt(c.Child, scene, curve.Point{})
+func (c *Constrained) PerformPaint(p *Painter, scene *jello.Scene) {
+	p.PaintAt(c.Child, scene, curve.Point{})
 }
 
 type Opacity struct {
@@ -190,16 +190,16 @@ func (o *Opacity) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements Object.
-func (o *Opacity) PerformPaint(r *Renderer, scene *jello.Scene) {
+func (o *Opacity) PerformPaint(p *Painter, scene *jello.Scene) {
 	switch o.opacity {
 	case 0:
 		return
 	case 1:
-		r.PaintAt(o.Child, scene, curve.Point{})
+		p.PaintAt(o.Child, scene, curve.Point{})
 	default:
 		scene.PushLayer(gfx.BlendMode{}, o.opacity, curve.Identity, nil)
 		defer scene.PopLayer()
-		r.PaintAt(o.Child, scene, curve.Point{})
+		p.PaintAt(o.Child, scene, curve.Point{})
 	}
 }
 

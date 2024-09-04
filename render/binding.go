@@ -83,19 +83,20 @@ type View struct {
 	ObjectHandle
 	SingleChild
 
-	r             *Renderer
+	// XXX do we need this field?
+	p             *Painter
 	configuration ViewConfiguration
 }
 
 func NewView() *View {
 	return &View{
-		r: NewRenderer(),
+		p: NewPainter(),
 	}
 }
 
-func (v *View) PerformPaint(r *Renderer, scene *jello.Scene) {
+func (v *View) PerformPaint(p *Painter, scene *jello.Scene) {
 	if v.Child != nil {
-		scene.Append(r.Paint(v.Child), curve.Identity)
+		scene.Append(p.Paint(v.Child), curve.Identity)
 	}
 }
 

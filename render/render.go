@@ -29,7 +29,7 @@ import (
 type Object interface {
 	// PerformLayout lays out the object.
 	PerformLayout() (size curve.Size)
-	PerformPaint(r *Renderer, scene *jello.Scene)
+	PerformPaint(p *Painter, scene *jello.Scene)
 
 	VisitChildren(yield func(Object) bool)
 	Handle() *ObjectHandle
@@ -252,36 +252,34 @@ func (c *ManyChildren) PerformRemoveChild(child Object) {
 	c.children = slices.Delete(c.children, idx, idx+1)
 }
 
-type Renderer struct {
+type Painter struct {
 	// XXX delete from map when objects disappear
 	cachedScenes map[Object]*jello.Scene
-	// needsLayout []Object
-	// needsPaint  []Object
 }
 
-func (r *Renderer) Paint(obj Object) *jello.Scene {
+func (p *Painter) Paint(obj Object) *jello.Scene {
 	var scene *jello.Scene
 	if obj.Handle().needsPaint {
 		obj.Handle().needsPaint = false
-		if cached, ok := r.cachedScenes[obj]; ok {
+		if cached, ok := p.cachedScenes[obj]; ok {
 			cached.Reset()
 			scene = cached
 		} else {
 			scene = &jello.Scene{}
 		}
-	} else if cached, ok := r.cachedScenes[obj]; ok {
+	} else if cached, ok := p.cachedScenes[obj]; ok {
 		return cached
 	} else {
 		scene = &jello.Scene{}
 	}
 
-	obj.PerformPaint(r, scene)
-	r.cachedScenes[obj] = scene
+	obj.PerformPaint(p, scene)
+	p.cachedScenes[obj] = scene
 	return scene
 }
 
-func (r *Renderer) PaintAt(obj Object, scene *jello.Scene, offset curve.Point) {
-	fragment := r.Paint(obj)
+func (p *Painter) PaintAt(obj Object, scene *jello.Scene, offset curve.Point) {
+	fragment := p.Paint(obj)
 	scene.Append(fragment, curve.Translate(curve.Vec2(offset)))
 }
 
@@ -352,8 +350,8 @@ func cleanRelayoutBoundary(child Object) bool {
 	return true
 }
 
-func NewRenderer() *Renderer {
-	return &Renderer{
+func NewPainter() *Painter {
+	return &Painter{
 		cachedScenes: make(map[Object]*jello.Scene),
 	}
 }

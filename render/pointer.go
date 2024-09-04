@@ -123,9 +123,9 @@ func (c *PointerRegion) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements render.Object.
-func (c *PointerRegion) PerformPaint(r *Renderer, scene *jello.Scene) {
+func (c *PointerRegion) PerformPaint(p *Painter, scene *jello.Scene) {
 	if c.Child != nil {
-		r.PaintAt(c.Child, scene, curve.Point{})
+		p.PaintAt(c.Child, scene, curve.Point{})
 	}
 }
 
