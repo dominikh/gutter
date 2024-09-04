@@ -17,6 +17,7 @@ import (
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/mem"
 	"honnef.co/go/gutter/render"
+	"honnef.co/go/gutter/wsi"
 )
 
 type ElementTransitionKind uint8
@@ -604,6 +605,7 @@ type BuildOwner struct {
 	OnBuildScheduled            func()
 	scheduledFlushDirtyElements bool
 	Renderer                    *render.Renderer
+	EmitEvent                   func(ev wsi.Event)
 	globals                     map[GlobalKey]Element
 	inDrawFrame                 bool
 	nextFrameCallbacks          mem.DoubleBufferedSlice[func(now time.Time)]

@@ -428,7 +428,7 @@ func (c *channelBuilderState[E]) startGoroutine() {
 				if !ok {
 					return
 				}
-				c.Element.Handle().BuildOwner.Renderer.EmitEvent(CallbackEvent(func() {
+				c.Element.Handle().BuildOwner.EmitEvent(CallbackEvent(func() {
 					c.value = v
 					MarkNeedsBuild(c.Element)
 				}))

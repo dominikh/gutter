@@ -11,7 +11,6 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/mem"
-	"honnef.co/go/gutter/wsi"
 	"honnef.co/go/jello"
 )
 
@@ -22,19 +21,13 @@ type Renderer struct {
 	nodesNeedingCompositingBitsUpdate []Object
 	shouldMergeDirtyNodes             bool
 	OnNeedVisualUpdate                func()
-	EmitEvent                         func(ev wsi.Event)
 
 	htr hitTestResult
 }
 
-func NewRenderer(sys *wsi.System, win wsi.Window) *Renderer {
+func NewRenderer() *Renderer {
 	r := &Renderer{
-		painter:            NewPainter(),
-		OnNeedVisualUpdate: win.RequestFrame,
-		EmitEvent: func(ev wsi.Event) {
-			// TODO(dh): add a wsi.Window.EmitEvent method
-			sys.EmitEvent(win, ev)
-		},
+		painter: NewPainter(),
 	}
 	v := NewView()
 	r.SetRootNode(v)

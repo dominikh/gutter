@@ -31,7 +31,12 @@ type Binding struct {
 func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 	b := &Binding{
 		buildOwner: NewBuildOwner(),
-		Renderer:   render.NewRenderer(sys, win),
+		Renderer:   render.NewRenderer(),
+	}
+	b.Renderer.OnNeedVisualUpdate = win.RequestFrame
+	b.buildOwner.EmitEvent = func(ev wsi.Event) {
+		// TODO(dh): add a wsi.Window.EmitEvent method
+		sys.EmitEvent(win, ev)
 	}
 	b.buildOwner.Renderer = b.Renderer
 	b.buildOwner.OnBuildScheduled = func() {
