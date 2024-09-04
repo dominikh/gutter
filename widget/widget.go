@@ -268,7 +268,14 @@ func (a *animatedOpacityState) Build(ctx BuildContext) Widget {
 	}
 }
 
-func makeAnimatedProperty[T any, W Widget, S State[W]](state S, compute func(start, end T, t float64) T) AnimatedProperty[T, W, S] {
+func makeAnimatedProperty[
+	T any,
+	W Widget,
+	S State[W],
+](
+	state S,
+	compute func(start, end T, t float64) T,
+) AnimatedProperty[T, W, S] {
 	return AnimatedProperty[T, W, S]{
 		state:   state,
 		compute: compute,

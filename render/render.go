@@ -104,6 +104,7 @@ func MarkNeedsPaint(obj Object) {
 		}
 	}
 }
+
 func MarkNeedsLayout(obj Object) {
 	h := obj.Handle()
 	if h.needsLayout {
@@ -234,6 +235,7 @@ func (c *ManyChildren) PerformInsertChild(child Object, after int) {
 	}
 	c.children = slices.Insert(c.children, after+1, child)
 }
+
 func (c *ManyChildren) PerformMoveChild(child Object, after int) {
 	idx := slices.Index(c.children, child)
 	if after == idx {
@@ -247,6 +249,7 @@ func (c *ManyChildren) PerformMoveChild(child Object, after int) {
 		c.children = slices.Insert(c.children, after+1, child)
 	}
 }
+
 func (c *ManyChildren) PerformRemoveChild(child Object) {
 	idx := slices.Index(c.children, child)
 	c.children = slices.Delete(c.children, idx, idx+1)
