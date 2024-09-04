@@ -6,9 +6,6 @@
 package widget
 
 import (
-	"time"
-
-	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/wsi"
@@ -50,13 +47,11 @@ func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 	return b
 }
 
-func (b *Binding) DrawFrame(scene *jello.Scene) {
+func (b *Binding) DrawFrame(ev *wsi.RedrawRequested, scene *jello.Scene) {
 	debug.Assert(!b.buildOwner.inDrawFrame)
 	b.buildOwner.inDrawFrame = true
 	b.AttachRootWidget(b.rootWidget)
-	// XXX get the proper frame time
-	now := time.Now()
-	b.RenderBinding.RunFrameCallbacks(now)
+	b.RenderBinding.RunFrameCallbacks(ev.When)
 	if b.renderViewElement != nil {
 		b.buildOwner.BuildScope(nil)
 	}
@@ -66,10 +61,10 @@ func (b *Binding) DrawFrame(scene *jello.Scene) {
 }
 
 func (b *Binding) AttachRootWidget(rootWidget Widget) {
-	// XXX get the actual dimensions and scale
+	cs := b.RenderBinding.View().Configuration()
 	data := MediaQueryData{
-		Scale: 1.0,
-		Size:  curve.Sz(500, 500),
+		Scale: 1.0, // XXX scale
+		Size:  cs.Max,
 	}
 	if b.mediaQuery == nil || b.mediaQuery.Data != data {
 		b.mediaQuery = &MediaQuery{

@@ -26,10 +26,6 @@ import (
 // TODO should we handle nil children?
 // TODO dry layout/intrinsic dimensions/https://github.com/flutter/flutter/issues/48679
 
-// OPT if we could call op.Ops directly, then we wouldn't have to repaint parents, because their cached ops
-//   would still be calling the repainted ops of the child. However, Gio makes us go through macros, and
-//   macros record both the start and end PC, and we can't expect those to remain the same.
-
 type Object interface {
 	// PerformLayout lays out the object.
 	PerformLayout() (size curve.Size)
@@ -258,7 +254,7 @@ func (c *ManyChildren) PerformRemoveChild(child Object) {
 
 type Renderer struct {
 	// XXX delete from map when objects disappear
-	ops map[Object]*jello.Scene
+	cachedScenes map[Object]*jello.Scene
 	// needsLayout []Object
 	// needsPaint  []Object
 }
@@ -267,20 +263,20 @@ func (r *Renderer) Paint(obj Object) *jello.Scene {
 	var scene *jello.Scene
 	if obj.Handle().needsPaint {
 		obj.Handle().needsPaint = false
-		if cached, ok := r.ops[obj]; ok {
+		if cached, ok := r.cachedScenes[obj]; ok {
 			cached.Reset()
 			scene = cached
 		} else {
 			scene = &jello.Scene{}
 		}
-	} else if cached, ok := r.ops[obj]; ok {
+	} else if cached, ok := r.cachedScenes[obj]; ok {
 		return cached
 	} else {
 		scene = &jello.Scene{}
 	}
 
 	obj.PerformPaint(r, scene)
-	r.ops[obj] = scene
+	r.cachedScenes[obj] = scene
 	return scene
 }
 
@@ -358,7 +354,7 @@ func cleanRelayoutBoundary(child Object) bool {
 
 func NewRenderer() *Renderer {
 	return &Renderer{
-		ops: make(map[Object]*jello.Scene),
+		cachedScenes: make(map[Object]*jello.Scene),
 	}
 }
 

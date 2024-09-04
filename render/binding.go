@@ -113,6 +113,10 @@ func (v *View) PerformPaint(r *Renderer, scene *jello.Scene) {
 // XXX include pxperdp etc in the view configuration
 type ViewConfiguration = Constraints
 
+func (v *View) Configuration() ViewConfiguration {
+	return v.configuration
+}
+
 func (v *View) SetConfiguration(value ViewConfiguration) {
 	if v.configuration == value {
 		return
