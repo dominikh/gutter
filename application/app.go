@@ -120,7 +120,7 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 			ev.Size = wsi.LogicalSize{Width: 500, Height: 500}
 		}
 		sz := curve.Sz(float64(ev.Size.Width), float64(ev.Size.Height))
-		app.widgetBinding.RenderBinding.View().SetConfiguration(render.ViewConfiguration{
+		app.widgetBinding.PipelineOwner.View().SetConfiguration(render.ViewConfiguration{
 			Min: sz,
 			Max: sz,
 		})

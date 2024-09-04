@@ -22,7 +22,7 @@ func RunApp(sys *wsi.System, win wsi.Window, app Widget) *Binding {
 type Binding struct {
 	renderViewElement *RenderObjectToWidgetElement
 	buildOwner        *BuildOwner
-	RenderBinding     *render.Binding
+	PipelineOwner     *render.PipelineOwner
 	rootWidget        Widget
 
 	mediaQuery *MediaQuery
@@ -31,9 +31,9 @@ type Binding struct {
 func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 	b := &Binding{
 		buildOwner:    NewBuildOwner(),
-		RenderBinding: render.NewBinding(sys, win),
+		PipelineOwner: render.NewPipelineOwner(sys, win),
 	}
-	b.buildOwner.PipelineOwner = b.RenderBinding.PipelineOwner
+	b.buildOwner.PipelineOwner = b.PipelineOwner
 	b.buildOwner.OnBuildScheduled = func() {
 		// XXX surely there's a better way to rebuild than to ask (and wait!)
 		// for a frame from wayland
@@ -55,13 +55,13 @@ func (b *Binding) DrawFrame(ev *wsi.RedrawRequested, scene *jello.Scene) {
 	if b.renderViewElement != nil {
 		b.buildOwner.BuildScope(nil)
 	}
-	b.RenderBinding.DrawFrame(scene)
+	b.PipelineOwner.DrawFrame(scene)
 	b.buildOwner.FinalizeTree()
 	b.buildOwner.inDrawFrame = false
 }
 
 func (b *Binding) AttachRootWidget(rootWidget Widget) {
-	cs := b.RenderBinding.View().Configuration()
+	cs := b.PipelineOwner.View().Configuration()
 	data := MediaQueryData{
 		Scale: 1.0, // XXX scale
 		Size:  cs.Max,
@@ -73,7 +73,7 @@ func (b *Binding) AttachRootWidget(rootWidget Widget) {
 		}
 	}
 	b.renderViewElement = (&RenderObjectToWidgetAdapter{
-		Container: b.RenderBinding.View(),
+		Container: b.PipelineOwner.View(),
 		Child:     b.mediaQuery,
 	}).AttachToRenderTree(b.buildOwner, b.renderViewElement)
 }

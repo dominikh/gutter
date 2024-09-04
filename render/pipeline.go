@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/mem"
 	"honnef.co/go/gutter/wsi"
 	"honnef.co/go/jello"
@@ -22,13 +23,69 @@ type PipelineOwner struct {
 	shouldMergeDirtyNodes             bool
 	OnNeedVisualUpdate                func()
 	EmitEvent                         func(ev wsi.Event)
+
+	htr hitTestResult
 }
 
-func NewPipelineOwner() *PipelineOwner {
-	return &PipelineOwner{
-		painter: NewPainter(),
+func NewPipelineOwner(sys *wsi.System, win wsi.Window) *PipelineOwner {
+	po := &PipelineOwner{
+		painter:            NewPainter(),
+		OnNeedVisualUpdate: win.RequestFrame,
+		EmitEvent: func(ev wsi.Event) {
+			// TODO(dh): add a wsi.Window.EmitEvent method
+			sys.EmitEvent(win, ev)
+		},
 	}
+	v := NewView()
+	po.SetRootNode(v)
+	v.PrepareInitialFrame()
+	return po
 }
+
+func (o *PipelineOwner) DrawFrame(scene *jello.Scene) {
+	debug.Assert(o.View() != nil)
+	o.FlushLayout()
+	o.FlushCompositingBits()
+	o.FlushPaint(scene)
+}
+
+func (o *PipelineOwner) View() *View {
+	return o.rootNode.(*View)
+}
+
+// func (b *Binding) HandlePointerEvent(e giopointer.Event) {
+// 	b.htr.Reset()
+// 	hitTest(&b.htr, b.PipelineOwner.rootNode, e.Position)
+// 	hits := b.htr.hits
+// 	n := 0
+// 	for _, hit := range hits {
+// 		if _, ok := hit.Object.(PointerEventHandler); ok {
+// 			n++
+// 			if n >= 2 {
+// 				break
+// 			}
+// 		}
+// 	}
+// 	var kind pointer.Priority
+// 	if n < 2 {
+// 		kind = pointer.Exclusive
+// 	} else {
+// 		kind = pointer.Shared
+// 	}
+// 	first := true
+// 	for _, hit := range hits {
+// 		if obj, ok := hit.Object.(PointerEventHandler); ok {
+// 			prio := kind
+// 			if first && prio == pointer.Shared {
+// 				prio = pointer.Foremost
+// 			}
+// 			first = false
+// 			ev := pointer.FromRaw(e)
+// 			ev.Priority = prio
+// 			obj.HandlePointerEvent(hit, ev)
+// 		}
+// 	}
+// }
 
 func (o *PipelineOwner) RootNode() Object { return o.rootNode }
 func (o *PipelineOwner) SetRootNode(root Object) {
@@ -147,5 +204,60 @@ func Detach(obj Object) {
 	obj.Handle().owner = nil
 	if obj, ok := obj.(Attacher); ok {
 		obj.PerformDetach()
+	}
+}
+
+var _ Object = (*View)(nil)
+
+type View struct {
+	ObjectHandle
+	SingleChild
+
+	configuration ViewConfiguration
+}
+
+func NewView() *View {
+	return &View{}
+}
+
+func (v *View) PerformPaint(p *Painter, scene *jello.Scene) {
+	if v.Child != nil {
+		scene.Append(p.Paint(v.Child), curve.Identity)
+	}
+}
+
+// XXX include pxperdp etc in the view configuration
+type ViewConfiguration = Constraints
+
+func (v *View) Configuration() ViewConfiguration {
+	return v.configuration
+}
+
+func (v *View) SetConfiguration(value ViewConfiguration) {
+	if v.configuration == value {
+		return
+	}
+	v.configuration = value
+	MarkNeedsLayout(v)
+}
+
+func (v *View) PrepareInitialFrame() {
+	ScheduleInitialLayout(v)
+	ScheduleInitialPaint(v)
+}
+
+func (v *View) constraints() Constraints {
+	return v.configuration
+}
+
+func (v *View) PerformLayout() curve.Size {
+	sizedByChild := !v.constraints().Tight()
+	if v.Child != nil {
+		Layout(v.Child, v.constraints(), sizedByChild)
+	}
+	if sizedByChild && v.Child != nil {
+		return v.Child.Handle().size
+	} else {
+		return v.constraints().Min
 	}
 }
