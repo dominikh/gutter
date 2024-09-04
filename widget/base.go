@@ -603,7 +603,7 @@ type BuildOwner struct {
 	dirtyElementsNeedsResorting bool
 	OnBuildScheduled            func()
 	scheduledFlushDirtyElements bool
-	PipelineOwner               *render.PipelineOwner
+	Renderer                    *render.Renderer
 	globals                     map[GlobalKey]Element
 	inDrawFrame                 bool
 	nextFrameCallbacks          mem.DoubleBufferedSlice[func(now time.Time)]
@@ -617,7 +617,7 @@ func NewBuildOwner() *BuildOwner {
 
 func (o *BuildOwner) AddNextFrameCallback(fn func(now time.Time)) {
 	o.nextFrameCallbacks.Front = append(o.nextFrameCallbacks.Front, fn)
-	o.PipelineOwner.RequestVisualUpdate()
+	o.Renderer.RequestVisualUpdate()
 }
 
 func (o *BuildOwner) RunFrameCallbacks(now time.Time) {

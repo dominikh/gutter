@@ -15,7 +15,7 @@ import (
 	"honnef.co/go/jello"
 )
 
-type PipelineOwner struct {
+type Renderer struct {
 	painter                           *Painter
 	rootNode                          Object
 	nodesNeedingLayout                mem.DoubleBufferedSlice[Object]
@@ -27,8 +27,8 @@ type PipelineOwner struct {
 	htr hitTestResult
 }
 
-func NewPipelineOwner(sys *wsi.System, win wsi.Window) *PipelineOwner {
-	po := &PipelineOwner{
+func NewRenderer(sys *wsi.System, win wsi.Window) *Renderer {
+	r := &Renderer{
 		painter:            NewPainter(),
 		OnNeedVisualUpdate: win.RequestFrame,
 		EmitEvent: func(ev wsi.Event) {
@@ -37,20 +37,20 @@ func NewPipelineOwner(sys *wsi.System, win wsi.Window) *PipelineOwner {
 		},
 	}
 	v := NewView()
-	po.SetRootNode(v)
+	r.SetRootNode(v)
 	v.PrepareInitialFrame()
-	return po
+	return r
 }
 
-func (o *PipelineOwner) DrawFrame(scene *jello.Scene) {
-	debug.Assert(o.View() != nil)
-	o.FlushLayout()
-	o.FlushCompositingBits()
-	o.FlushPaint(scene)
+func (r *Renderer) DrawFrame(scene *jello.Scene) {
+	debug.Assert(r.View() != nil)
+	r.FlushLayout()
+	r.FlushCompositingBits()
+	r.FlushPaint(scene)
 }
 
-func (o *PipelineOwner) View() *View {
-	return o.rootNode.(*View)
+func (r *Renderer) View() *View {
+	return r.rootNode.(*View)
 }
 
 // func (b *Binding) HandlePointerEvent(e giopointer.Event) {
@@ -87,57 +87,57 @@ func (o *PipelineOwner) View() *View {
 // 	}
 // }
 
-func (o *PipelineOwner) RootNode() Object { return o.rootNode }
-func (o *PipelineOwner) SetRootNode(root Object) {
-	if o.rootNode == root {
+func (r *Renderer) RootNode() Object { return r.rootNode }
+func (r *Renderer) SetRootNode(root Object) {
+	if r.rootNode == root {
 		return
 	}
-	if o.rootNode != nil {
-		Detach(o.rootNode)
+	if r.rootNode != nil {
+		Detach(r.rootNode)
 	}
-	o.rootNode = root
+	r.rootNode = root
 	if root != nil {
-		Attach(root, o)
+		Attach(root, r)
 	}
 }
 
-func (o *PipelineOwner) RequestVisualUpdate() {
-	if o.OnNeedVisualUpdate != nil {
-		o.OnNeedVisualUpdate()
+func (r *Renderer) RequestVisualUpdate() {
+	if r.OnNeedVisualUpdate != nil {
+		r.OnNeedVisualUpdate()
 	}
 }
 
-func (o *PipelineOwner) enableMutationsToDirtySubtrees(fn func()) {
+func (r *Renderer) enableMutationsToDirtySubtrees(fn func()) {
 	fn()
-	o.shouldMergeDirtyNodes = true
+	r.shouldMergeDirtyNodes = true
 }
 
-func (o *PipelineOwner) FlushLayout() {
-	for len(o.nodesNeedingLayout.Front) != 0 {
-		dirtyNodes := o.nodesNeedingLayout.Front
-		o.nodesNeedingLayout.Swap()
+func (r *Renderer) FlushLayout() {
+	for len(r.nodesNeedingLayout.Front) != 0 {
+		dirtyNodes := r.nodesNeedingLayout.Front
+		r.nodesNeedingLayout.Swap()
 		slices.SortFunc(dirtyNodes, func(a, b Object) int {
 			return a.Handle().depth - b.Handle().depth
 		})
 		for i := range dirtyNodes {
-			if o.shouldMergeDirtyNodes {
-				o.shouldMergeDirtyNodes = false
-				if len(o.nodesNeedingLayout.Front) != 0 {
-					o.nodesNeedingLayout.Front = append(o.nodesNeedingLayout.Front, dirtyNodes[i:]...)
+			if r.shouldMergeDirtyNodes {
+				r.shouldMergeDirtyNodes = false
+				if len(r.nodesNeedingLayout.Front) != 0 {
+					r.nodesNeedingLayout.Front = append(r.nodesNeedingLayout.Front, dirtyNodes[i:]...)
 					break
 				}
 			}
 			node := dirtyNodes[i]
-			if node.Handle().needsLayout && node.Handle().owner == o {
+			if node.Handle().needsLayout && node.Handle().renderer == r {
 				layoutWithoutResize(node)
 			}
 		}
 		// No need to merge dirty nodes generated from processing the last
 		// relayout boundary back.
-		o.shouldMergeDirtyNodes = false
+		r.shouldMergeDirtyNodes = false
 	}
 
-	o.shouldMergeDirtyNodes = false
+	r.shouldMergeDirtyNodes = false
 }
 
 // XXX what's the meaning of this function name?
@@ -147,30 +147,30 @@ func layoutWithoutResize(obj Object) {
 	MarkNeedsPaint(obj)
 }
 
-func (o *PipelineOwner) FlushPaint(scene *jello.Scene) {
-	if o.rootNode != nil {
-		o.painter.PaintAt(o.rootNode, scene, curve.Point{})
+func (r *Renderer) FlushPaint(scene *jello.Scene) {
+	if r.rootNode != nil {
+		r.painter.PaintAt(r.rootNode, scene, curve.Point{})
 	}
 }
 
-func (o *PipelineOwner) FlushCompositingBits() {
-	nodes := o.nodesNeedingCompositingBitsUpdate
+func (r *Renderer) FlushCompositingBits() {
+	nodes := r.nodesNeedingCompositingBitsUpdate
 	slices.SortFunc(nodes, func(a, b Object) int {
 		return a.Handle().depth - b.Handle().depth
 	})
 	for _, node := range nodes {
 		h := node.Handle()
-		if h.needsCompositingBitsUpdate && h.owner == o {
+		if h.needsCompositingBitsUpdate && h.renderer == r {
 			// h.updateCompositingBits()
 		}
 	}
 	clear(nodes)
-	o.nodesNeedingCompositingBitsUpdate = nodes[:0]
+	r.nodesNeedingCompositingBitsUpdate = nodes[:0]
 }
 
-func Attach(obj Object, owner *PipelineOwner) {
+func Attach(obj Object, r *Renderer) {
 	h := obj.Handle()
-	h.owner = owner
+	h.renderer = r
 	// If the node was dirtied in some way while unattached, make sure to add
 	// it to the appropriate dirty list now that an owner is available
 	if h.needsLayout && h.relayoutBoundary != nil {
@@ -191,17 +191,17 @@ func Attach(obj Object, owner *PipelineOwner) {
 	}
 
 	if aobj, ok := obj.(Attacher); ok {
-		aobj.PerformAttach(owner)
+		aobj.PerformAttach(r)
 	} else {
 		obj.VisitChildren(func(child Object) bool {
-			Attach(child, owner)
+			Attach(child, r)
 			return true
 		})
 	}
 }
 
 func Detach(obj Object) {
-	obj.Handle().owner = nil
+	obj.Handle().renderer = nil
 	if obj, ok := obj.(Attacher); ok {
 		obj.PerformDetach()
 	}

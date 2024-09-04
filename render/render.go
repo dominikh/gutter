@@ -36,7 +36,7 @@ type Object interface {
 }
 
 type Attacher interface {
-	PerformAttach(owner *PipelineOwner)
+	PerformAttach(r *Renderer)
 	PerformDetach()
 }
 
@@ -79,7 +79,7 @@ type ObjectHandle struct {
 	constraints                Constraints
 	relayoutBoundary           Object
 	depth                      int
-	owner                      *PipelineOwner
+	renderer                   *Renderer
 	HitTestBehavior            HitTestBehavior
 }
 
@@ -99,8 +99,8 @@ func MarkNeedsPaint(obj Object) {
 	if h.Parent != nil {
 		MarkNeedsPaint(h.Parent)
 	} else {
-		if h.owner != nil {
-			h.owner.RequestVisualUpdate()
+		if h.renderer != nil {
+			h.renderer.RequestVisualUpdate()
 		}
 	}
 }
@@ -124,8 +124,8 @@ func MarkNeedsLayout(obj Object) {
 		MarkNeedsLayout(h.Parent)
 	} else {
 		h.needsLayout = true
-		h.owner.nodesNeedingLayout.Front = append(h.owner.nodesNeedingLayout.Front, obj)
-		h.owner.RequestVisualUpdate()
+		h.renderer.nodesNeedingLayout.Front = append(h.renderer.nodesNeedingLayout.Front, obj)
+		h.renderer.RequestVisualUpdate()
 	}
 }
 
@@ -367,7 +367,7 @@ func ScheduleInitialLayout(obj Object) {
 	h := obj.Handle()
 	h.needsLayout = true
 	h.relayoutBoundary = obj
-	h.owner.nodesNeedingLayout.Front = append(h.owner.nodesNeedingLayout.Front, obj)
+	h.renderer.nodesNeedingLayout.Front = append(h.renderer.nodesNeedingLayout.Front, obj)
 }
 
 func ScheduleInitialPaint(obj Object) {
