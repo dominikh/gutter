@@ -6,8 +6,6 @@
 package render
 
 import (
-	"time"
-
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/wsi"
@@ -32,10 +30,6 @@ func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 	b.SetView(v)
 	v.PrepareInitialFrame()
 	return b
-}
-
-func (b *Binding) RunFrameCallbacks(now time.Time) {
-	b.PipelineOwner.RunFrameCallbacks(now)
 }
 
 func (b *Binding) DrawFrame(scene *jello.Scene) {

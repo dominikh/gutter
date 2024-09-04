@@ -51,7 +51,7 @@ func (b *Binding) DrawFrame(ev *wsi.RedrawRequested, scene *jello.Scene) {
 	debug.Assert(!b.buildOwner.inDrawFrame)
 	b.buildOwner.inDrawFrame = true
 	b.AttachRootWidget(b.rootWidget)
-	b.RenderBinding.RunFrameCallbacks(ev.When)
+	b.buildOwner.RunFrameCallbacks(ev.When)
 	if b.renderViewElement != nil {
 		b.buildOwner.BuildScope(nil)
 	}

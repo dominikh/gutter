@@ -7,7 +7,6 @@ package render
 
 import (
 	"slices"
-	"time"
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/mem"
@@ -23,8 +22,6 @@ type PipelineOwner struct {
 	shouldMergeDirtyNodes             bool
 	OnNeedVisualUpdate                func()
 	EmitEvent                         func(ev wsi.Event)
-
-	NextFrameCallbacks mem.DoubleBufferedSlice[func(now time.Time)]
 }
 
 func NewPipelineOwner() *PipelineOwner {
@@ -50,20 +47,6 @@ func (o *PipelineOwner) SetRootNode(root Object) {
 func (o *PipelineOwner) RequestVisualUpdate() {
 	if o.OnNeedVisualUpdate != nil {
 		o.OnNeedVisualUpdate()
-	}
-}
-
-func (o *PipelineOwner) AddNextFrameCallback(fn func(now time.Time)) {
-	o.NextFrameCallbacks.Front = append(o.NextFrameCallbacks.Front, fn)
-	o.RequestVisualUpdate()
-}
-
-func (o *PipelineOwner) RunFrameCallbacks(now time.Time) {
-	fns := o.NextFrameCallbacks.Front
-	o.NextFrameCallbacks.Swap()
-
-	for _, fn := range fns {
-		fn(now)
 	}
 }
 

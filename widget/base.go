@@ -10,6 +10,7 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"time"
 	"unsafe"
 
 	"honnef.co/go/curve"
@@ -605,11 +606,26 @@ type BuildOwner struct {
 	PipelineOwner               *render.PipelineOwner
 	globals                     map[GlobalKey]Element
 	inDrawFrame                 bool
+	nextFrameCallbacks          mem.DoubleBufferedSlice[func(now time.Time)]
 }
 
 func NewBuildOwner() *BuildOwner {
 	return &BuildOwner{
 		globals: make(map[GlobalKey]Element),
+	}
+}
+
+func (o *BuildOwner) AddNextFrameCallback(fn func(now time.Time)) {
+	o.nextFrameCallbacks.Front = append(o.nextFrameCallbacks.Front, fn)
+	o.PipelineOwner.RequestVisualUpdate()
+}
+
+func (o *BuildOwner) RunFrameCallbacks(now time.Time) {
+	fns := o.nextFrameCallbacks.Front
+	o.nextFrameCallbacks.Swap()
+
+	for _, fn := range fns {
+		fn(now)
 	}
 }
 

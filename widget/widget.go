@@ -323,7 +323,7 @@ func (p *AnimatedProperty[T, W, S]) updateAnimation(now time.Time) {
 
 	if !done {
 		// XXX this chain of fields is ridiculous
-		p.state.GetStateHandle().Element.Handle().BuildOwner.PipelineOwner.AddNextFrameCallback(p.updateAnimationFn)
+		p.state.GetStateHandle().Element.Handle().BuildOwner.AddNextFrameCallback(p.updateAnimationFn)
 	}
 	MarkNeedsBuild(p.state.GetStateHandle().Element)
 }
