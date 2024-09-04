@@ -27,7 +27,7 @@ func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 		sys.EmitEvent(win, ev)
 	}
 	v := NewView()
-	b.SetView(v)
+	b.PipelineOwner.SetRootNode(v)
 	v.PrepareInitialFrame()
 	return b
 }
@@ -41,11 +41,6 @@ func (b *Binding) DrawFrame(scene *jello.Scene) {
 
 func (b *Binding) View() *View {
 	return b.PipelineOwner.rootNode.(*View)
-}
-
-func (b *Binding) SetView(v *View) {
-	debug.Assert(v != nil)
-	b.PipelineOwner.SetRootNode(v)
 }
 
 // func (b *Binding) HandlePointerEvent(e giopointer.Event) {
