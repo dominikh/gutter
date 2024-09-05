@@ -7,7 +7,6 @@ package render
 
 import (
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 
@@ -137,7 +136,7 @@ type Constraints struct {
 }
 
 func (c Constraints) Tight() bool {
-	return c.Min == c.Max && float64(c.Max.Width) != math.Inf(1) && float64(c.Max.Height) != math.Inf(1)
+	return c.Min == c.Max
 }
 
 func (c Constraints) Enforce(oc Constraints) Constraints {
