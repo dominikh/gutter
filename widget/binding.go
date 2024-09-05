@@ -39,16 +39,7 @@ func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 		sys.EmitEvent(win, ev)
 	}
 	b.buildOwner.Renderer = b.Renderer
-	b.buildOwner.OnBuildScheduled = func() {
-		// XXX surely there's a better way to rebuild than to ask (and wait!)
-		// for a frame from wayland
-		//
-		// this is not just a matter of performance, but also correctness. we
-		// should rebuild the tree immediately after every event that
-		// invalidates it, so that consecutive events can observe updates to the
-		// tree.
-		win.RequestFrame()
-	}
+	b.buildOwner.OnBuildScheduled = win.RequestFrame
 	return b
 }
 
