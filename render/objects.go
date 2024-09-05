@@ -6,9 +6,12 @@
 package render
 
 import (
+	"math"
+
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/debug"
 	"honnef.co/go/jello"
 	"honnef.co/go/jello/gfx"
 )
@@ -17,6 +20,7 @@ var _ Object = (*FillColor)(nil)
 
 var _ ObjectWithChildren = (*Clip)(nil)
 var _ ObjectWithChildren = (*Constrained)(nil)
+var _ ObjectWithChildren = (*FittedBox)(nil)
 var _ ObjectWithChildren = (*Opacity)(nil)
 var _ ObjectWithChildren = (*Padding)(nil)
 
@@ -208,4 +212,141 @@ func (o *Opacity) SetOpacity(f float32) {
 		o.opacity = f
 		MarkNeedsPaint(o)
 	}
+}
+
+// TODO(dh): implement hit testing
+type FittedBox struct {
+	Box
+	SingleChild
+
+	fit  BoxFit
+	clip bool
+}
+
+func (b *FittedBox) SetFit(f BoxFit) {
+	if b.fit != f {
+		b.fit = f
+		MarkNeedsPaint(b)
+	}
+}
+
+func (b *FittedBox) SetClip(clip bool) {
+	if b.clip != clip {
+		b.clip = clip
+		MarkNeedsPaint(b)
+	}
+}
+
+// PerformLayout implements Object.
+func (b *FittedBox) PerformLayout() (size curve.Size) {
+	if b.Child != nil {
+		childSize := Layout(b.Child, Constraints{Max: curve.Sz(math.Inf(1), math.Inf(1))}, true)
+		if b.fit == BoxFitScaleDown {
+			cs := b.Constraints()
+			cs.Min = curve.Size{}
+			usz := cs.ConstrainWithAspectRatio(childSize)
+			return b.Constraints().Constrain(usz)
+		} else {
+			return b.Constraints().ConstrainWithAspectRatio(childSize)
+		}
+	} else {
+		return b.Constraints().Min
+	}
+}
+
+// PerformPaint implements Object.
+func (b *FittedBox) PerformPaint(p *Painter, scene *jello.Scene) {
+	if b.Child == nil || b.Size() == curve.Sz(0, 0) || b.Child.Handle().Size() == curve.Sz(0, 0) {
+		return
+	}
+
+	childSize := b.Child.Handle().Size()
+	sizes := applyBoxFit(b.fit, childSize, b.Size())
+	scaleX := sizes.Destination.Width / sizes.Source.Width
+	scaleY := sizes.Destination.Height / sizes.Source.Height
+	// TODO(dh): support alignment
+	sourceRect := curve.NewRectFromOrigin(curve.Pt(0, 0), sizes.Source)
+	destinationRect := curve.NewRectFromOrigin(curve.Pt(0, 0), sizes.Destination)
+	hasVisualOverflow := sourceRect.Width() < childSize.Width || sourceRect.Height() < childSize.Height
+	debug.Assert(!math.IsInf(scaleX, 0) && !math.IsInf(scaleY, 0))
+	// TODO(dh): support alignment
+	transform := curve.Scale(scaleX, scaleY)
+
+	if hasVisualOverflow && b.clip {
+		scene.PushLayer(
+			gfx.BlendMode{Mix: gfx.MixClip},
+			1,
+			curve.Identity,
+			destinationRect.Path(0.1),
+		)
+		defer scene.PopLayer()
+	}
+	childScene := p.Paint(b.Child)
+	scene.Append(childScene, transform)
+}
+
+type fittedSizes struct {
+	Source      curve.Size
+	Destination curve.Size
+}
+
+func applyBoxFit(fit BoxFit, inputSize, outputSize curve.Size) fittedSizes {
+	if inputSize.Height <= 0.0 || inputSize.Width <= 0.0 || outputSize.Height <= 0.0 || outputSize.Width <= 0.0 {
+		return fittedSizes{}
+	}
+
+	var sourceSize, destinationSize curve.Size
+	switch fit {
+	case BoxFitFill:
+		sourceSize = inputSize
+		destinationSize = outputSize
+	case BoxFitContain:
+		sourceSize = inputSize
+		if outputSize.Width/outputSize.Height > sourceSize.Width/sourceSize.Height {
+			destinationSize = curve.Sz(sourceSize.Width*outputSize.Height/sourceSize.Height, outputSize.Height)
+		} else {
+			destinationSize = curve.Sz(outputSize.Width, sourceSize.Height*outputSize.Width/sourceSize.Width)
+		}
+	case BoxFitCover:
+		if outputSize.Width/outputSize.Height > inputSize.Width/inputSize.Height {
+			sourceSize = curve.Sz(inputSize.Width, inputSize.Width*outputSize.Height/outputSize.Width)
+		} else {
+			sourceSize = curve.Sz(inputSize.Height*outputSize.Width/outputSize.Height, inputSize.Height)
+		}
+		destinationSize = outputSize
+	case BoxFitFitWidth:
+		if outputSize.Width/outputSize.Height > inputSize.Width/inputSize.Height {
+			// Like "cover"
+			sourceSize = curve.Sz(inputSize.Width, inputSize.Width*outputSize.Height/outputSize.Width)
+			destinationSize = outputSize
+		} else {
+			// Like "contain"
+			sourceSize = inputSize
+			destinationSize = curve.Sz(outputSize.Width, sourceSize.Height*outputSize.Width/sourceSize.Width)
+		}
+	case BoxFitFitHeight:
+		if outputSize.Width/outputSize.Height > inputSize.Width/inputSize.Height {
+			// Like "contain"
+			sourceSize = inputSize
+			destinationSize = curve.Sz(sourceSize.Width*outputSize.Height/sourceSize.Height, outputSize.Height)
+		} else {
+			// Like "cover"
+			sourceSize = curve.Sz(inputSize.Height*outputSize.Width/outputSize.Height, inputSize.Height)
+			destinationSize = outputSize
+		}
+	case BoxFitNone:
+		sourceSize = curve.Sz(min(inputSize.Width, outputSize.Width), min(inputSize.Height, outputSize.Height))
+		destinationSize = sourceSize
+	case BoxFitScaleDown:
+		sourceSize = inputSize
+		destinationSize = inputSize
+		aspectRatio := inputSize.Width / inputSize.Height
+		if destinationSize.Height > outputSize.Height {
+			destinationSize = curve.Sz(outputSize.Height*aspectRatio, outputSize.Height)
+		}
+		if destinationSize.Width > outputSize.Width {
+			destinationSize = curve.Sz(outputSize.Width, outputSize.Width/aspectRatio)
+		}
+	}
+	return fittedSizes{sourceSize, destinationSize}
 }

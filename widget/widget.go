@@ -20,6 +20,7 @@ import (
 )
 
 var _ RenderObjectWidget = (*ColoredBox)(nil)
+var _ RenderObjectWidget = (*FittedBox)(nil)
 var _ RenderObjectWidget = (*Opacity)(nil)
 var _ RenderObjectWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
@@ -457,3 +458,29 @@ func (c *channelBuilderState[E]) restartGoroutine() {
 type CallbackEvent func()
 
 func (CallbackEvent) ImplementsEvent() {}
+
+type FittedBox struct {
+	Fit render.BoxFit
+	// TODO(dh): add alignment option
+	Clip  bool
+	Child Widget
+}
+
+// CreateElement implements RenderObjectWidget.
+func (f *FittedBox) CreateElement() Element {
+	return NewRenderObjectElement(f)
+}
+
+// CreateRenderObject implements RenderObjectWidget.
+func (f *FittedBox) CreateRenderObject(ctx BuildContext) render.Object {
+	obj := new(render.FittedBox)
+	f.UpdateRenderObject(ctx, obj)
+	return obj
+}
+
+// UpdateRenderObject implements RenderObjectWidget.
+func (f *FittedBox) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+	obj_ := obj.(*render.FittedBox)
+	obj_.SetFit(f.Fit)
+	obj_.SetClip(f.Clip)
+}

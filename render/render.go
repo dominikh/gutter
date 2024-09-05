@@ -30,6 +30,8 @@ type Object interface {
 	PerformLayout() (size curve.Size)
 	PerformPaint(p *Painter, scene *jello.Scene)
 
+	// TODO(dh): why does VisitChildren have to be in Object? can't it be in
+	// ObjectWithChildren instead
 	VisitChildren(yield func(Object) bool)
 	Handle() *ObjectHandle
 }
@@ -152,21 +154,50 @@ func (c Constraints) Enforce(oc Constraints) Constraints {
 	}
 }
 
-// Constrain a size so each dimension is in the range [min;max].
+// Constrain a size so each dimension is in the range [min, max].
 func (c Constraints) Constrain(size curve.Size) curve.Size {
-	if min := c.Min.Width; size.Width < min {
-		size.Width = min
-	}
-	if min := c.Min.Height; size.Height < min {
-		size.Height = min
-	}
-	if max := c.Max.Width; size.Width > max {
-		size.Width = max
-	}
-	if max := c.Max.Height; size.Height > max {
-		size.Height = max
-	}
+	size.Width = jmath.Clamp(size.Width, c.Min.Width, c.Max.Width)
+	size.Height = jmath.Clamp(size.Height, c.Min.Height, c.Max.Height)
 	return size
+}
+
+// Constrain a size so each dimension is in the range [min, max], while
+// maintaining the aspect ratio of the input size.
+func (c Constraints) ConstrainWithAspectRatio(size curve.Size) curve.Size {
+	if c.Tight() {
+		return c.Min
+	}
+
+	width := size.Width
+	height := size.Height
+	debug.Assert(width > 0.0)
+	debug.Assert(height > 0.0)
+	aspectRatio := width / height
+
+	if width > c.Max.Width {
+		width = c.Max.Width
+		height = width / aspectRatio
+	}
+
+	if height > c.Max.Height {
+		height = c.Max.Height
+		width = height * aspectRatio
+	}
+
+	if width < c.Min.Width {
+		width = c.Min.Width
+		height = width / aspectRatio
+	}
+
+	if height < c.Min.Height {
+		height = c.Min.Height
+		width = height * aspectRatio
+	}
+
+	return curve.Sz(
+		jmath.Clamp(width, c.Min.Width, c.Max.Height),
+		jmath.Clamp(height, c.Min.Height, c.Max.Height),
+	)
 }
 
 func FormatTree(root Object) string {

@@ -1199,7 +1199,7 @@ func WidgetChildrenIter(parent Widget) func(yield func(i int, w Widget) bool) {
 			yield(0, f.Interface().(Widget))
 		}
 	} else {
-		panic(fmt.Sprintf("%T does not have children", parent))
+		return func(yield func(i int, w Widget) bool) {}
 	}
 }
 
@@ -1229,7 +1229,7 @@ func WidgetChildren(parent Widget) []Widget {
 			return []Widget{f.Interface().(Widget)}
 		}
 	} else {
-		panic(fmt.Sprintf("%T does not have children", parent))
+		return nil
 	}
 }
 
