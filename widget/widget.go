@@ -25,6 +25,7 @@ var _ RenderObjectWidget = (*Opacity)(nil)
 var _ RenderObjectWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
 var _ RenderObjectWidget = (*SizedBox)(nil)
+var _ RenderObjectWidget = (*LottieFrame)(nil)
 
 var _ Widget = (*AnimatedOpacity)(nil)
 var _ Widget = (*AnimatedPadding)(nil)
@@ -320,9 +321,12 @@ func (p *AnimatedProperty[T, W, S]) Transition(t StateTransition[W]) {
 		if !w.Field(p.field).Equal(reflect.ValueOf(t.OldWidget).Elem().Field(p.field)) {
 			// XXX this should use the event's now, not time.Now
 			p.animation.Start(time.Now(), w.FieldByName("Duration").Interface().(time.Duration), p.Value, w.Field(p.field).Interface().(T))
+			// XXX can this cause two calls to updateAnimation to be queued?
+			// XXX we don't want time.Now
 			p.updateAnimation(time.Now())
 		}
 	}
+	// TODO(dh): prevent further calls to updateAnimation after the state gets disposed
 }
 
 func (p *AnimatedProperty[T, W, S]) updateAnimation(now time.Time) {

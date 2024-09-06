@@ -12,11 +12,14 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/lottie/lottie_model"
+	"honnef.co/go/gutter/lottie/lottie_renderer"
 	"honnef.co/go/jello"
 	"honnef.co/go/jello/gfx"
 )
 
 var _ Object = (*FillColor)(nil)
+var _ Object = (*Lottie)(nil)
 
 var _ ObjectWithChildren = (*Clip)(nil)
 var _ ObjectWithChildren = (*Constrained)(nil)
@@ -349,4 +352,47 @@ func applyBoxFit(fit BoxFit, inputSize, outputSize curve.Size) fittedSizes {
 		}
 	}
 	return fittedSizes{sourceSize, destinationSize}
+}
+
+type Lottie struct {
+	Box
+
+	composition *lottie_model.Composition
+	frame       float64
+}
+
+// VisitChildren implements Object.
+func (l *Lottie) VisitChildren(yield func(Object) bool) {}
+
+func (l *Lottie) SetComposition(c *lottie_model.Composition) {
+	if l.composition != c {
+		l.composition = c
+		MarkNeedsLayout(l)
+		MarkNeedsPaint(l)
+	}
+}
+
+func (l *Lottie) SetFrame(f float64) {
+	if l.frame != f {
+		l.frame = f
+		MarkNeedsPaint(l)
+	}
+}
+
+func (l *Lottie) PerformLayout() curve.Size {
+	if l.composition != nil {
+		w := float64(l.composition.Width)
+		h := float64(l.composition.Height)
+		return l.Constraints().Constrain(curve.Sz(w, h))
+	} else {
+		return l.Constraints().Constrain(curve.Sz(0, 0))
+	}
+}
+
+func (l *Lottie) PerformPaint(p *Painter, scene *jello.Scene) {
+	if l.composition == nil {
+		return
+	}
+	var r lottie_renderer.Renderer
+	r.Append(l.composition, l.frame, curve.Identity, 1, scene)
 }

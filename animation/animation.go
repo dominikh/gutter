@@ -49,6 +49,7 @@ type Animation[T any] struct {
 	EndTime    time.Time
 	StartValue T
 	EndValue   T
+	Repeat     bool
 	Compute    Tween[T]
 	Curve      Ease
 }
@@ -66,14 +67,30 @@ func (anim *Animation[T]) Start(now time.Time, d time.Duration, start, end T) {
 
 func (anim *Animation[T]) Evaluate(now time.Time) (v T, done bool) {
 	t := AnimationProgress(anim.StartTime, anim.EndTime, now)
-	switch t {
-	case 0:
-		return anim.StartValue, false
-	case 1:
-		return anim.EndValue, true
-	default:
+	if anim.Repeat {
+		if t >= 1 {
+			if t > 1 {
+				// XXX right now this is impossible because AnimationProgress
+				// caps at 1, which is not what we want for repeating
+				// animations, anyway.
+				_, t = math.Modf(t)
+			}
+			d := anim.EndTime.Sub(anim.StartTime)
+			anim.StartTime = anim.EndTime
+			anim.EndTime = anim.EndTime.Add(d)
+		}
 		t = anim.Curve(t)
 		return anim.Compute(anim.StartValue, anim.EndValue, t), false
+	} else {
+		switch t {
+		case 0:
+			return anim.StartValue, false
+		case 1:
+			return anim.EndValue, true
+		default:
+			t = anim.Curve(t)
+			return anim.Compute(anim.StartValue, anim.EndValue, t), false
+		}
 	}
 }
 

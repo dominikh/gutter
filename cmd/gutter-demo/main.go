@@ -8,11 +8,15 @@ import (
 	"context"
 	"log"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"time"
 
 	"honnef.co/go/color"
 	"honnef.co/go/gutter/application"
 	"honnef.co/go/gutter/io/pointer"
+	"honnef.co/go/gutter/lottie/lottie_converter"
+	"honnef.co/go/gutter/lottie/lottie_encoding"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
 )
@@ -34,49 +38,49 @@ func main() {
 		}
 	}()
 
+	paths, _ := filepath.Glob("/home/dominikh/lottie/*.json")
+	rand.Shuffle(len(paths), func(i, j int) {
+		paths[i], paths[j] = paths[j], paths[i]
+	})
+	var rows []widget.Widget
+	var row *widget.Flex
+	for i, path := range paths[:100] {
+		if i%10 == 0 {
+			row = &widget.Flex{
+				Direction:          render.Horizontal,
+				MainAxisAlignment:  render.MainAxisAlignCenter,
+				CrossAxisAlignment: render.CrossAxisAlignCenter,
+				MainAxisSize:       render.MainAxisSizeMax,
+			}
+			rows = append(rows, row)
+		}
+
+		b, err := os.ReadFile(path)
+		if err != nil {
+			panic(err)
+		}
+		anim, err := lottie_encoding.Parse(b)
+		if err != nil {
+			panic(err)
+		}
+		comp := lottie_converter.ConvertAnimation(anim)
+
+		w := &widget.Flexible{
+			Fit: render.FlexFitTight,
+			Child: &widget.Lottie{
+				Composition: comp,
+				Width:       64.0,
+			},
+		}
+		row.Children = append(row.Children, w)
+	}
+
 	root := &widget.Flex{
-		Direction:          render.Horizontal,
+		Direction:          render.Vertical,
 		MainAxisAlignment:  render.MainAxisAlignCenter,
 		CrossAxisAlignment: render.CrossAxisAlignCenter,
 		MainAxisSize:       render.MainAxisSizeMax,
-		Children: []widget.Widget{
-			&widget.Flexible{
-				Fit: render.FlexFitTight,
-				Child: &widget.Builder{
-					Builder: func(ctx widget.BuildContext, child widget.Widget) widget.Widget {
-						log.Println("building sizey boy")
-						width := widget.DependOnWidgetOfExactType[*widget.MediaQuery](ctx).Data.Size.Width
-						return &widget.SizedBox{
-							Width:  width / 4,
-							Height: 200,
-							Child: &widget.ColoredBox{
-								Color: color.Make(color.LinearSRGB, 0, 1, 0, 1),
-							},
-						}
-					},
-				},
-			},
-
-			&widget.Flexible{
-				Fit: render.FlexFitTight,
-				Child: &widget.SizedBox{
-					Width:  200,
-					Height: 200,
-					Child: &widget.ChannelBuilder[color.Color]{
-						Channel: theCh,
-						Builder: func(ctx widget.BuildContext, child widget.Widget, v color.Color) widget.Widget {
-							log.Println("building colory boy")
-							if v == (color.Color{}) {
-								v = color.Make(color.LinearSRGB, 1, 0, 1, 1)
-							}
-							return &widget.ColoredBox{
-								Color: v,
-							}
-						},
-					},
-				},
-			},
-		},
+		Children:           rows,
 	}
 
 	application.Run(context.Background(), root)
