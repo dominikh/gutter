@@ -304,7 +304,7 @@ func (p *AnimatedProperty[T, W, S]) Transition(t StateTransition[W]) {
 
 		w := reflect.ValueOf(p.state.GetStateHandle().Widget).Elem()
 		wt := w.Type()
-		for i, n := wt.NumField(), 0; i < n; i++ {
+		for i := range wt.NumField() {
 			if wt.Field(i).Tag.Get("gutter") == "animated" {
 				p.field = i
 				break
