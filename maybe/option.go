@@ -45,6 +45,10 @@ func (o Option[T]) UnwrapOr(def T) T {
 	}
 }
 
+func (o *Option[T]) Clear() {
+	*o = Option[T]{}
+}
+
 func (o *Option[T]) Take() Option[T] {
 	v := *o
 	*o = Option[T]{}
