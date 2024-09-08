@@ -87,6 +87,7 @@ type ObjectHandle struct {
 func (h *ObjectHandle) Handle() *ObjectHandle    { return h }
 func (h *ObjectHandle) Size() curve.Size         { return h.size }
 func (h *ObjectHandle) Constraints() Constraints { return h.constraints }
+func (h *ObjectHandle) Attached() bool           { return h.renderer != nil }
 
 func MarkNeedsPaint(obj Object) {
 	h := obj.Handle()
@@ -410,7 +411,6 @@ func ScheduleInitialPaint(obj Object) {
 
 func InsertChild(parent ObjectWithChildren, child Object, after int) {
 	parent.PerformInsertChild(child, after)
-	child.Handle().Parent = parent
 	adoptChild(parent, child)
 }
 
@@ -425,19 +425,26 @@ func RemoveChild(parent ChildRemover, child Object) {
 }
 
 func adoptChild(parent, child Object) {
+	debug.Assert(child.Handle().Parent == nil)
 	if parent, ok := parent.(ParentDataSetuper); ok {
 		parent.PerformSetupParentData(child)
 	}
 	MarkNeedsLayout(parent)
+	child.Handle().Parent = parent
+	if parent.Handle().Attached() {
+		Attach(child, parent.Handle().renderer)
+	}
 }
 
 func dropChild(parent, child Object) {
+	debug.Assert(child.Handle().Parent == parent)
+	debug.Assert(child.Handle().Attached() == parent.Handle().Attached())
 	// child._cleanRelayoutBoundary();
 	// child.parentData!.detach();
 	child.Handle().ParentData = nil
 	child.Handle().Parent = nil
-	// if attached {
-	Detach(child)
-	// }
+	if parent.Handle().Attached() {
+		Detach(child)
+	}
 	MarkNeedsLayout(parent)
 }
