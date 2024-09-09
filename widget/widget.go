@@ -14,6 +14,7 @@ import (
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/io/pointer"
+	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/jello"
 	"honnef.co/go/jello/gfx"
@@ -383,7 +384,7 @@ var _ StatefulWidget[*ChannelBuilder[int]] = (*ChannelBuilder[int])(nil)
 
 type ChannelBuilder[E any] struct {
 	Channel chan E
-	Builder func(ctx BuildContext, child Widget, v E) Widget
+	Builder func(ctx BuildContext, child Widget, v maybe.Option[E]) Widget
 	Child   Widget
 }
 
@@ -399,7 +400,7 @@ func (c *ChannelBuilder[E]) CreateState() State[*ChannelBuilder[E]] {
 
 type channelBuilderState[E any] struct {
 	StateHandle[*ChannelBuilder[E]]
-	value E
+	value maybe.Option[E]
 	g     chan struct{}
 }
 
@@ -441,7 +442,7 @@ func (c *channelBuilderState[E]) startGoroutine() {
 					return
 				}
 				c.Element.Handle().BuildOwner.EmitEvent(CallbackEvent(func() {
-					c.value = v
+					c.value = maybe.Some(v)
 					MarkNeedsBuild(c.Element)
 				}))
 			}
