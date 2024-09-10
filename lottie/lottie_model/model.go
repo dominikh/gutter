@@ -7,7 +7,9 @@ package lottie_model
 
 import (
 	"fmt"
+	"math"
 	"slices"
+	"time"
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
@@ -23,6 +25,10 @@ type Composition struct {
 	Height     int
 	Assets     map[string][]Layer
 	Layers     []Layer
+}
+
+func (c *Composition) Duration() time.Duration {
+	return time.Duration(math.Round(((c.LastFrame - c.FirstFrame) / c.Framerate) * float64(time.Second)))
 }
 
 type GeometryKind int
