@@ -204,7 +204,12 @@ func (o *Opacity) PerformPaint(p *Painter, scene *jello.Scene) {
 	case 1:
 		p.PaintAt(o.Child, scene, curve.Point{})
 	default:
-		scene.PushLayer(gfx.BlendMode{}, o.opacity, curve.Identity, nil)
+		scene.PushLayer(
+			gfx.BlendMode{},
+			o.opacity,
+			curve.Identity,
+			curve.NewRectFromPoints(curve.Pt(-1e9, -1e9), curve.Pt(1e9, 1e9)).Path(0.1),
+		)
 		defer scene.PopLayer()
 		p.PaintAt(o.Child, scene, curve.Point{})
 	}
