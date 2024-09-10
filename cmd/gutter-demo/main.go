@@ -7,116 +7,83 @@ package main
 import (
 	"context"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"os"
-	"path/filepath"
 	"time"
 
-	"honnef.co/go/color"
+	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/application"
-	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/lottie/lottie_converter"
 	"honnef.co/go/gutter/lottie/lottie_encoding"
-	"honnef.co/go/gutter/render"
+	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/widget"
+	"honnef.co/go/gutter/wsi"
 )
 
 func main() {
-	log.SetFlags(log.Lmicroseconds)
+	log.SetFlags(log.Lmicroseconds | log.Llongfile)
+	// slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	// 	AddSource: true,
+	// 	Level:     slog.LevelDebug,
+	// })))
 
-	theCh := make(chan color.Color)
+	app, err := application.New()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer app.Dispose()
+
+	theCh := make(chan float64)
 	go func() {
 		t := time.NewTicker(500 * time.Millisecond)
 		defer t.Stop()
 		for range t.C {
-			r := rand.Float64()
-			g := rand.Float64()
-			b := rand.Float64()
-
-			c := color.Make(color.LinearSRGB, r, g, b, 1)
-			theCh <- c
+			theCh <- rand.Float64()
 		}
 	}()
 
-	paths, _ := filepath.Glob("/home/dominikh/lottie/*.json")
-	rand.Shuffle(len(paths), func(i, j int) {
-		paths[i], paths[j] = paths[j], paths[i]
+	b, err := os.ReadFile("/home/dominikh/lottie/:melting:.json")
+	if err != nil {
+		panic(err)
+	}
+	anim, err := lottie_encoding.Parse(b)
+	if err != nil {
+		panic(err)
+	}
+	comp := lottie_converter.ConvertAnimation(anim)
+
+	l := widget.NewChannelListener(theCh, func(ev wsi.Event) {
+		// Ignore that we need this argument, ideally widget.NewChannelListener
+		// would have a magic way to get the event emitter, while not depending
+		// on the 'application' package.
+		app.EmitEvent(nil, ev)
 	})
-	var rows []widget.Widget
-	var row *widget.Flex
-	for i, path := range paths[:100] {
-		if i%10 == 0 {
-			row = &widget.Flex{
-				Direction:          render.Horizontal,
-				MainAxisAlignment:  render.MainAxisAlignCenter,
-				CrossAxisAlignment: render.CrossAxisAlignCenter,
-				MainAxisSize:       render.MainAxisSizeMax,
+	defer l.Dispose()
+
+	root := &widget.ValueListenableBuilder[float64]{
+		ValueListenable: l,
+		Builder: func(ctx widget.BuildContext, mv maybe.Option[float64], child widget.Widget) widget.Widget {
+			v := mv.UnwrapOr(0)
+			return &widget.AnimatedOpacity{
+				Opacity:  float32(v),
+				Duration: 250 * time.Millisecond,
+				Curve:    animation.CurveOutSine,
+				Child: &widget.Lottie{
+					Composition: comp,
+					Animate:     true,
+					Repeat:      true,
+					Reverse:     false,
+				},
 			}
-			rows = append(rows, row)
-		}
-
-		b, err := os.ReadFile(path)
-		if err != nil {
-			panic(err)
-		}
-		anim, err := lottie_encoding.Parse(b)
-		if err != nil {
-			panic(err)
-		}
-		comp := lottie_converter.ConvertAnimation(anim)
-
-		w := &widget.Flexible{
-			Fit: render.FlexFitTight,
-			Child: &widget.Lottie{
-				Composition: comp,
-				Width:       64.0,
-			},
-		}
-		row.Children = append(row.Children, w)
-	}
-
-	root := &widget.Flex{
-		Direction:          render.Vertical,
-		MainAxisAlignment:  render.MainAxisAlignCenter,
-		CrossAxisAlignment: render.CrossAxisAlignCenter,
-		MainAxisSize:       render.MainAxisSizeMax,
-		Children:           rows,
-	}
-
-	application.Run(context.Background(), root)
-}
-
-type ColorChangingBox struct {
-	Color color.Color
-}
-
-func (c *ColorChangingBox) CreateElement() widget.Element {
-	return widget.NewInteriorElement(c)
-}
-
-func (c *ColorChangingBox) CreateState() widget.State[*ColorChangingBox] {
-	return &colorChangingBoxState{c: c.Color}
-}
-
-type colorChangingBoxState struct {
-	widget.StateHandle[*ColorChangingBox]
-	c color.Color
-}
-
-func (cs *colorChangingBoxState) Transition(t widget.StateTransition[*ColorChangingBox]) {
-}
-
-func (cs *colorChangingBoxState) Build(ctx widget.BuildContext) widget.Widget {
-	return &widget.PointerRegion{
-		OnPress: func(hit render.HitTestEntry, ev pointer.Event) {
-			// cs.c.R += 50
-			widget.MarkNeedsBuild(cs.Element)
-		},
-		Child: &widget.SizedBox{
-			Width: 100,
-			Child: &widget.ColoredBox{
-				Color: cs.c,
-			},
 		},
 	}
+
+	// root := &widget.Lottie{
+	// 	Composition: comp,
+	// 	Animate:     true,
+	// 	Repeat:      true,
+	// 	Reverse:     false,
+	// }
+
+	app.Run(context.Background(), root)
 }

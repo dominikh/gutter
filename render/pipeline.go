@@ -6,9 +6,12 @@
 package render
 
 import (
+	"math"
 	"slices"
+	"time"
 
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/mem"
 	"honnef.co/go/jello"
@@ -22,7 +25,52 @@ type Renderer struct {
 	shouldMergeDirtyNodes             bool
 	OnNeedVisualUpdate                func()
 
-	htr hitTestResult
+	htr                hitTestResult
+	nextFrameCallbacks mem.DoubleBufferedSlice[func(now time.Duration)]
+}
+
+func (r *Renderer) ScheduleFrameCallback(fn animation.FrameCallback) uint64 {
+	n := uint64(len(r.nextFrameCallbacks.Front))
+	if n >= math.MaxUint32 {
+		panic("tried registering 2**32 frame callbacks in a single frame")
+	}
+	r.nextFrameCallbacks.Front = append(r.nextFrameCallbacks.Front, fn)
+	r.RequestVisualUpdate()
+	return uint64(r.nextFrameCallbacks.Generation)<<32 | (n & 0xFFFFFFFF)
+}
+
+func (r *Renderer) CancelFrameCallback(id uint64) {
+	gen := uint32(id >> 32)
+	idx := int(id & 0xFFFFFFFF)
+	if gen != r.nextFrameCallbacks.Generation {
+		// If gen > Generation, then the callback is from an old frame.
+		//
+		// If gen < Generation, then the callback is from an old frame and the
+		// generation counter has overflown.
+		return
+	}
+	// If gen == Generation, then the callback is either from this frame, or
+	// from 2**32 frames ago, which was around 200-800 days ago (at 60-240 Hz of
+	// non-stop rendering). Hopefully nobody keeps a frame ID around for that
+	// long...
+	if idx >= len(r.nextFrameCallbacks.Front) {
+		// An invalid index... Did someone pass in a very old ID?
+		return
+	}
+	r.nextFrameCallbacks.Front[idx] = nil
+}
+
+func (r *Renderer) RunFrameCallbacks(now time.Duration) {
+	fns := r.nextFrameCallbacks.Front
+	r.nextFrameCallbacks.Swap()
+
+	for _, fn := range fns {
+		if fn == nil {
+			// Cancelled callback
+			continue
+		}
+		fn(now)
+	}
 }
 
 func NewRenderer() *Renderer {

@@ -33,11 +33,11 @@ func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 		buildOwner: NewBuildOwner(),
 		Renderer:   render.NewRenderer(),
 	}
-	b.Renderer.OnNeedVisualUpdate = win.RequestFrame
 	b.buildOwner.EmitEvent = func(ev wsi.Event) {
 		// TODO(dh): add a wsi.Window.EmitEvent method
 		sys.EmitEvent(win, ev)
 	}
+	b.Renderer.OnNeedVisualUpdate = win.RequestFrame
 	b.buildOwner.Renderer = b.Renderer
 	b.buildOwner.OnBuildScheduled = win.RequestFrame
 	return b
@@ -47,7 +47,7 @@ func (b *Binding) DrawFrame(ev *wsi.RedrawRequested, scene *jello.Scene) {
 	debug.Assert(!b.buildOwner.inDrawFrame)
 	b.buildOwner.inDrawFrame = true
 	b.AttachRootWidget(b.rootWidget)
-	b.buildOwner.RunFrameCallbacks(ev.When)
+	b.Renderer.RunFrameCallbacks(ev.When)
 	if b.renderViewElement != nil {
 		b.buildOwner.BuildScope(nil)
 	}

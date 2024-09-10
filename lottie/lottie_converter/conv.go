@@ -326,9 +326,9 @@ func convertScalar(floatValue encoding.ScalarProperty) animation.Keyframes[float
 			values[i] = keyframe.Value[0]
 		}
 		return animation.Keyframes[float64]{
-			Frames:  frames,
-			Easings: easings,
-			Values:  values,
+			Frames: frames,
+			Curves: easings,
+			Values: values,
 		}
 	} else {
 		return fixedValue(floatValue.Value)
@@ -413,9 +413,9 @@ func convertMultiKeyframes[T ~[]float64 | ~[2]float64 | ~[3]float64](keyframes [
 	out := make([]animation.Keyframes[float64], numItems)
 	for i := range out {
 		out[i] = animation.Keyframes[float64]{
-			Frames:  frames[i],
-			Easings: easings[i],
-			Values:  values[i],
+			Frames: frames[i],
+			Curves: easings[i],
+			Values: values[i],
 		}
 	}
 	return out
@@ -497,9 +497,9 @@ func convertShapeGeometry(value encoding.BezierProperty) (model.Geometry, bool) 
 			Spline: model.Spline{
 				IsClosed: isClosed,
 				Keyframes: animation.Keyframes[[]curve.Point]{
-					Frames:  frames,
-					Easings: easings,
-					Values:  values,
+					Frames: frames,
+					Curves: easings,
+					Values: values,
 				},
 			},
 		}, true
@@ -763,9 +763,9 @@ func convertGradientColors(value encoding.GradientProperty) animation.ColorStops
 		}
 		return animation.ColorStops{
 			Keyframes: animation.Keyframes[[]animation.ColorStop]{
-				Frames:  frames,
-				Easings: easings,
-				Values:  values,
+				Frames: frames,
+				Curves: easings,
+				Values: values,
 			},
 			Count: count,
 		}
@@ -773,9 +773,9 @@ func convertGradientColors(value encoding.GradientProperty) animation.ColorStops
 		raw := convertStops(value.Value.Value, count)
 		return animation.ColorStops{
 			Keyframes: animation.Keyframes[[]animation.ColorStop]{
-				Frames:  []float64{0},
-				Easings: []animation.Curve{animation.CurveIdentity},
-				Values:  [][]animation.ColorStop{raw},
+				Frames: []float64{0},
+				Curves: []animation.Curve{animation.CurveIdentity},
+				Values: [][]animation.ColorStop{raw},
 			},
 			Count: count,
 		}
@@ -860,9 +860,9 @@ func setupShapeLayer(source encoding.ShapeLayer, target *model.Layer) (int, mayb
 
 func fixedValue[T any](v T) animation.Keyframes[T] {
 	return animation.Keyframes[T]{
-		Frames:  []float64{0},
-		Easings: []animation.Curve{animation.CurveIdentity},
-		Values:  []T{v},
+		Frames: []float64{0},
+		Curves: []animation.Curve{animation.CurveIdentity},
+		Values: []T{v},
 	}
 }
 

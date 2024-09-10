@@ -20,13 +20,17 @@ import (
 	"honnef.co/go/wgpu"
 )
 
-func Run(ctx context.Context, root widget.Widget) error {
+func New() (_ *application, err error) {
 	ins := wgpu.CreateInstance(wgpu.InstanceDescriptor{
 		Extras: &wgpu.InstanceExtras{
 			Backends: wgpu.InstanceBackendVulkan,
 		},
 	})
-	defer ins.Release()
+	defer func() {
+		if err != nil {
+			ins.Release()
+		}
+	}()
 
 	adapter, err := ins.RequestAdapter(wgpu.RequestAdapterOptions{
 		PowerPreference:      wgpu.PowerPreferenceHighPerformance,
@@ -34,7 +38,7 @@ func Run(ctx context.Context, root widget.Widget) error {
 		// CompatibleSurface:    surface,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer adapter.Release()
 
@@ -57,11 +61,15 @@ func Run(ctx context.Context, root widget.Widget) error {
 		},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	queue := dev.Queue()
-	defer queue.Release()
+	defer func() {
+		if err != nil {
+			queue.Release()
+		}
+	}()
 
 	r := wgpu_engine.New(dev, &wgpu_engine.RendererOptions{
 		SurfaceFormat: wgpu.TextureFormatRGBA8UnormSrgb,
@@ -69,14 +77,27 @@ func Run(ctx context.Context, root widget.Widget) error {
 	})
 
 	app := &application{
-		root:   root,
 		dev:    dev,
 		ins:    ins,
 		engine: r,
 		queue:  queue,
 	}
 	app.sys = wsi.NewSystem(app)
-	return app.sys.Run(context.Background())
+	return app, nil
+}
+
+func (app *application) Dispose() {
+	app.queue.Release()
+	app.ins.Release()
+}
+
+func (app *application) EmitEvent(win wsi.Window, ev wsi.Event) {
+	app.sys.EmitEvent(win, ev)
+}
+
+func (app *application) Run(ctx context.Context, root widget.Widget) error {
+	app.root = root
+	return app.sys.Run(ctx)
 }
 
 type application struct {

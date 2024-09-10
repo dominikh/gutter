@@ -8,29 +8,166 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"time"
 
-	"golang.org/x/exp/constraints"
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/jello/gfx"
 	"honnef.co/go/jello/jmath"
+
+	"golang.org/x/exp/constraints"
 )
 
-func AnimationProgress(start, end, now time.Time) float64 {
-	if now.Before(start) {
-		return 0
-	} else if now.After(end) {
-		return 1
-	} else {
-		return float64(now.Sub(start)) / float64(end.Sub(start))
+type Animation[T any] interface {
+	Listenable
+	StatusListenable
+
+	Animating() bool
+	Status() AnimationStatus
+	Value() T
+}
+
+type Animatable[T any] interface {
+	Evaluate(t float64) T
+}
+
+type Lerper[T any] interface {
+	Lerp(other T, t float64) T
+}
+
+func Animate[T any](parent Animation[float64], animatable Animatable[T]) Animation[T] {
+	return &animatedEvaluation[T]{
+		parent:     parent,
+		animatable: animatable,
 	}
 }
 
-type Tween[T any] func(start, end T, progress float64) T
+func Chain[T any](parent Animatable[float64], animatable Animatable[T]) Animatable[T] {
+	return &chainedEvaluation[T]{
+		parent:     parent,
+		animatable: animatable,
+	}
+}
 
-var _ Tween[int] = Lerp[int]
+var _ Animation[float64] = (*CurvedAnimation)(nil)
+
+type CurvedAnimation struct {
+	Animation[float64]
+	Curve        Curve
+	ReverseCurve Curve
+
+	curveDirection maybe.Option[AnimationStatus]
+	statusListener StatusListener
+}
+
+func NewCurvedAnimation(parent Animation[float64], curve, reverseCurve Curve) *CurvedAnimation {
+	obj := &CurvedAnimation{
+		Animation:    parent,
+		Curve:        curve,
+		ReverseCurve: reverseCurve,
+	}
+	obj.updateCurveDirection(parent.Status())
+	parent.AddStatusListener(obj.updateCurveDirection)
+	return obj
+}
+
+func (e *CurvedAnimation) effectiveCurve() Curve {
+	if e.ReverseCurve == nil {
+		return e.Curve
+	}
+	if e.curveDirection.UnwrapOr(e.Animation.Status()) != AnimationStatusReverse {
+		return e.Curve
+	}
+	return e.ReverseCurve
+}
+
+func (e *CurvedAnimation) updateCurveDirection(status AnimationStatus) {
+	switch status {
+	case AnimationStatusDismissed:
+	case AnimationStatusCompleted:
+		e.curveDirection.Clear()
+	case AnimationStatusForward:
+		e.curveDirection = maybe.Some(AnimationStatusForward)
+	case AnimationStatusReverse:
+		e.curveDirection = maybe.Some(AnimationStatusReverse)
+	default:
+		panic(fmt.Sprintf("internal error: unhandled status %v", status))
+	}
+}
+
+func (e *CurvedAnimation) Dispose() {
+	e.Animation.RemoveStatusListener(e.statusListener)
+}
+
+// Value implements Animation.
+func (e *CurvedAnimation) Value() float64 {
+	ease := e.effectiveCurve()
+	t := e.Animation.Value()
+	if ease == nil {
+		return t
+	}
+	if t == 0 || t == 1 {
+		return t
+	}
+	return ease.Transform(t)
+}
+
+type chainedEvaluation[T any] struct {
+	parent     Animatable[float64]
+	animatable Animatable[T]
+}
+
+func (c *chainedEvaluation[T]) Evaluate(t float64) T {
+	return c.animatable.Evaluate(c.parent.Evaluate(t))
+}
+
+type animatedEvaluation[T any] struct {
+	parent     Animation[float64]
+	animatable Animatable[T]
+}
+
+// AddListener implements Animation.
+func (a *animatedEvaluation[T]) AddListener(cb func()) Listener {
+	return a.parent.AddListener(cb)
+}
+
+// AddStatusListener implements Animation.
+func (a *animatedEvaluation[T]) AddStatusListener(cb func(status AnimationStatus)) StatusListener {
+	return a.parent.AddStatusListener(cb)
+}
+
+// Animating implements Animation.
+func (a *animatedEvaluation[T]) Animating() bool {
+	return a.parent.Animating()
+}
+
+// RemoveListener implements Animation.
+func (a *animatedEvaluation[T]) RemoveListener(l Listener) {
+	a.parent.RemoveListener(l)
+}
+
+// RemoveStatusListener implements Animation.
+func (a *animatedEvaluation[T]) RemoveStatusListener(l StatusListener) {
+	a.parent.RemoveStatusListener(l)
+}
+
+func (a *animatedEvaluation[T]) ClearListeners() {
+	a.parent.ClearListeners()
+}
+
+func (a *animatedEvaluation[T]) ClearStatusListeners() {
+	a.parent.ClearStatusListeners()
+}
+
+// Status implements Animation.
+func (a *animatedEvaluation[T]) Status() AnimationStatus {
+	return a.parent.Status()
+}
+
+// Value implements Animation.
+func (a *animatedEvaluation[T]) Value() T {
+	return a.animatable.Evaluate(a.parent.Value())
+}
 
 func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T {
 	switch t {
@@ -43,60 +180,25 @@ func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T 
 	}
 }
 
-type Animation[T any] struct {
-	StartTime  time.Time
-	EndTime    time.Time
-	StartValue T
-	EndValue   T
-	Repeat     bool
-	Compute    Tween[T]
-	Curve      Curve
+type Tween[T any] struct {
+	Start T
+	End   T
+	// Easing function to apply to t value passed to [Tween.Evaluate]. Optional.
+	Curve   Curve
+	Compute func(start, end T, progress float64) T
 }
 
-func (anim *Animation[T]) Start(now time.Time, d time.Duration, start, end T) {
-	*anim = Animation[T]{
-		StartTime:  now,
-		EndTime:    now.Add(d),
-		StartValue: start,
-		EndValue:   end,
-		Compute:    anim.Compute,
-		Curve:      anim.Curve,
+func (tween *Tween[T]) Evaluate(t float64) (v T) {
+	if c := tween.Curve; c != nil {
+		t = c.Transform(t)
 	}
-}
-
-func (anim *Animation[T]) Evaluate(now time.Time) (v T, done bool) {
-	t := AnimationProgress(anim.StartTime, anim.EndTime, now)
-	if anim.Repeat {
-		if t >= 1 {
-			if t > 1 {
-				// XXX right now this is impossible because AnimationProgress
-				// caps at 1, which is not what we want for repeating
-				// animations, anyway.
-				_, t = math.Modf(t)
-			}
-			d := anim.EndTime.Sub(anim.StartTime)
-			anim.StartTime = anim.EndTime
-			anim.EndTime = anim.EndTime.Add(d)
-		}
-		t = anim.Curve.Transform(t)
-		return anim.Compute(anim.StartValue, anim.EndValue, t), false
-	} else {
-		switch t {
-		case 0:
-			return anim.StartValue, false
-		case 1:
-			return anim.EndValue, true
-		default:
-			t = anim.Curve.Transform(t)
-			return anim.Compute(anim.StartValue, anim.EndValue, t), false
-		}
-	}
+	return tween.Compute(tween.Start, tween.End, t)
 }
 
 type Keyframes[T any] struct {
-	Frames  []float64
-	Easings []Curve
-	Values  []T
+	Frames []float64
+	Curves []Curve
+	Values []T
 	// The function to use for lerping between two values of type T. If it is
 	// nil then T must implement [Lerper] or be one of the built-in integer or
 	// float types.
@@ -149,15 +251,11 @@ func (v *Keyframes[T]) Evaluate(frame float64) T {
 	}
 }
 
-type Lerper[T any] interface {
-	Lerp(other T, t float64) T
-}
-
 func (kfs Keyframes[T]) ComputeFramesAndWeight(frame float64) (startValue, endValue T, t float64, ok bool) {
 	if len(kfs.Frames) == 0 {
 		return *new(T), *new(T), 0, false
 	} else if len(kfs.Frames) == 1 {
-		return kfs.Values[0], kfs.Values[0], kfs.Easings[0].Transform(1), true
+		return kfs.Values[0], kfs.Values[0], kfs.Curves[0].Transform(1), true
 	}
 	idx := sort.Search(len(kfs.Frames), func(i int) bool {
 		return kfs.Frames[i] >= frame
@@ -169,7 +267,7 @@ func (kfs Keyframes[T]) ComputeFramesAndWeight(frame float64) (startValue, endVa
 	idx1 := min(idx0+1, len(kfs.Frames)-1)
 	t0 := kfs.Frames[idx0]
 	t1 := kfs.Frames[idx1]
-	easing := kfs.Easings[idx0]
+	easing := kfs.Curves[idx0]
 	t = (frame - t0) / (t1 - t0)
 	if t1 <= t0 {
 		t = 0

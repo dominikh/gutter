@@ -6,7 +6,6 @@
 package widget
 
 import (
-	"reflect"
 	"time"
 
 	"honnef.co/go/color"
@@ -16,6 +15,7 @@ import (
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/render"
+	"honnef.co/go/gutter/wsi"
 	"honnef.co/go/jello"
 	"honnef.co/go/jello/gfx"
 )
@@ -26,10 +26,8 @@ var _ RenderObjectWidget = (*Opacity)(nil)
 var _ RenderObjectWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
 var _ RenderObjectWidget = (*SizedBox)(nil)
-var _ RenderObjectWidget = (*LottieFrame)(nil)
+var _ RenderObjectWidget = (*FadeTransition)(nil)
 
-var _ Widget = (*AnimatedOpacity)(nil)
-var _ Widget = (*AnimatedPadding)(nil)
 var _ Widget = (*ColoredBox)(nil)
 var _ Widget = (*KeyedSubtree)(nil)
 var _ Widget = (*Opacity)(nil)
@@ -38,6 +36,7 @@ var _ Widget = (*PointerRegion)(nil)
 var _ Widget = (*SizedBox)(nil)
 
 var _ StatefulWidget[*AnimatedOpacity] = (*AnimatedOpacity)(nil)
+var _ StatefulWidget[*ListenableBuilder] = (*ListenableBuilder)(nil)
 var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
 
 var _ KeyedWidget = (*KeyedSubtree)(nil)
@@ -63,37 +62,34 @@ func (p *Padding) CreateElement() Element {
 }
 
 type AnimatedPadding struct {
-	Padding render.Inset `gutter:"animated"`
+	Padding render.Inset
 	Child   Widget
 
 	Duration time.Duration
-	Curve    func(t float64) float64
+	Curve    animation.Curve
 }
 
-// CreateElement implements StatefulWidget.
+type paddingAnimations struct {
+	Padding animation.Animation[render.Inset]
+}
+
 func (a *AnimatedPadding) CreateElement() Element {
 	return NewInteriorElement(a)
 }
 
-// CreateState implements StatefulWidget.
 func (a *AnimatedPadding) CreateState() State[*AnimatedPadding] {
-	s := &animatedPaddingState{}
-	s.AnimatedProperty = makeAnimatedProperty(s, render.LerpInset)
-	return s
-}
-
-type animatedPaddingState struct {
-	StateHandle[*AnimatedPadding]
-
-	AnimatedProperty[render.Inset, *AnimatedPadding, *animatedPaddingState]
-}
-
-// Build implements State.
-func (a *animatedPaddingState) Build(ctx BuildContext) Widget {
-	return &Padding{
-		Padding: a.AnimatedProperty.Value,
-		Child:   a.Widget.Child,
-	}
+	return NewAutomaticAnimatedState[paddingAnimations](
+		map[string]any{
+			"Padding": NewAnimatedField(render.LerpInset),
+		},
+		func(ctx BuildContext, s State[*AnimatedPadding], anims *paddingAnimations) Widget {
+			return &Padding{
+				Padding: anims.Padding.Value(),
+				Child:   s.GetStateHandle().Widget.Child,
+			}
+		},
+		true,
+	)
 }
 
 type ColoredBox struct {
@@ -238,18 +234,31 @@ func (o *Opacity) CreateElement() Element {
 }
 
 type AnimatedOpacity struct {
-	Opacity float32 `gutter:"animated"`
+	Opacity float32
 	Child   Widget
 
 	Duration time.Duration
-	Curve    func(t float64) float64
+	Curve    animation.Curve
+}
+
+type opacityAnimations struct {
+	Opacity animation.Animation[float32]
 }
 
 // CreateState implements StatefulWidget.
 func (a *AnimatedOpacity) CreateState() State[*AnimatedOpacity] {
-	s := &animatedOpacityState{}
-	s.AnimatedProperty = makeAnimatedProperty(s, animation.Lerp[float32])
-	return s
+	return NewAutomaticAnimatedState[opacityAnimations](
+		map[string]any{
+			"Opacity": NewAnimatedField(animation.Lerp[float32]),
+		},
+		func(ctx BuildContext, s State[*AnimatedOpacity], anims *opacityAnimations) Widget {
+			return &FadeTransition{
+				Opacity: anims.Opacity,
+				Child:   s.GetStateHandle().Widget.Child,
+			}
+		},
+		false,
+	)
 }
 
 // CreateElement implements Widget.
@@ -257,88 +266,25 @@ func (a *AnimatedOpacity) CreateElement() Element {
 	return NewInteriorElement(a)
 }
 
-type animatedOpacityState struct {
-	StateHandle[*AnimatedOpacity]
-
-	AnimatedProperty[float32, *AnimatedOpacity, *animatedOpacityState]
+type FadeTransition struct {
+	Opacity animation.Animation[float32]
+	Child   Widget
 }
 
-// Build implements State.
-func (a *animatedOpacityState) Build(ctx BuildContext) Widget {
-	return &Opacity{
-		Opacity: a.AnimatedProperty.Value,
-		Child:   a.Widget.Child,
-	}
+// CreateElement implements Widget.
+func (f *FadeTransition) CreateElement() Element {
+	return NewRenderObjectElement(f)
 }
 
-func makeAnimatedProperty[
-	T any,
-	W Widget,
-	S State[W],
-](
-	state S,
-	compute func(start, end T, t float64) T,
-) AnimatedProperty[T, W, S] {
-	return AnimatedProperty[T, W, S]{
-		state:   state,
-		compute: compute,
-	}
+func (f *FadeTransition) CreateRenderObject(ctx BuildContext) render.Object {
+	obj := &render.AnimatedOpacity{}
+	obj.SetOpacity(f.Opacity)
+	return obj
 }
 
-type AnimatedProperty[T any, W Widget, S State[W]] struct {
-	state   S
-	compute func(start, end T, t float64) T
-
-	field     int
-	animation animation.Animation[T]
-	Value     T
-
-	// This caches the method value. If we didn't cache it, Go would create it anew every time we pass it to
-	// AddNextFrameCallback, causing an allocation on every animation frame. The field gets set at state
-	// initialization time, i.e. in the Transition method.
-	updateAnimationFn func(time.Time)
-}
-
-func (p *AnimatedProperty[T, W, S]) Transition(t StateTransition[W]) {
-	switch t.Kind {
-	case StateInitializing:
-		p.updateAnimationFn = p.updateAnimation
-
-		w := reflect.ValueOf(p.state.GetStateHandle().Widget).Elem()
-		wt := w.Type()
-		for i := range wt.NumField() {
-			if wt.Field(i).Tag.Get("gutter") == "animated" {
-				p.field = i
-				break
-			}
-		}
-
-		p.Value = w.Field(p.field).Interface().(T)
-		p.animation.Curve = curveOrDefault(w.FieldByName("Curve").Interface().(animation.Curve))
-		p.animation.Compute = p.compute
-	case StateUpdatedWidget:
-		sh := p.state.GetStateHandle()
-		w := reflect.ValueOf(sh.Widget).Elem()
-		if !w.Field(p.field).Equal(reflect.ValueOf(t.OldWidget).Elem().Field(p.field)) {
-			// XXX this should use the event's now, not time.Now
-			p.animation.Start(time.Now(), w.FieldByName("Duration").Interface().(time.Duration), p.Value, w.Field(p.field).Interface().(T))
-			// XXX can this cause two calls to updateAnimation to be queued?
-			// XXX we don't want time.Now
-			p.updateAnimation(time.Now())
-		}
-	}
-	// TODO(dh): prevent further calls to updateAnimation after the state gets disposed
-}
-
-func (p *AnimatedProperty[T, W, S]) updateAnimation(now time.Time) {
-	v, done := p.animation.Evaluate(now)
-	p.Value = v
-
-	if !done {
-		// XXX this chain of fields is ridiculous
-		p.state.GetStateHandle().Element.Handle().BuildOwner.AddNextFrameCallback(p.updateAnimationFn)
-	}
-	MarkNeedsBuild(p.state.GetStateHandle().Element)
+func (f *FadeTransition) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+	obj_ := obj.(*render.AnimatedOpacity)
+	obj_.SetOpacity(f.Opacity)
 }
 
 func curveOrDefault(curve animation.Curve) animation.Curve {
@@ -380,86 +326,6 @@ func (b *Builder) CreateElement() Element {
 	return NewInteriorElement(b)
 }
 
-var _ StatefulWidget[*ChannelBuilder[int]] = (*ChannelBuilder[int])(nil)
-
-type ChannelBuilder[E any] struct {
-	Channel chan E
-	Builder func(ctx BuildContext, child Widget, v maybe.Option[E]) Widget
-	Child   Widget
-}
-
-// CreateElement implements StatefulWidget.
-func (c *ChannelBuilder[E]) CreateElement() Element {
-	return NewInteriorElement(c)
-}
-
-// CreateState implements StatefulWidget.
-func (c *ChannelBuilder[E]) CreateState() State[*ChannelBuilder[E]] {
-	return &channelBuilderState[E]{}
-}
-
-type channelBuilderState[E any] struct {
-	StateHandle[*ChannelBuilder[E]]
-	value maybe.Option[E]
-	g     chan struct{}
-}
-
-// Build implements State.
-func (c *channelBuilderState[E]) Build(ctx BuildContext) Widget {
-	return c.Widget.Builder(ctx, c.Widget.Child, c.value)
-}
-
-// Transition implements State.
-func (c *channelBuilderState[E]) Transition(t StateTransition[*ChannelBuilder[E]]) {
-	switch t.Kind {
-	case StateInitializing:
-		c.startGoroutine()
-	case StateActivating:
-		c.startGoroutine()
-	case StateDeactivating:
-		c.stopGoroutine()
-	case StateUpdatedWidget:
-		if t.OldWidget.Channel != c.Widget.Channel {
-			c.restartGoroutine()
-		}
-	}
-}
-
-func (c *channelBuilderState[E]) startGoroutine() {
-	debug.Assert(c.g == nil)
-	g := make(chan struct{})
-	c.g = g
-	ch := c.Widget.Channel
-	debug.Assert(ch != nil)
-	go func() {
-		// Read g and ch instead of c.g and c.Widget.Channel to avoid racing with updates to the widget tree.
-		for {
-			select {
-			case <-g:
-				return
-			case v, ok := <-ch:
-				if !ok {
-					return
-				}
-				c.Element.Handle().BuildOwner.EmitEvent(CallbackEvent(func() {
-					c.value = maybe.Some(v)
-					MarkNeedsBuild(c.Element)
-				}))
-			}
-		}
-	}()
-}
-
-func (c *channelBuilderState[E]) stopGoroutine() {
-	close(c.g)
-	c.g = nil
-}
-
-func (c *channelBuilderState[E]) restartGoroutine() {
-	c.stopGoroutine()
-	c.startGoroutine()
-}
-
 type CallbackEvent func()
 
 func (CallbackEvent) ImplementsEvent() {}
@@ -488,4 +354,146 @@ func (f *FittedBox) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 	obj_ := obj.(*render.FittedBox)
 	obj_.SetFit(f.Fit)
 	obj_.SetClip(f.Clip)
+}
+
+type ListenableBuilder struct {
+	Listenable animation.Listenable
+	Builder    func(ctx BuildContext, child Widget) Widget
+	Child      Widget
+}
+
+// CreateElement implements Widget.
+func (b *ListenableBuilder) CreateElement() Element {
+	return NewInteriorElement(b)
+}
+
+func (b *ListenableBuilder) CreateState() State[*ListenableBuilder] {
+	return &listenableBuilderState{}
+}
+
+type listenableBuilderState struct {
+	StateHandle[*ListenableBuilder]
+
+	listener animation.Listener
+}
+
+// Transition implements State.
+func (a *listenableBuilderState) Transition(t StateTransition[*ListenableBuilder]) {
+	switch t.Kind {
+	case StateInitializing:
+		a.listener = a.Widget.Listenable.AddListener(a.handleChange)
+	case StateUpdatedWidget:
+		if a.Widget.Listenable != t.OldWidget.Listenable {
+			t.OldWidget.Listenable.RemoveListener(a.listener)
+			a.listener = a.Widget.Listenable.AddListener(a.handleChange)
+		}
+	case StateDisposing:
+		a.Widget.Listenable.RemoveListener(a.listener)
+	}
+}
+
+// Build implements State.
+func (a *listenableBuilderState) Build(ctx BuildContext) Widget {
+	return a.Widget.Builder(ctx, a.Widget.Child)
+}
+
+func (a *listenableBuilderState) handleChange() {
+	MarkNeedsBuild(a.Element)
+}
+
+var _ Widget = (*ValueListenableBuilder[float64])(nil)
+var _ StatefulWidget[*ValueListenableBuilder[float64]] = (*ValueListenableBuilder[float64])(nil)
+
+type ValueListenableBuilder[T any] struct {
+	ValueListenable animation.ValueListenable[T]
+	Builder         func(ctx BuildContext, v maybe.Option[T], child Widget) Widget
+	Child           Widget
+}
+
+// CreateState implements StatefulWidget.
+func (v *ValueListenableBuilder[T]) CreateState() State[*ValueListenableBuilder[T]] {
+	return &valueListenableBuilderState[T]{}
+}
+
+// CreateElement implements Widget.
+func (v *ValueListenableBuilder[T]) CreateElement() Element {
+	return NewInteriorElement(v)
+}
+
+type valueListenableBuilderState[T any] struct {
+	StateHandle[*ValueListenableBuilder[T]]
+
+	listener animation.Listener
+	value    maybe.Option[T]
+}
+
+// Build implements State.
+func (v *valueListenableBuilderState[T]) Build(ctx BuildContext) Widget {
+	return v.Widget.Builder(ctx, v.value, v.Widget.Child)
+}
+
+// Transition implements State.
+func (v *valueListenableBuilderState[T]) Transition(t StateTransition[*ValueListenableBuilder[T]]) {
+	switch t.Kind {
+	case StateInitializing:
+		v.value = v.Widget.ValueListenable.Value()
+		v.listener = v.Widget.ValueListenable.AddListener(v.valueChanged)
+	case StateUpdatedWidget:
+		if t.OldWidget.ValueListenable != v.Widget.ValueListenable {
+			t.OldWidget.ValueListenable.RemoveListener(v.listener)
+			v.value = v.Widget.ValueListenable.Value()
+			v.listener = v.Widget.ValueListenable.AddListener(v.valueChanged)
+		}
+	case StateDisposing:
+		v.Widget.ValueListenable.RemoveListener(v.listener)
+	}
+}
+
+func (v *valueListenableBuilderState[T]) valueChanged() {
+	v.value = v.Widget.ValueListenable.Value()
+	MarkNeedsBuild(v.Element)
+}
+
+var _ animation.ValueListenable[int] = (*ChannelListener[int])(nil)
+
+type ChannelListener[T any] struct {
+	animation.PlainListenable
+	ch        <-chan T
+	emitEvent func(ev wsi.Event)
+	value     maybe.Option[T]
+	g         chan struct{}
+}
+
+func NewChannelListener[T any](ch <-chan T, emitEvent func(ev wsi.Event)) *ChannelListener[T] {
+	l := &ChannelListener[T]{
+		ch:        ch,
+		emitEvent: emitEvent,
+	}
+	l.startGoroutine()
+	return l
+}
+
+func (l *ChannelListener[T]) Value() maybe.Option[T] { return l.value }
+func (l *ChannelListener[T]) Dispose()               { close(l.g) }
+
+func (l *ChannelListener[T]) startGoroutine() {
+	debug.Assert(l.g == nil)
+	l.g = make(chan struct{})
+	debug.Assert(l.ch != nil)
+	go func() {
+		for {
+			select {
+			case <-l.g:
+				return
+			case v, ok := <-l.ch:
+				if !ok {
+					return
+				}
+				l.emitEvent(CallbackEvent(func() {
+					l.value = maybe.Some(v)
+					l.NotifyListeners()
+				}))
+			}
+		}
+	}()
 }

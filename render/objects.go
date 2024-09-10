@@ -25,6 +25,7 @@ var _ ObjectWithChildren = (*Clip)(nil)
 var _ ObjectWithChildren = (*Constrained)(nil)
 var _ ObjectWithChildren = (*FittedBox)(nil)
 var _ ObjectWithChildren = (*Opacity)(nil)
+var _ ObjectWithChildren = (*AnimatedOpacity)(nil)
 var _ ObjectWithChildren = (*Padding)(nil)
 
 type Box struct {
@@ -400,4 +401,84 @@ func (l *Lottie) PerformPaint(p *Painter, scene *jello.Scene) {
 	}
 	var r lottie_renderer.Renderer
 	r.Append(l.composition, l.frame, curve.Identity, 1, scene)
+}
+
+var _ Attacher = (*AnimatedOpacity)(nil)
+
+type AnimatedOpacity struct {
+	Box
+	SingleChild
+
+	opacity    animation.Animation[float32]
+	oldOpacity float32
+
+	updateOpacityListener animation.Listener
+}
+
+// PerformLayout implements Object.
+func (o *AnimatedOpacity) PerformLayout() (size curve.Size) {
+	if o.Child != nil {
+		return Layout(o.Child, o.constraints, true)
+	} else {
+		return o.constraints.Constrain(curve.Sz(0, 0))
+	}
+}
+
+// PerformPaint implements Object.
+func (o *AnimatedOpacity) PerformPaint(p *Painter, scene *jello.Scene) {
+	alpha := o.opacity.Value()
+	switch alpha {
+	case 0:
+		return
+	case 1:
+		p.PaintAt(o.Child, scene, curve.Point{})
+	default:
+		scene.PushLayer(
+			gfx.BlendMode{},
+			alpha,
+			curve.Identity,
+			curve.NewRectFromPoints(curve.Pt(-1e9, -1e9), curve.Pt(1e9, 1e9)).Path(0.1),
+		)
+		defer scene.PopLayer()
+		p.PaintAt(o.Child, scene, curve.Point{})
+	}
+}
+
+// PerformAttach implements Attacher.
+func (o *AnimatedOpacity) PerformAttach(r *Renderer) {
+	// TODO(dh): we'd prefer AfterAttach and BeforeDetach hooks instead of
+	// PerformAttach, so that we don't have to concern ourselves with attaching
+	// children
+	o.VisitChildren(func(child Object) bool {
+		Attach(child, r)
+		return true
+	})
+	o.updateOpacityListener = o.opacity.AddListener(o.updateOpacity)
+	o.updateOpacity()
+}
+
+// PerformDetach implements Attacher.
+func (o *AnimatedOpacity) PerformDetach() {
+	o.opacity.RemoveListener(o.updateOpacityListener)
+}
+
+func (o *AnimatedOpacity) SetOpacity(anim animation.Animation[float32]) {
+	if o.opacity == anim {
+		return
+	}
+	if o.Attached() && o.opacity != nil {
+		o.opacity.RemoveListener(o.updateOpacityListener)
+	}
+	o.opacity = anim
+	if o.Attached() {
+		o.updateOpacityListener = o.opacity.AddListener(o.updateOpacity)
+	}
+	o.updateOpacity()
+}
+
+func (o *AnimatedOpacity) updateOpacity() {
+	if o.oldOpacity != o.opacity.Value() {
+		o.oldOpacity = o.opacity.Value()
+		MarkNeedsPaint(o)
+	}
 }

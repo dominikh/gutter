@@ -323,6 +323,7 @@ func isType[T any](obj any) bool {
 }
 
 func Layout(obj Object, cs Constraints, parentUsesSize bool) curve.Size {
+	debug.Assert(obj != nil)
 	if cs.Min.Width > cs.Max.Width || cs.Min.Height > cs.Max.Height || cs.Min.Width < 0 || cs.Min.Height < 0 {
 		panic(fmt.Sprintf("constraints %v are malformed", cs))
 	}

@@ -10,10 +10,10 @@ import (
 	"math"
 	"reflect"
 	"slices"
-	"time"
 	"unsafe"
 
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/mem"
 	"honnef.co/go/gutter/render"
@@ -608,26 +608,21 @@ type BuildOwner struct {
 	EmitEvent                   func(ev wsi.Event)
 	globals                     map[GlobalKey]Element
 	inDrawFrame                 bool
-	nextFrameCallbacks          mem.DoubleBufferedSlice[func(now time.Time)]
+}
+
+// CreateTicker implements animation.TickerProvider.
+func (o *BuildOwner) CreateTicker(cb animation.TickerCallback) animation.Ticker {
+	// TODO(dh): eventually we'll want a widget tree-aware ticker provider that
+	// supports something akin to Flutter's TickerMode.
+	tp := &animation.PlainTickerProvider{
+		FrameCallbacker: o.Renderer,
+	}
+	return tp.CreateTicker(cb)
 }
 
 func NewBuildOwner() *BuildOwner {
 	return &BuildOwner{
 		globals: make(map[GlobalKey]Element),
-	}
-}
-
-func (o *BuildOwner) AddNextFrameCallback(fn func(now time.Time)) {
-	o.nextFrameCallbacks.Front = append(o.nextFrameCallbacks.Front, fn)
-	o.Renderer.RequestVisualUpdate()
-}
-
-func (o *BuildOwner) RunFrameCallbacks(now time.Time) {
-	fns := o.nextFrameCallbacks.Front
-	o.nextFrameCallbacks.Swap()
-
-	for _, fn := range fns {
-		fn(now)
 	}
 }
 

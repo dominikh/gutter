@@ -423,7 +423,7 @@ func (win *WaylandWindow) RequestFrame() {
 	}
 }
 
-func (win *WaylandWindow) redraw(ts time.Time) {
+func (win *WaylandWindow) redraw(d time.Duration) {
 	if win.sys.wl.pres != nil {
 		// XXX we have to remember fb and free it
 		fb := win.sys.wl.pres.Feedback(win.surf)
@@ -437,7 +437,7 @@ func (win *WaylandWindow) redraw(ts time.Time) {
 	}
 	win.sys.app.WindowEvent(
 		mem.Make(&win.sys.eventArena, Context{Window: win}),
-		mem.Make(&win.sys.eventArena, RedrawRequested{ts}),
+		mem.Make(&win.sys.eventArena, RedrawRequested{d}),
 	)
 }
 
@@ -445,9 +445,9 @@ func (win *WaylandWindow) onFrame(ms uint32) {
 	// TODO(dh): libwayland should be responsible for giving us the right
 	// argument type.
 	// fmt.Println(ms)
-	ts := time.Time{}.Add(time.Duration(ms) * time.Millisecond)
+	d := time.Duration(ms) * time.Millisecond
 	win.frameScheduled = false
-	win.redraw(ts)
+	win.redraw(d)
 }
 
 func (win *WaylandWindow) requestFrameNow() {
@@ -560,7 +560,8 @@ func (win *WaylandWindow) setup() {
 		if first {
 			first = false
 			win.xdgSurf.AckConfigure(serial)
-			win.redraw(time.Now())
+			// XXX 0 isn't great, e.g. if the app wants to fade in when starting
+			win.redraw(0)
 		} else if changedSize {
 			win.requestFrameNow()
 			win.dsp.Flush()
@@ -676,7 +677,7 @@ type Resized struct {
 }
 
 type RedrawRequested struct {
-	When time.Time
+	When time.Duration
 }
 
 type CloseRequested struct{}
