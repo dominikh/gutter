@@ -29,7 +29,6 @@ func AnimationProgress(start, end, now time.Time) float64 {
 }
 
 type Tween[T any] func(start, end T, progress float64) T
-type Ease func(t float64) float64
 
 var _ Tween[int] = Lerp[int]
 
@@ -51,7 +50,7 @@ type Animation[T any] struct {
 	EndValue   T
 	Repeat     bool
 	Compute    Tween[T]
-	Curve      Ease
+	Curve      Curve
 }
 
 func (anim *Animation[T]) Start(now time.Time, d time.Duration, start, end T) {
@@ -79,7 +78,7 @@ func (anim *Animation[T]) Evaluate(now time.Time) (v T, done bool) {
 			anim.StartTime = anim.EndTime
 			anim.EndTime = anim.EndTime.Add(d)
 		}
-		t = anim.Curve(t)
+		t = anim.Curve.Transform(t)
 		return anim.Compute(anim.StartValue, anim.EndValue, t), false
 	} else {
 		switch t {
@@ -88,7 +87,7 @@ func (anim *Animation[T]) Evaluate(now time.Time) (v T, done bool) {
 		case 1:
 			return anim.EndValue, true
 		default:
-			t = anim.Curve(t)
+			t = anim.Curve.Transform(t)
 			return anim.Compute(anim.StartValue, anim.EndValue, t), false
 		}
 	}
@@ -96,7 +95,7 @@ func (anim *Animation[T]) Evaluate(now time.Time) (v T, done bool) {
 
 type Keyframes[T any] struct {
 	Frames  []float64
-	Easings []Ease
+	Easings []Curve
 	Values  []T
 	// The function to use for lerping between two values of type T. If it is
 	// nil then T must implement [Lerper] or be one of the built-in integer or
@@ -158,7 +157,7 @@ func (kfs Keyframes[T]) ComputeFramesAndWeight(frame float64) (startValue, endVa
 	if len(kfs.Frames) == 0 {
 		return *new(T), *new(T), 0, false
 	} else if len(kfs.Frames) == 1 {
-		return kfs.Values[0], kfs.Values[0], kfs.Easings[0](1), true
+		return kfs.Values[0], kfs.Values[0], kfs.Easings[0].Transform(1), true
 	}
 	idx := sort.Search(len(kfs.Frames), func(i int) bool {
 		return kfs.Frames[i] >= frame
@@ -175,7 +174,7 @@ func (kfs Keyframes[T]) ComputeFramesAndWeight(frame float64) (startValue, endVa
 	if t1 <= t0 {
 		t = 0
 	}
-	return kfs.Values[idx0], kfs.Values[idx1], easing(jmath.Clamp(t, 0, 1)), true
+	return kfs.Values[idx0], kfs.Values[idx1], easing.Transform(jmath.Clamp(t, 0, 1)), true
 }
 
 type Transform struct {

@@ -76,7 +76,7 @@ func (l *Lottie) CreateState() State[*Lottie] {
 			EndValue:   l.Composition.LastFrame - 1,
 			Repeat:     true,
 			Compute:    animation.Lerp[float64],
-			Curve:      animation.EaseIdentity,
+			Curve:      animation.CurveIdentity,
 		},
 	}
 }

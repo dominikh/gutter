@@ -314,7 +314,7 @@ func (p *AnimatedProperty[T, W, S]) Transition(t StateTransition[W]) {
 		}
 
 		p.Value = w.Field(p.field).Interface().(T)
-		p.animation.Curve = curveOrDefault(w.FieldByName("Curve").Interface().(func(float64) float64))
+		p.animation.Curve = curveOrDefault(w.FieldByName("Curve").Interface().(animation.Curve))
 		p.animation.Compute = p.compute
 	case StateUpdatedWidget:
 		sh := p.state.GetStateHandle()
@@ -341,11 +341,11 @@ func (p *AnimatedProperty[T, W, S]) updateAnimation(now time.Time) {
 	MarkNeedsBuild(p.state.GetStateHandle().Element)
 }
 
-func curveOrDefault(curve func(float64) float64) func(float64) float64 {
+func curveOrDefault(curve animation.Curve) animation.Curve {
 	if curve != nil {
 		return curve
 	} else {
-		return animation.EaseInSine
+		return animation.CurveInSine
 	}
 }
 

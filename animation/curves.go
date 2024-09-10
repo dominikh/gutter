@@ -11,31 +11,99 @@ import (
 	"honnef.co/go/jello/jmath"
 )
 
-func EaseIdentity(t float64) float64 {
+type Curve interface {
+	Transform(t float64) float64
+}
+
+var CurveIdentity = Curve(&curveIdentity{})
+var CurveInBack = Curve(&curveInBack{})
+var CurveInBounce = Curve(&curveInBounce{})
+var CurveInCirc = Curve(&curveInCirc{})
+var CurveInCubic = Curve(&curveInCubic{})
+var CurveInElastic = Curve(&curveInElastic{})
+var CurveInExpo = Curve(&curveInExpo{})
+var CurveInOutBack = Curve(&curveInOutBack{})
+var CurveInOutBounce = Curve(&curveInOutBounce{})
+var CurveInOutCirc = Curve(&curveInOutCirc{})
+var CurveInOutCubic = Curve(&curveInOutCubic{})
+var CurveInOutElastic = Curve(&curveInOutElastic{})
+var CurveInOutExpo = Curve(&curveInOutExpo{})
+var CurveInOutQuad = Curve(&curveInOutQuad{})
+var CurveInOutQuart = Curve(&curveInOutQuart{})
+var CurveInOutQuint = Curve(&curveInOutQuint{})
+var CurveInOutSine = Curve(&curveInOutSine{})
+var CurveInQuad = Curve(&curveInQuad{})
+var CurveInQuart = Curve(&curveInQuart{})
+var CurveInQuint = Curve(&curveInQuint{})
+var CurveInSine = Curve(&curveInSine{})
+var CurveOutBack = Curve(&curveOutBack{})
+var CurveOutBounce = Curve(&curveOutBounce{})
+var CurveOutCirc = Curve(&curveOutCirc{})
+var CurveOutCubic = Curve(&curveOutCubic{})
+var CurveOutElastic = Curve(&curveOutElastic{})
+var CurveOutExpo = Curve(&curveOutExpo{})
+var CurveOutQuad = Curve(&curveOutQuad{})
+var CurveOutQuart = Curve(&curveOutQuart{})
+var CurveOutQuint = Curve(&curveOutQuint{})
+var CurveOutSine = Curve(&curveOutSine{})
+
+type curveIdentity struct{}
+type curveInBack struct{}
+type curveInBounce struct{}
+type curveInCirc struct{}
+type curveInCubic struct{}
+type curveInElastic struct{}
+type curveInExpo struct{}
+type curveInOutBack struct{}
+type curveInOutBounce struct{}
+type curveInOutCirc struct{}
+type curveInOutCubic struct{}
+type curveInOutElastic struct{}
+type curveInOutExpo struct{}
+type curveInOutQuad struct{}
+type curveInOutQuart struct{}
+type curveInOutQuint struct{}
+type curveInOutSine struct{}
+type curveInQuad struct{}
+type curveInQuart struct{}
+type curveInQuint struct{}
+type curveInSine struct{}
+type curveOutBack struct{}
+type curveOutBounce struct{}
+type curveOutCirc struct{}
+type curveOutCubic struct{}
+type curveOutElastic struct{}
+type curveOutExpo struct{}
+type curveOutQuad struct{}
+type curveOutQuart struct{}
+type curveOutQuint struct{}
+type curveOutSine struct{}
+
+func (*curveIdentity) Transform(t float64) float64 {
 	return t
 }
 
-func EaseInSine(t float64) float64 {
+func (*curveInSine) Transform(t float64) float64 {
 	return 1 - math.Cos((t*math.Pi)/2)
 }
 
-func EaseOutSine(t float64) float64 {
+func (*curveOutSine) Transform(t float64) float64 {
 	return math.Sin((t * math.Pi) / 2)
 }
 
-func EaseInOutSine(t float64) float64 {
+func (*curveInOutSine) Transform(t float64) float64 {
 	return -(math.Cos(math.Pi*t) - 1) / 2
 }
 
-func EaseInQuad(t float64) float64 {
+func (*curveInQuad) Transform(t float64) float64 {
 	return t * t
 }
 
-func EaseOutQuad(t float64) float64 {
+func (*curveOutQuad) Transform(t float64) float64 {
 	return 1 - (1 - t) - (1 - t)
 }
 
-func EaseInOutQuad(t float64) float64 {
+func (*curveInOutQuad) Transform(t float64) float64 {
 	if t < 0.5 {
 		return 2 * t * t
 	} else {
@@ -43,15 +111,15 @@ func EaseInOutQuad(t float64) float64 {
 	}
 }
 
-func EaseInCubic(t float64) float64 {
+func (*curveInCubic) Transform(t float64) float64 {
 	return t * t * t
 }
 
-func EaseOutCubic(t float64) float64 {
+func (*curveOutCubic) Transform(t float64) float64 {
 	return 1 - (1-t)*(1-t)*(1-t)
 }
 
-func EaseInOutCubic(t float64) float64 {
+func (*curveInOutCubic) Transform(t float64) float64 {
 	if t < 0.5 {
 		return 4 * t * t * t
 	} else {
@@ -59,15 +127,15 @@ func EaseInOutCubic(t float64) float64 {
 	}
 }
 
-func EaseInQuart(t float64) float64 {
+func (*curveInQuart) Transform(t float64) float64 {
 	return t * t * t * t
 }
 
-func EaseOutQuart(t float64) float64 {
+func (*curveOutQuart) Transform(t float64) float64 {
 	return 1 - (1-t)*(1-t)*(1-t)*(1-t)
 }
 
-func EaseInOutQuart(t float64) float64 {
+func (*curveInOutQuart) Transform(t float64) float64 {
 	if t < 0.5 {
 		return 8 * t * t * t * t
 	} else {
@@ -75,15 +143,15 @@ func EaseInOutQuart(t float64) float64 {
 	}
 }
 
-func EaseInQuint(t float64) float64 {
+func (*curveInQuint) Transform(t float64) float64 {
 	return t * t * t * t * t
 }
 
-func EaseOutQuint(t float64) float64 {
+func (*curveOutQuint) Transform(t float64) float64 {
 	return 1 - (1-t)*(1-t)*(1-t)*(1-t)*(1-t)
 }
 
-func EaseInOutQuint(t float64) float64 {
+func (*curveInOutQuint) Transform(t float64) float64 {
 	if t < 0.5 {
 		return 16 * t * t * t * t * t
 	} else {
@@ -91,15 +159,15 @@ func EaseInOutQuint(t float64) float64 {
 	}
 }
 
-func EaseInCirc(t float64) float64 {
+func (*curveInCirc) Transform(t float64) float64 {
 	return 1 - math.Sqrt(1-t*t)
 }
 
-func EaseOutCirc(t float64) float64 {
+func (*curveOutCirc) Transform(t float64) float64 {
 	return math.Sqrt(1 - (t-1)*(t-1))
 }
 
-func EaseInOutCirc(t float64) float64 {
+func (*curveInOutCirc) Transform(t float64) float64 {
 	if t < 0.5 {
 		return (1 - math.Sqrt(1-2*t*2*t)) / 2
 	} else {
@@ -107,7 +175,7 @@ func EaseInOutCirc(t float64) float64 {
 	}
 }
 
-func EaseInElastic(t float64) float64 {
+func (*curveInElastic) Transform(t float64) float64 {
 	switch t {
 	case 0:
 		return 0
@@ -119,7 +187,7 @@ func EaseInElastic(t float64) float64 {
 	}
 }
 
-func EaseOutElastic(t float64) float64 {
+func (*curveOutElastic) Transform(t float64) float64 {
 	switch t {
 	case 0:
 		return 0
@@ -131,7 +199,7 @@ func EaseOutElastic(t float64) float64 {
 	}
 }
 
-func EaseInOutElastic(t float64) float64 {
+func (*curveInOutElastic) Transform(t float64) float64 {
 	const c5 = (2 * math.Pi) / 4.5
 	if t == 0 {
 		return 0
@@ -144,11 +212,11 @@ func EaseInOutElastic(t float64) float64 {
 	}
 }
 
-func EaseInBounce(t float64) float64 {
-	return 1 - EaseOutBounce(1-t)
+func (*curveInBounce) Transform(t float64) float64 {
+	return 1 - CurveOutBounce.Transform(1-t)
 }
 
-func EaseOutBounce(t float64) float64 {
+func (*curveOutBounce) Transform(t float64) float64 {
 	const n1 = 7.5625
 	const d1 = 2.75
 
@@ -166,15 +234,15 @@ func EaseOutBounce(t float64) float64 {
 	}
 }
 
-func EaseInOutBounce(t float64) float64 {
+func (*curveInOutBounce) Transform(t float64) float64 {
 	if t < 0.5 {
-		return (1 - EaseOutBounce(1-2*t)) / 2
+		return (1 - CurveOutBounce.Transform(1-2*t)) / 2
 	} else {
-		return (1 + EaseOutBounce(2*t-1)) / 2
+		return (1 + CurveOutBounce.Transform(2*t-1)) / 2
 	}
 }
 
-func EaseInExpo(t float64) float64 {
+func (*curveInExpo) Transform(t float64) float64 {
 	if t == 0 {
 		return 0
 	} else {
@@ -182,7 +250,7 @@ func EaseInExpo(t float64) float64 {
 	}
 }
 
-func EaseOutExpo(t float64) float64 {
+func (*curveOutExpo) Transform(t float64) float64 {
 	if t == 1 {
 		return 1
 	} else {
@@ -190,7 +258,7 @@ func EaseOutExpo(t float64) float64 {
 	}
 }
 
-func EaseInOutExpo(t float64) float64 {
+func (*curveInOutExpo) Transform(t float64) float64 {
 	if t == 0 {
 		return 0
 	} else if t == 1 {
@@ -202,20 +270,20 @@ func EaseInOutExpo(t float64) float64 {
 	}
 }
 
-func EaseInBack(t float64) float64 {
+func (*curveInBack) Transform(t float64) float64 {
 	const c1 = 1.70158
 	const c3 = c1 + 1
 	return c3*t*t*t - c1*t*t
 }
 
-func EaseOutBack(t float64) float64 {
+func (*curveOutBack) Transform(t float64) float64 {
 	const c1 = 1.70158
 	const c3 = c1 + 1
 
 	return 1 + c3*(t-1)*(t-1)*(t-1) + c1*(t-1)*(t-1)
 }
 
-func EaseInOutBack(t float64) float64 {
+func (*curveInOutBack) Transform(t float64) float64 {
 	const c1 = 1.70158
 	const c2 = c1 * 1.525
 
@@ -226,13 +294,13 @@ func EaseInOutBack(t float64) float64 {
 	}
 }
 
-// EaseCubicBezier uses a cubic Bézier curve to map the input t to an output t′,
+// CurveCubicBezier uses a cubic Bézier curve to map the input t to an output t′,
 // similar to cubic Bézier easing functions in CSS and many other tools.
 //
 // The first and last control points are fixed to (0, 0) and (1, 1), and the x
 // coordinates of the remaining two control points are constrained to [0, 1).
 // This ensures that x(t) is monotonically increasing.
-type EaseCubicBezier struct {
+type CurveCubicBezier struct {
 	// We'll call the argument p (for progress) instead of the usual t to avoid
 	// confusion with the conventional use of t in Bézier curves, which
 	// describes the progress along the curve. We'll use p′ for the output
@@ -250,7 +318,7 @@ type EaseCubicBezier struct {
 	P1, P2 curve.Point
 }
 
-func (ecb EaseCubicBezier) Ease(p float64) float64 {
+func (ecb CurveCubicBezier) Transform(p float64) float64 {
 	p0 := curve.Pt(0, 0)
 	p1 := curve.Pt(jmath.Clamp(ecb.P1.X, 0, 1), ecb.P1.Y)
 	p2 := curve.Pt(jmath.Clamp(ecb.P2.X, 0, 1), ecb.P2.Y)
@@ -285,3 +353,7 @@ func (ecb EaseCubicBezier) Ease(p float64) float64 {
 		return cb.Eval(t).Y
 	}
 }
+
+type CurveStatic float64
+
+func (e CurveStatic) Transform(p float64) float64 { return float64(e) }

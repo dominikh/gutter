@@ -318,7 +318,7 @@ func convertScalar(floatValue encoding.ScalarProperty) animation.Keyframes[float
 	if floatValue.Animated {
 		n := len(floatValue.Keyframes)
 		frames := make([]float64, n)
-		easings := make([]animation.Ease, n)
+		easings := make([]animation.Curve, n)
 		values := make([]float64, n)
 
 		for i, keyframe := range floatValue.Keyframes {
@@ -373,7 +373,7 @@ func convertMultiKeyframes[T ~[]float64 | ~[2]float64 | ~[3]float64](keyframes [
 	// OPT(dh): preallocate
 	// value per keyframe per dimension
 	frames := make([][]float64, numItems)
-	easings := make([][]animation.Ease, numItems)
+	easings := make([][]animation.Curve, numItems)
 	values := make([][]float64, numItems)
 
 	for _, keyframe := range keyframes {
@@ -383,9 +383,9 @@ func convertMultiKeyframes[T ~[]float64 | ~[2]float64 | ~[3]float64](keyframes [
 			for j := range numItems {
 				frames[j] = append(frames[j], keyframe.Time)
 				if keyframe.Hold {
-					easings[j] = append(easings[j], func(float64) float64 { return 0 })
+					easings[j] = append(easings[j], animation.CurveStatic(0))
 				} else {
-					easings[j] = append(easings[j], animation.EaseIdentity)
+					easings[j] = append(easings[j], animation.CurveIdentity)
 				}
 				values[j] = append(values[j], keyframe.Value[j])
 			}
@@ -395,12 +395,12 @@ func convertMultiKeyframes[T ~[]float64 | ~[2]float64 | ~[3]float64](keyframes [
 				outTangent := outTangents[j]
 				frames[j] = append(frames[j], keyframe.Time)
 				if keyframe.Hold {
-					easings[j] = append(easings[j], func(float64) float64 { return 0 })
+					easings[j] = append(easings[j], animation.CurveStatic(0))
 				} else {
-					easings[j] = append(easings[j], animation.EaseCubicBezier{
+					easings[j] = append(easings[j], animation.CurveCubicBezier{
 						P2: inTangent,
 						P1: outTangent,
-					}.Ease)
+					})
 				}
 				if j < len(keyframe.Value) {
 					values[j] = append(values[j], keyframe.Value[j])
@@ -479,7 +479,7 @@ func convertShapeGeometry(value encoding.BezierProperty) (model.Geometry, bool) 
 		var isClosed bool
 		n := len(value.Keyframes)
 		frames := make([]float64, n)
-		easings := make([]animation.Ease, n)
+		easings := make([]animation.Curve, n)
 		values := make([][]curve.Point, n)
 		for i, value := range value.Keyframes {
 			if len(value.Value) == 0 {
@@ -755,7 +755,7 @@ func convertGradientColors(value encoding.GradientProperty) animation.ColorStops
 	if value.Value.Animated {
 		n := len(value.Value.Keyframes)
 		frames := make([]float64, n)
-		easings := make([]animation.Ease, n)
+		easings := make([]animation.Curve, n)
 		values := make([][]animation.ColorStop, n)
 		for i, value := range value.Value.Keyframes {
 			frames[i], easings[i] = convertKeyframe(value.BaseKeyframe)
@@ -774,7 +774,7 @@ func convertGradientColors(value encoding.GradientProperty) animation.ColorStops
 		return animation.ColorStops{
 			Keyframes: animation.Keyframes[[]animation.ColorStop]{
 				Frames:  []float64{0},
-				Easings: []animation.Ease{animation.EaseIdentity},
+				Easings: []animation.Curve{animation.CurveIdentity},
 				Values:  [][]animation.ColorStop{raw},
 			},
 			Count: count,
@@ -861,20 +861,20 @@ func setupShapeLayer(source encoding.ShapeLayer, target *model.Layer) (int, mayb
 func fixedValue[T any](v T) animation.Keyframes[T] {
 	return animation.Keyframes[T]{
 		Frames:  []float64{0},
-		Easings: []animation.Ease{animation.EaseIdentity},
+		Easings: []animation.Curve{animation.CurveIdentity},
 		Values:  []T{v},
 	}
 }
 
-func convertKeyframe(k encoding.BaseKeyframe) (frame float64, easing animation.Ease) {
+func convertKeyframe(k encoding.BaseKeyframe) (frame float64, easing animation.Curve) {
 	if k.Hold {
-		return k.Time, func(float64) float64 { return 0 }
+		return k.Time, animation.CurveStatic(0)
 	} else {
 		return k.Time,
-			animation.EaseCubicBezier{
+			animation.CurveCubicBezier{
 				P1: maybe.Map(k.OutTangent, convertKeyframeHandle).UnwrapOr(curve.Pt(0, 0)),
 				P2: maybe.Map(k.InTangent, convertKeyframeHandle).UnwrapOr(curve.Pt(1, 1)),
-			}.Ease
+			}
 	}
 }
 
