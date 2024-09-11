@@ -24,7 +24,7 @@ type Animation[T any] interface {
 	StatusListenable
 
 	Animating() bool
-	Status() AnimationStatus
+	Status() Status
 	Value() T
 }
 
@@ -57,7 +57,7 @@ type CurvedAnimation struct {
 	Curve        Curve
 	ReverseCurve Curve
 
-	curveDirection maybe.Option[AnimationStatus]
+	curveDirection maybe.Option[Status]
 	statusListener StatusListener
 }
 
@@ -76,21 +76,21 @@ func (e *CurvedAnimation) effectiveCurve() Curve {
 	if e.ReverseCurve == nil {
 		return e.Curve
 	}
-	if e.curveDirection.UnwrapOr(e.Animation.Status()) != AnimationStatusReverse {
+	if e.curveDirection.UnwrapOr(e.Animation.Status()) != StatusReverse {
 		return e.Curve
 	}
 	return e.ReverseCurve
 }
 
-func (e *CurvedAnimation) updateCurveDirection(status AnimationStatus) {
+func (e *CurvedAnimation) updateCurveDirection(status Status) {
 	switch status {
-	case AnimationStatusDismissed:
-	case AnimationStatusCompleted:
+	case StatusDismissed:
+	case StatusCompleted:
 		e.curveDirection.Clear()
-	case AnimationStatusForward:
-		e.curveDirection = maybe.Some(AnimationStatusForward)
-	case AnimationStatusReverse:
-		e.curveDirection = maybe.Some(AnimationStatusReverse)
+	case StatusForward:
+		e.curveDirection = maybe.Some(StatusForward)
+	case StatusReverse:
+		e.curveDirection = maybe.Some(StatusReverse)
 	default:
 		panic(fmt.Sprintf("internal error: unhandled status %v", status))
 	}
@@ -133,7 +133,7 @@ func (a *animatedEvaluation[T]) AddListener(cb func()) base.Listener {
 }
 
 // AddStatusListener implements Animation.
-func (a *animatedEvaluation[T]) AddStatusListener(cb func(status AnimationStatus)) StatusListener {
+func (a *animatedEvaluation[T]) AddStatusListener(cb func(status Status)) StatusListener {
 	return a.parent.AddStatusListener(cb)
 }
 
@@ -161,7 +161,7 @@ func (a *animatedEvaluation[T]) ClearStatusListeners() {
 }
 
 // Status implements Animation.
-func (a *animatedEvaluation[T]) Status() AnimationStatus {
+func (a *animatedEvaluation[T]) Status() Status {
 	return a.parent.Status()
 }
 

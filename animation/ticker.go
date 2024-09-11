@@ -15,20 +15,20 @@ import (
 type StatusListener uint64
 
 type StatusListenable interface {
-	AddStatusListener(cb func(status AnimationStatus)) StatusListener
+	AddStatusListener(cb func(status Status)) StatusListener
 	RemoveStatusListener(l StatusListener)
 	ClearStatusListeners()
 }
 
 type PlainStatusListenable struct {
 	maxID     StatusListener
-	listeners map[StatusListener]func(AnimationStatus)
+	listeners map[StatusListener]func(Status)
 }
 
-func (l *PlainStatusListenable) AddStatusListener(cb func(status AnimationStatus)) StatusListener {
+func (l *PlainStatusListenable) AddStatusListener(cb func(status Status)) StatusListener {
 	l.maxID++
 	if l.listeners == nil {
-		l.listeners = make(map[StatusListener]func(AnimationStatus))
+		l.listeners = make(map[StatusListener]func(Status))
 	}
 	l.listeners[l.maxID] = cb
 	return l.maxID
@@ -38,7 +38,7 @@ func (l *PlainStatusListenable) RemoveStatusListener(id StatusListener) {
 	delete(l.listeners, id)
 }
 
-func (l *PlainStatusListenable) NotifyStatusListeners(status AnimationStatus) {
+func (l *PlainStatusListenable) NotifyStatusListeners(status Status) {
 	for _, cb := range l.listeners {
 		cb(status)
 	}

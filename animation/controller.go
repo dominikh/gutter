@@ -29,20 +29,20 @@ const (
 )
 
 // TODO(dh): add stringer invocation
-type AnimationStatus int
+type Status int
 
 const (
-	AnimationStatusDismissed AnimationStatus = iota
-	AnimationStatusForward
-	AnimationStatusReverse
-	AnimationStatusCompleted
+	StatusDismissed Status = iota
+	StatusForward
+	StatusReverse
+	StatusCompleted
 )
 
-func (s AnimationStatus) IsForwardOrCompleted() bool {
+func (s Status) IsForwardOrCompleted() bool {
 	switch s {
-	case AnimationStatusForward, AnimationStatusCompleted:
+	case StatusForward, StatusCompleted:
 		return true
-	case AnimationStatusReverse, AnimationStatusDismissed:
+	case StatusReverse, StatusDismissed:
 		return false
 	default:
 		panic(fmt.Sprintf("unknown animation status %v", s))
@@ -60,10 +60,10 @@ type Controller struct {
 	statusListeners     PlainStatusListenable
 	value               float64
 	direction           animationDirection
-	status              AnimationStatus
+	status              Status
 	simulation          Simulation
 	lastElapsedDuration time.Duration
-	lastReportedStatus  AnimationStatus
+	lastReportedStatus  Status
 }
 
 func NewController(tp TickerProvider) *Controller {
@@ -76,7 +76,7 @@ func NewController(tp TickerProvider) *Controller {
 	return c
 }
 
-func (c *Controller) Status() AnimationStatus {
+func (c *Controller) Status() Status {
 	return c.status
 }
 
@@ -103,15 +103,15 @@ func (c *Controller) setValue(v float64) {
 	c.value = jmath.Clamp(v, c.LowerBound, c.UpperBound)
 	switch c.value {
 	case c.LowerBound:
-		c.status = AnimationStatusDismissed
+		c.status = StatusDismissed
 	case c.UpperBound:
-		c.status = AnimationStatusCompleted
+		c.status = StatusCompleted
 	default:
 		switch c.direction {
 		case animationDirectionForward:
-			c.status = AnimationStatusForward
+			c.status = StatusForward
 		case animationDirectionReverse:
-			c.status = AnimationStatusReverse
+			c.status = StatusReverse
 		default:
 			panic(fmt.Sprintf("internal error: unhandled direction %v", c.direction))
 		}
@@ -190,9 +190,9 @@ func (c *Controller) animateTo(v float64, curve Curve) {
 			c.notifyListeners()
 		}
 		if c.direction == animationDirectionForward {
-			c.status = AnimationStatusCompleted
+			c.status = StatusCompleted
 		} else {
-			c.status = AnimationStatusDismissed
+			c.status = StatusDismissed
 		}
 		c.checkStatusChanged()
 		return
@@ -236,9 +236,9 @@ func (c *Controller) startSimulation(sim Simulation) {
 	c.value = jmath.Clamp(sim.X(0), c.LowerBound, c.UpperBound)
 	c.ticker.Start()
 	if c.direction == animationDirectionForward {
-		c.status = AnimationStatusForward
+		c.status = StatusForward
 	} else {
-		c.status = AnimationStatusReverse
+		c.status = StatusReverse
 	}
 	c.checkStatusChanged()
 }
@@ -259,7 +259,7 @@ func (c *Controller) notifyListeners() {
 	c.listeners.NotifyListeners()
 }
 
-func (c *Controller) AddStatusListener(cb func(status AnimationStatus)) StatusListener {
+func (c *Controller) AddStatusListener(cb func(status Status)) StatusListener {
 	return c.statusListeners.AddStatusListener(cb)
 
 }
@@ -271,7 +271,7 @@ func (c *Controller) ClearStatusListeners() {
 	c.statusListeners.ClearStatusListeners()
 }
 
-func (c *Controller) notifyStatusListeners(status AnimationStatus) {
+func (c *Controller) notifyStatusListeners(status Status) {
 	c.statusListeners.NotifyStatusListeners(status)
 }
 
@@ -280,9 +280,9 @@ func (c *Controller) tick(elapsed time.Duration) {
 	c.value = jmath.Clamp(c.simulation.X(elapsed), c.LowerBound, c.UpperBound)
 	if c.simulation.Done(elapsed) {
 		if c.direction == animationDirectionForward {
-			c.status = AnimationStatusCompleted
+			c.status = StatusCompleted
 		} else {
-			c.status = AnimationStatusDismissed
+			c.status = StatusDismissed
 		}
 		c.Stop()
 	}
@@ -300,9 +300,9 @@ func (c *Controller) checkStatusChanged() {
 func (c *Controller) setDirection(dir animationDirection) {
 	c.direction = dir
 	if dir == animationDirectionForward {
-		c.status = AnimationStatusForward
+		c.status = StatusForward
 	} else {
-		c.status = AnimationStatusReverse
+		c.status = StatusReverse
 	}
 	c.checkStatusChanged()
 }

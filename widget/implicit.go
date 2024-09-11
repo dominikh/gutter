@@ -50,13 +50,13 @@ func (is *AnimatedStateHelper[W, S]) Transition(s S, t StateTransition[W]) (upda
 			is.animation = animation.NewCurvedAnimation(is.controller, animation.CurveIdentity, nil)
 		}
 
-		is.statusListener = is.controller.AddStatusListener(func(status animation.AnimationStatus) {
+		is.statusListener = is.controller.AddStatusListener(func(status animation.Status) {
 			switch status {
-			case animation.AnimationStatusCompleted:
+			case animation.StatusCompleted:
 				// TODO(dh): call an OnEnd callback stored in the widget
-			case animation.AnimationStatusDismissed,
-				animation.AnimationStatusForward,
-				animation.AnimationStatusReverse:
+			case animation.StatusDismissed,
+				animation.StatusForward,
+				animation.StatusReverse:
 				// nothing to do
 			default:
 				panic(fmt.Sprintf("internal error: unhandled status %v", status))
