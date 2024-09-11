@@ -100,6 +100,10 @@ type Inset struct {
 	Left, Top, Right, Bottom float64
 }
 
+func NewInset(v float64) Inset {
+	return Inset{v, v, v, v}
+}
+
 func LerpInset(start, end Inset, t float64) Inset {
 	return Inset{
 		Left:   animation.Lerp(start.Left, end.Left, t),
