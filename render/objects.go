@@ -11,6 +11,7 @@ import (
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/lottie/lottie_model"
 	"honnef.co/go/gutter/lottie/lottie_renderer"
@@ -416,7 +417,7 @@ type AnimatedOpacity struct {
 	opacity    animation.Animation[float32]
 	oldOpacity float32
 
-	updateOpacityListener animation.Listener
+	updateOpacityListener base.Listener
 }
 
 // PerformLayout implements Object.

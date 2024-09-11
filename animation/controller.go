@@ -14,6 +14,7 @@ import (
 	"math"
 	"time"
 
+	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/jello/jmath"
 )
@@ -55,7 +56,7 @@ type Controller struct {
 	ReverseDuration time.Duration
 
 	ticker              Ticker
-	listeners           PlainListenable
+	listeners           base.PlainListenable
 	statusListeners     PlainStatusListenable
 	value               float64
 	direction           animationDirection
@@ -242,11 +243,11 @@ func (c *Controller) startSimulation(sim Simulation) {
 	c.checkStatusChanged()
 }
 
-func (c *Controller) AddListener(cb func()) Listener {
+func (c *Controller) AddListener(cb func()) base.Listener {
 	return c.listeners.AddListener(cb)
 }
 
-func (c *Controller) RemoveListener(l Listener) {
+func (c *Controller) RemoveListener(l base.Listener) {
 	c.listeners.RemoveListener(l)
 }
 

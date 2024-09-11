@@ -11,6 +11,7 @@ import (
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/jello/gfx"
 	"honnef.co/go/jello/jmath"
@@ -19,7 +20,7 @@ import (
 )
 
 type Animation[T any] interface {
-	Listenable
+	base.Listenable
 	StatusListenable
 
 	Animating() bool
@@ -127,7 +128,7 @@ type animatedEvaluation[T any] struct {
 }
 
 // AddListener implements Animation.
-func (a *animatedEvaluation[T]) AddListener(cb func()) Listener {
+func (a *animatedEvaluation[T]) AddListener(cb func()) base.Listener {
 	return a.parent.AddListener(cb)
 }
 
@@ -142,7 +143,7 @@ func (a *animatedEvaluation[T]) Animating() bool {
 }
 
 // RemoveListener implements Animation.
-func (a *animatedEvaluation[T]) RemoveListener(l Listener) {
+func (a *animatedEvaluation[T]) RemoveListener(l base.Listener) {
 	a.parent.RemoveListener(l)
 }
 

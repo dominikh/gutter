@@ -11,6 +11,7 @@ import (
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/maybe"
@@ -357,7 +358,7 @@ func (f *FittedBox) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 }
 
 type ListenableBuilder struct {
-	Listenable animation.Listenable
+	Listenable base.Listenable
 	Builder    func(ctx BuildContext, child Widget) Widget
 	Child      Widget
 }
@@ -374,7 +375,7 @@ func (b *ListenableBuilder) CreateState() State[*ListenableBuilder] {
 type listenableBuilderState struct {
 	StateHandle[*ListenableBuilder]
 
-	listener animation.Listener
+	listener base.Listener
 }
 
 // Transition implements State.
@@ -405,7 +406,7 @@ var _ Widget = (*ValueListenableBuilder[float64])(nil)
 var _ StatefulWidget[*ValueListenableBuilder[float64]] = (*ValueListenableBuilder[float64])(nil)
 
 type ValueListenableBuilder[T any] struct {
-	ValueListenable animation.ValueListenable[T]
+	ValueListenable base.ValueListenable[T]
 	Builder         func(ctx BuildContext, v maybe.Option[T], child Widget) Widget
 	Child           Widget
 }
@@ -423,7 +424,7 @@ func (v *ValueListenableBuilder[T]) CreateElement() Element {
 type valueListenableBuilderState[T any] struct {
 	StateHandle[*ValueListenableBuilder[T]]
 
-	listener animation.Listener
+	listener base.Listener
 	value    maybe.Option[T]
 }
 
@@ -454,10 +455,10 @@ func (v *valueListenableBuilderState[T]) valueChanged() {
 	MarkNeedsBuild(v.Element)
 }
 
-var _ animation.ValueListenable[int] = (*ChannelListener[int])(nil)
+var _ base.ValueListenable[int] = (*ChannelListener[int])(nil)
 
 type ChannelListener[T any] struct {
-	animation.PlainListenable
+	base.PlainListenable
 	ch        <-chan T
 	emitEvent func(ev wsi.Event)
 	value     maybe.Option[T]
