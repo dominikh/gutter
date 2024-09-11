@@ -201,6 +201,12 @@ func (c Constraints) ConstrainWithAspectRatio(size curve.Size) curve.Size {
 	)
 }
 
+func (c Constraints) Loosen() Constraints {
+	return Constraints{
+		Max: c.Max,
+	}
+}
+
 func FormatTree(root Object) string {
 	var sb strings.Builder
 
