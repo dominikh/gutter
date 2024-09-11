@@ -15,6 +15,7 @@ import (
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/lottie/lottie_model"
 	"honnef.co/go/gutter/lottie/lottie_renderer"
+	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/jello"
 	"honnef.co/go/jello/gfx"
 )
@@ -28,6 +29,7 @@ var _ ObjectWithChildren = (*FittedBox)(nil)
 var _ ObjectWithChildren = (*Opacity)(nil)
 var _ ObjectWithChildren = (*AnimatedOpacity)(nil)
 var _ ObjectWithChildren = (*Padding)(nil)
+var _ ObjectWithChildren = (*PositionedBox)(nil)
 
 type Box struct {
 	ObjectHandle
@@ -203,6 +205,80 @@ func (a Alignment) AlongVec2(v curve.Vec2) curve.Vec2 {
 		centerX+a.X*centerX,
 		centerY+a.Y*centerY,
 	)
+}
+
+type PositionedBox struct {
+	Box
+	SingleChild
+
+	alignment    Alignment
+	widthFactor  maybe.Option[float64]
+	heightFactor maybe.Option[float64]
+}
+
+func (p *PositionedBox) SetAlignment(a Alignment) {
+	if a != p.alignment {
+		p.alignment = a
+		MarkNeedsLayout(p)
+	}
+}
+
+func (p *PositionedBox) SetWidthFactor(f maybe.Option[float64]) {
+	if f != p.widthFactor {
+		p.widthFactor = f
+		MarkNeedsLayout(p)
+	}
+}
+
+func (p *PositionedBox) SetHeightFactor(f maybe.Option[float64]) {
+	if f != p.heightFactor {
+		p.heightFactor = f
+		MarkNeedsLayout(p)
+	}
+}
+
+// PerformLayout implements ObjectWithChildren.
+func (p *PositionedBox) PerformLayout() (size curve.Size) {
+	cs := p.Constraints()
+	shrinkWrapWidth := p.widthFactor.Set() || cs.Max.Width == math.Inf(1)
+	shrinkWrapHeight := p.heightFactor.Set() || cs.Max.Height == math.Inf(1)
+
+	if p.Child == nil {
+		w := math.Inf(1)
+		h := math.Inf(1)
+		if shrinkWrapWidth {
+			w = 0
+		}
+		if shrinkWrapHeight {
+			h = 0
+		}
+		return cs.Constrain(curve.Sz(w, h))
+	}
+
+	childSz := Layout(p.Child, cs.Loosen(), true)
+	w := math.Inf(1)
+	h := math.Inf(1)
+	if shrinkWrapWidth {
+		w = childSz.Width * p.widthFactor.UnwrapOr(1)
+	}
+	if shrinkWrapHeight {
+		h = childSz.Height * p.heightFactor.UnwrapOr(1)
+	}
+	size = cs.Constrain(curve.Sz(w, h))
+	p.alignChild(size, childSz)
+	return size
+}
+
+func (p *PositionedBox) alignChild(ourSize, childSize curve.Size) {
+	debug.Assert(p.Child != nil)
+	debug.Assert(!p.Child.Handle().needsLayout)
+
+	p.Child.Handle().offset = curve.Point(p.alignment.AlongVec2(ourSize.AsVec2().Add(childSize.AsVec2().Negate())))
+}
+
+// PerformPaint implements ObjectWithChildren.
+func (pb *PositionedBox) PerformPaint(p *Painter, scene *jello.Scene) {
+	p.PaintAt(pb.Child, scene, pb.Child.Handle().offset)
 }
 
 type Constrained struct {

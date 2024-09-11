@@ -28,6 +28,7 @@ var _ RenderObjectWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
 var _ RenderObjectWidget = (*SizedBox)(nil)
 var _ RenderObjectWidget = (*FadeTransition)(nil)
+var _ RenderObjectWidget = (*Align)(nil)
 
 var _ Widget = (*ColoredBox)(nil)
 var _ Widget = (*KeyedSubtree)(nil)
@@ -497,4 +498,31 @@ func (l *ChannelListener[T]) startGoroutine() {
 			}
 		}
 	}()
+}
+
+type Align struct {
+	Alignment    render.Alignment
+	WidthFactor  maybe.Option[float64]
+	HeightFactor maybe.Option[float64]
+	Child        Widget
+}
+
+// CreateElement implements RenderObjectWidget.
+func (a *Align) CreateElement() Element {
+	return NewRenderObjectElement(a)
+}
+
+// CreateRenderObject implements RenderObjectWidget.
+func (a *Align) CreateRenderObject(ctx BuildContext) render.Object {
+	obj := &render.PositionedBox{}
+	a.UpdateRenderObject(ctx, obj)
+	return obj
+}
+
+// UpdateRenderObject implements RenderObjectWidget.
+func (a *Align) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+	obj_ := obj.(*render.PositionedBox)
+	obj_.SetAlignment(a.Alignment)
+	obj_.SetWidthFactor(a.WidthFactor)
+	obj_.SetHeightFactor(a.HeightFactor)
 }
