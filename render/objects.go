@@ -158,6 +158,53 @@ func (pad *Padding) PerformPaint(p *Painter, scene *jello.Scene) {
 	p.PaintAt(pad.Child, scene, pad.Child.Handle().offset)
 }
 
+// TODO(dh): Alignment should eventually move to a lower level package
+
+var (
+	BottomCenter = Alignment{0, 1}
+	BottomLeft   = Alignment{-1, 1}
+	BottomRight  = Alignment{1, 1}
+	Center       = Alignment{0, 0}
+	CenterLeft   = Alignment{-1, 0}
+	CenterRight  = Alignment{1, 0}
+	TopCenter    = Alignment{0, -1}
+	TopLeft      = Alignment{-1, -1}
+	TopRight     = Alignment{1, -1}
+)
+
+type Alignment struct {
+	// TODO(dh): take text direction into consideration
+	X, Y float64
+}
+
+func LerpAlignment(a, b Alignment, t float64) Alignment {
+	return Alignment{
+		X: animation.Lerp(a.X, b.X, t),
+		Y: animation.Lerp(a.Y, b.Y, t),
+	}
+}
+
+func (a Alignment) Inscribe(sz curve.Size, rect curve.Rect) curve.Rect {
+	halfWidthDelta := (rect.Width() - sz.Width) / 2.0
+	halfHeightDelta := (rect.Height() - sz.Height) / 2.0
+	return curve.NewRectFromOrigin(
+		curve.Pt(
+			rect.X0+halfWidthDelta+a.X*halfWidthDelta,
+			rect.Y0+halfHeightDelta+a.Y*halfHeightDelta,
+		),
+		sz,
+	)
+}
+
+func (a Alignment) AlongVec2(v curve.Vec2) curve.Vec2 {
+	centerX := v.X / 2.0
+	centerY := v.Y / 2.0
+	return curve.Vec(
+		centerX+a.X*centerX,
+		centerY+a.Y*centerY,
+	)
+}
+
 type Constrained struct {
 	Box
 	SingleChild
