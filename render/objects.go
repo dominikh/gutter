@@ -151,13 +151,13 @@ func (pad *Padding) PerformLayout() curve.Size {
 		Max: curve.Sz(max(newMin.Width, cs.Max.Width-horiz), max(newMin.Height, cs.Max.Height-vert)),
 	}
 	childSz := Layout(pad.Child, innerCs, true)
-	pad.Child.Handle().offset = curve.Pt(pad.inset.Left, pad.inset.Top)
+	pad.Child.Handle().Offset = curve.Pt(pad.inset.Left, pad.inset.Top)
 	return cs.Constrain(childSz.Add(curve.Vec(horiz, vert)))
 }
 
 // PerformPaint implements Object.
 func (pad *Padding) PerformPaint(p *Painter, scene *jello.Scene) {
-	p.PaintAt(pad.Child, scene, pad.Child.Handle().offset)
+	p.PaintAt(pad.Child, scene, pad.Child.Handle().Offset)
 }
 
 // TODO(dh): Alignment should eventually move to a lower level package
@@ -273,12 +273,12 @@ func (p *PositionedBox) alignChild(ourSize, childSize curve.Size) {
 	debug.Assert(p.Child != nil)
 	debug.Assert(!p.Child.Handle().needsLayout)
 
-	p.Child.Handle().offset = curve.Point(p.alignment.AlongVec2(ourSize.AsVec2().Add(childSize.AsVec2().Negate())))
+	p.Child.Handle().Offset = curve.Point(p.alignment.AlongVec2(ourSize.AsVec2().Add(childSize.AsVec2().Negate())))
 }
 
 // PerformPaint implements ObjectWithChildren.
 func (pb *PositionedBox) PerformPaint(p *Painter, scene *jello.Scene) {
-	p.PaintAt(pb.Child, scene, pb.Child.Handle().offset)
+	p.PaintAt(pb.Child, scene, pb.Child.Handle().Offset)
 }
 
 type Constrained struct {

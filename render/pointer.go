@@ -81,7 +81,7 @@ func hitTest(res *hitTestResult, obj Object, pos curve.Point) bool {
 func hitTestChildren(res *hitTestResult, obj Object, pos curve.Point) bool {
 	hit := false
 	obj.VisitChildren(func(o Object) bool {
-		res.PushOffset(o.Handle().offset)
+		res.PushOffset(o.Handle().Offset)
 		defer res.PopTransform()
 		if hitTest(res, o, pos) {
 			hit = true

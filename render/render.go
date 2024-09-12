@@ -68,10 +68,10 @@ type ParentDataSetuper interface {
 
 type ObjectHandle struct {
 	size curve.Size
-	// The object's position as a relative offset from the parent object's origin. Having to configure a
-	// child's offset is so common that we have a dedicated field for it, instead of requiring the use of
-	// parentData.
-	offset                     curve.Point
+	// The object's position as a relative Offset from the parent object's
+	// origin. Having to configure a child's Offset is so common that we have a
+	// dedicated field for it, instead of requiring the use of parentData.
+	Offset                     curve.Point
 	ParentData                 any
 	needsPaint                 bool
 	needsLayout                bool

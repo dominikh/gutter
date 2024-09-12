@@ -176,9 +176,9 @@ func (f *Flex) PerformLayout() (size curve.Size) {
 		}
 		switch f.direction {
 		case Horizontal:
-			child.Handle().offset = curve.Pt(childMainPosition, childCrossPosition)
+			child.Handle().Offset = curve.Pt(childMainPosition, childCrossPosition)
 		case Vertical:
-			child.Handle().offset = curve.Pt(childCrossPosition, childMainPosition)
+			child.Handle().Offset = curve.Pt(childCrossPosition, childMainPosition)
 		}
 		childMainPosition += f.getMainSize(child.Handle().size) + betweenSpace
 	}
@@ -188,7 +188,7 @@ func (f *Flex) PerformLayout() (size curve.Size) {
 // PerformPaint implements ObjectWithChildren.
 func (f *Flex) PerformPaint(p *Painter, scene *jello.Scene) {
 	for _, child := range f.children {
-		p.PaintAt(child, scene, child.Handle().offset)
+		p.PaintAt(child, scene, child.Handle().Offset)
 	}
 }
 
