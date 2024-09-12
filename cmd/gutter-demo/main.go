@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/application"
 	"honnef.co/go/gutter/lottie/lottie_converter"
 	"honnef.co/go/gutter/lottie/lottie_encoding"
@@ -65,19 +64,18 @@ func main() {
 		ValueListenable: l,
 		Builder: func(ctx widget.BuildContext, mv maybe.Option[float64], child widget.Widget) widget.Widget {
 			v := mv.UnwrapOr(0)
-			return &widget.Align{
-				Alignment: render.Center,
-				Child: &widget.AnimatedOpacity{
-					Opacity:  float32(v),
-					Duration: 250 * time.Millisecond,
-					Curve:    animation.CurveOutSine,
-					Child: &widget.Lottie{
-						Composition: comp,
-						Animate:     true,
-						Repeat:      true,
-						Reverse:     false,
-						Width:       64,
-					},
+			return &widget.AnimatedAlign{
+				Alignment: render.Alignment{
+					X: v,
+					Y: v,
+				},
+				Duration: 250 * time.Millisecond,
+				Child: &widget.Lottie{
+					Composition: comp,
+					Animate:     true,
+					Repeat:      true,
+					Reverse:     false,
+					Width:       64,
 				},
 			}
 		},

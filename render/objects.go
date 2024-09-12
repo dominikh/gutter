@@ -278,6 +278,7 @@ func (p *PositionedBox) alignChild(ourSize, childSize curve.Size) {
 
 // PerformPaint implements ObjectWithChildren.
 func (pb *PositionedBox) PerformPaint(p *Painter, scene *jello.Scene) {
+	debug.Assert(pb.Child != nil)
 	p.PaintAt(pb.Child, scene, pb.Child.Handle().Offset)
 }
 
@@ -533,6 +534,10 @@ func (l *Lottie) PerformPaint(p *Painter, scene *jello.Scene) {
 
 var _ Attacher = (*AnimatedOpacity)(nil)
 
+// TODO(dh): why is AnimatedOpacity handled in the render layer when no other
+// animated widget has such a special case? Having the render object listen to
+// the animation is more efficient than having to rebuild the widget tree, but
+// why don't other animations deserve this optimization?
 type AnimatedOpacity struct {
 	Box
 	SingleChild

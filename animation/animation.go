@@ -181,6 +181,23 @@ func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T 
 	}
 }
 
+func MaybeLerp[T constraints.Integer | constraints.Float](start, end maybe.Option[T], t float64) maybe.Option[T] {
+	switch t {
+	case 0:
+		return start
+	case 1:
+		return end
+	default:
+		if start == end {
+			return start
+		}
+		var zero T
+		start_ := start.UnwrapOr(zero)
+		end_ := start.UnwrapOr(zero)
+		return maybe.Some(T(float64(start_) + float64(end_-start_)*t))
+	}
+}
+
 type Tween[T any] struct {
 	Start T
 	End   T

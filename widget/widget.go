@@ -38,6 +38,7 @@ var _ RenderObjectWidget = (*SizedBox)(nil)
 
 var _ StatefulWidget[*AnimatedOpacity] = (*AnimatedOpacity)(nil)
 var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
+var _ StatefulWidget[*AnimatedAlign] = (*AnimatedAlign)(nil)
 var _ StatefulWidget[*ListenableBuilder] = (*ListenableBuilder)(nil)
 var _ StatefulWidget[*Lottie] = (*Lottie)(nil)
 var _ StatefulWidget[*ValueListenableBuilder[int]] = (*ValueListenableBuilder[int])(nil)
@@ -523,4 +524,43 @@ func (a *Align) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 	obj_.SetAlignment(a.Alignment)
 	obj_.SetWidthFactor(a.WidthFactor)
 	obj_.SetHeightFactor(a.HeightFactor)
+}
+
+type AnimatedAlign struct {
+	Alignment    render.Alignment
+	WidthFactor  maybe.Option[float64]
+	HeightFactor maybe.Option[float64]
+	Child        Widget
+
+	Duration time.Duration
+	Curve    animation.Curve
+}
+
+type alignAnimations struct {
+	Alignment    animation.Animation[render.Alignment]
+	WidthFactor  animation.Animation[maybe.Option[float64]]
+	HeightFactor animation.Animation[maybe.Option[float64]]
+}
+
+func (a *AnimatedAlign) CreateElement() Element {
+	return NewInteriorElement(a)
+}
+
+func (a *AnimatedAlign) CreateState() State[*AnimatedAlign] {
+	return NewAutomaticAnimatedState[alignAnimations](
+		map[string]any{
+			"Alignment":    NewAnimatedField(render.LerpAlignment),
+			"WidthFactor":  NewAnimatedField(animation.MaybeLerp[float64]),
+			"HeightFactor": NewAnimatedField(animation.MaybeLerp[float64]),
+		},
+		func(ctx BuildContext, s State[*AnimatedAlign], anims *alignAnimations) Widget {
+			return &Align{
+				Alignment:    anims.Alignment.Value(),
+				WidthFactor:  anims.WidthFactor.Value(),
+				HeightFactor: anims.HeightFactor.Value(),
+				Child:        s.GetStateHandle().Widget.Child,
+			}
+		},
+		true,
+	)
 }
