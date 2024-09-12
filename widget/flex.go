@@ -68,3 +68,45 @@ func (f *Flexible) ApplyParentData(obj render.Object) {
 		}
 	}
 }
+
+type Row struct {
+	MainAxisAlignment  render.MainAxisAlignment
+	MainAxisSize       render.MainAxisSize
+	CrossAxisAlignment render.CrossAxisAlignment
+	Children           []Widget
+}
+
+func (r *Row) CreateElement() Element {
+	return NewInteriorElement(r)
+}
+
+func (r *Row) Build(ctx BuildContext) Widget {
+	return &Flex{
+		Direction:          render.Horizontal,
+		MainAxisAlignment:  r.MainAxisAlignment,
+		MainAxisSize:       r.MainAxisSize,
+		CrossAxisAlignment: r.CrossAxisAlignment,
+		Children:           r.Children,
+	}
+}
+
+type Column struct {
+	MainAxisAlignment  render.MainAxisAlignment
+	MainAxisSize       render.MainAxisSize
+	CrossAxisAlignment render.CrossAxisAlignment
+	Children           []Widget
+}
+
+func (r *Column) CreateElement() Element {
+	return NewInteriorElement(r)
+}
+
+func (r *Column) Build(ctx BuildContext) Widget {
+	return &Flex{
+		Direction:          render.Vertical,
+		MainAxisAlignment:  r.MainAxisAlignment,
+		MainAxisSize:       r.MainAxisSize,
+		CrossAxisAlignment: r.CrossAxisAlignment,
+		Children:           r.Children,
+	}
+}
