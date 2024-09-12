@@ -44,8 +44,13 @@ func (is *AnimatedStateHelper[W, S]) Transition(s S, t StateTransition[W]) (upda
 	switch t.Kind {
 	case StateInitializing:
 		is.controller = animation.NewController(s.GetStateHandle().Element.Handle().BuildOwner)
-		if f := reflect.ValueOf(s.GetStateHandle().Widget).Elem().FieldByName("Curve"); f.IsValid() {
-			is.animation = animation.NewCurvedAnimation(is.controller, f.Interface().(animation.Curve), nil)
+		widget := s.GetStateHandle().Widget
+		if f := reflect.ValueOf(widget).Elem().FieldByName("Curve"); f.IsValid() {
+			ease, _ := f.Interface().(animation.Curve)
+			if ease == nil {
+				ease = animation.CurveIdentity
+			}
+			is.animation = animation.NewCurvedAnimation(is.controller, ease, nil)
 		} else {
 			is.animation = animation.NewCurvedAnimation(is.controller, animation.CurveIdentity, nil)
 		}
@@ -73,8 +78,14 @@ func (is *AnimatedStateHelper[W, S]) Transition(s S, t StateTransition[W]) (upda
 		rwidget := reflect.ValueOf(widget).Elem()
 
 		if easef := rwidget.FieldByName("Curve"); easef.IsValid() {
-			ease := easef.Interface().(animation.Curve)
-			oldEase := reflect.ValueOf(t.OldWidget).Elem().FieldByName("Curve").Interface().(animation.Curve)
+			ease, _ := easef.Interface().(animation.Curve)
+			if ease == nil {
+				ease = animation.CurveIdentity
+			}
+			oldEase, _ := reflect.ValueOf(t.OldWidget).Elem().FieldByName("Curve").Interface().(animation.Curve)
+			if oldEase == nil {
+				oldEase = animation.CurveIdentity
+			}
 			if ease != oldEase {
 				is.animation.Dispose()
 				is.animation = animation.NewCurvedAnimation(is.controller, ease, nil)
