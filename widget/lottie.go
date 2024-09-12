@@ -10,10 +10,6 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-var _ Widget = (*Lottie)(nil)
-var _ StatefulWidget[*Lottie] = (*Lottie)(nil)
-var _ RenderObjectWidget = (*LottieFrame)(nil)
-
 type LottieFrame struct {
 	Composition *lottie_model.Composition
 	Frame       float64

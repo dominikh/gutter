@@ -21,27 +21,30 @@ import (
 	"honnef.co/go/jello/gfx"
 )
 
+var _ KeyedWidget = (*KeyedSubtree)(nil)
+
+var _ ParentDataWidget = (*Flexible)(nil)
+
+var _ RenderObjectWidget = (*Align)(nil)
 var _ RenderObjectWidget = (*ColoredBox)(nil)
+var _ RenderObjectWidget = (*FadeTransition)(nil)
+var _ RenderObjectWidget = (*Flex)(nil)
 var _ RenderObjectWidget = (*FittedBox)(nil)
+var _ RenderObjectWidget = (*LottieFrame)(nil)
 var _ RenderObjectWidget = (*Opacity)(nil)
 var _ RenderObjectWidget = (*Padding)(nil)
 var _ RenderObjectWidget = (*PointerRegion)(nil)
 var _ RenderObjectWidget = (*SizedBox)(nil)
-var _ RenderObjectWidget = (*FadeTransition)(nil)
-var _ RenderObjectWidget = (*Align)(nil)
-
-var _ Widget = (*ColoredBox)(nil)
-var _ Widget = (*KeyedSubtree)(nil)
-var _ Widget = (*Opacity)(nil)
-var _ Widget = (*Padding)(nil)
-var _ Widget = (*PointerRegion)(nil)
-var _ Widget = (*SizedBox)(nil)
 
 var _ StatefulWidget[*AnimatedOpacity] = (*AnimatedOpacity)(nil)
-var _ StatefulWidget[*ListenableBuilder] = (*ListenableBuilder)(nil)
 var _ StatefulWidget[*AnimatedPadding] = (*AnimatedPadding)(nil)
+var _ StatefulWidget[*ListenableBuilder] = (*ListenableBuilder)(nil)
+var _ StatefulWidget[*Lottie] = (*Lottie)(nil)
+var _ StatefulWidget[*ValueListenableBuilder[int]] = (*ValueListenableBuilder[int])(nil)
 
-var _ KeyedWidget = (*KeyedSubtree)(nil)
+var _ StatelessWidget = (*Builder)(nil)
+
+var _ Widget = (*MediaQuery)(nil)
 
 var _ render.Object = (*renderColoredBox)(nil)
 var _ render.ObjectWithChildren = (*renderColoredBox)(nil)
@@ -311,8 +314,6 @@ func (k *KeyedSubtree) CreateElement() Element {
 	return NewProxyElement(k)
 }
 
-var _ StatelessWidget = (*Builder)(nil)
-
 type Builder struct {
 	Child   Widget
 	Builder func(ctx BuildContext, child Widget) Widget
@@ -402,9 +403,6 @@ func (a *listenableBuilderState) Build(ctx BuildContext) Widget {
 func (a *listenableBuilderState) handleChange() {
 	MarkNeedsBuild(a.Element)
 }
-
-var _ Widget = (*ValueListenableBuilder[float64])(nil)
-var _ StatefulWidget[*ValueListenableBuilder[float64]] = (*ValueListenableBuilder[float64])(nil)
 
 type ValueListenableBuilder[T any] struct {
 	ValueListenable base.ValueListenable[T]

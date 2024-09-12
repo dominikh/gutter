@@ -9,11 +9,6 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-var _ Widget = (*Flexible)(nil)
-var _ ParentDataWidget = (*Flexible)(nil)
-
-var _ RenderObjectWidget = (*Flex)(nil)
-
 type Flex struct {
 	Direction          render.Axis
 	MainAxisAlignment  render.MainAxisAlignment

@@ -1309,8 +1309,6 @@ func (m *ManyChildElements) ForgetChild(child Element) {
 	m.forgottenChildren[child] = struct{}{}
 }
 
-var _ Widget = (*MediaQuery)(nil)
-
 type MediaQuery struct {
 	Data  MediaQueryData
 	Child Widget
