@@ -299,13 +299,19 @@ func (c *Constrained) ExtraConstraints() Constraints {
 // PerformLayout implements Object.
 func (c *Constrained) PerformLayout() curve.Size {
 	cs := c.extraConstraints.Enforce(c.Handle().Constraints())
-	Layout(c.Child, cs, true)
-	return c.Child.Handle().Size()
+	if c.Child != nil {
+		Layout(c.Child, cs, true)
+		return c.Child.Handle().Size()
+	} else {
+		return cs.Min
+	}
 }
 
 // PerformPaint implements Object.
 func (c *Constrained) PerformPaint(p *Painter, scene *jello.Scene) {
-	p.PaintAt(c.Child, scene, curve.Point{})
+	if c.Child != nil {
+		p.PaintAt(c.Child, scene, curve.Point{})
+	}
 }
 
 type Opacity struct {

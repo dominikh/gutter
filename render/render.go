@@ -302,6 +302,7 @@ type Painter struct {
 }
 
 func (p *Painter) Paint(obj Object) *jello.Scene {
+	debug.Assert(obj != nil)
 	var scene *jello.Scene
 	if obj.Handle().needsPaint {
 		obj.Handle().needsPaint = false
