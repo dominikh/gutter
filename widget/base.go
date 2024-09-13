@@ -89,7 +89,10 @@ type ProxyElement struct {
 
 // Build implements InteriorElement.
 func (el *ProxyElement) Build() Widget {
-	return GetWidgetChild(el.widget)
+	w := GetWidgetChild(el.widget)
+	// TODO(dh): emit a more useful error than a generic assertion failure
+	debug.Assert(w != nil)
+	return w
 }
 
 // PerformRebuild implements InteriorElement.
