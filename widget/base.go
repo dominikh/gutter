@@ -306,6 +306,11 @@ type Element interface {
 	PerformRebuild()
 }
 
+type ElementWithChildren interface {
+	Element
+	Children() iter.Seq[Element]
+}
+
 type InteriorElement interface {
 	ParentElement
 	Build() Widget
@@ -335,9 +340,11 @@ func RenderObjectAttachingChild(el Element) Element {
 		return nil
 	}
 	var out Element
-	for child := range Children(el) {
-		debug.Assert(out == nil)
-		out = child
+	if el, ok := el.(ElementWithChildren); ok {
+		for child := range el.Children() {
+			debug.Assert(out == nil)
+			out = child
+		}
 	}
 	return out
 }
@@ -363,8 +370,10 @@ func AttachRenderObject(el Element, slot int) {
 		el.AttachRenderObject(slot)
 		return
 	}
-	for child := range Children(el) {
-		AttachRenderObject(child, slot)
+	if el, ok := el.(ElementWithChildren); ok {
+		for child := range el.Children() {
+			AttachRenderObject(child, slot)
+		}
 	}
 	el.Handle().slot = slot
 }
@@ -380,8 +389,10 @@ func DetachRenderObject(el Element) {
 		el.PerformDetachRenderObject()
 		return
 	}
-	for child := range Children(el) {
-		DetachRenderObject(child)
+	if el, ok := el.(ElementWithChildren); ok {
+		for child := range el.Children() {
+			DetachRenderObject(child)
+		}
 	}
 	el.Handle().slot = int(math.MinInt)
 }
@@ -516,19 +527,6 @@ func Unmount(el Element) {
 	el.Transition(ElementTransition{Kind: ElementUnmounted})
 }
 
-type ChildrenVisiter interface {
-	Children() iter.Seq[Element]
-}
-
-// Children visits an element's children, by using its Children method.
-func Children(el Element) iter.Seq[Element] {
-	if el, ok := el.(ChildrenVisiter); ok {
-		return el.Children()
-	} else {
-		return func(yield func(Element) bool) {}
-	}
-}
-
 type ChildForgetter interface {
 	ForgetChild(child Element)
 }
@@ -541,8 +539,7 @@ func ForgetChild(el Element, child Element) {
 }
 
 type ParentElement interface {
-	Element
-	ChildrenVisiter
+	ElementWithChildren
 	// XXX figure out a better API
 	GetChildren() []Element
 	SetChildren(children []Element)
@@ -818,8 +815,10 @@ type inactiveElements struct {
 }
 
 func (els *inactiveElements) unmount(el Element) {
-	for child := range Children(el) {
-		els.unmount(child)
+	if el, ok := el.(ElementWithChildren); ok {
+		for child := range el.Children() {
+			els.unmount(child)
+		}
 	}
 	Unmount(el)
 }
@@ -864,8 +863,10 @@ func sortElements(els []Element) {
 
 func (els *inactiveElements) deactivateRecursively(el Element) {
 	Deactivate(el)
-	for child := range Children(el) {
-		els.deactivateRecursively(child)
+	if el, ok := el.(ElementWithChildren); ok {
+		for child := range el.Children() {
+			els.deactivateRecursively(child)
+		}
 	}
 }
 
@@ -954,8 +955,10 @@ func updateDepth(el Element, parentDepth int) {
 	expectedDepth := parentDepth + 1
 	if el.Handle().depth < expectedDepth {
 		el.Handle().depth = expectedDepth
-		for child := range Children(el) {
-			updateDepth(child, expectedDepth)
+		if el, ok := el.(ElementWithChildren); ok {
+			for child := range el.Children() {
+				updateDepth(child, expectedDepth)
+			}
 		}
 	}
 }
@@ -964,8 +967,10 @@ func activateRecursively(el Element) {
 	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
 	Activate(el)
 	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
-	for child := range Children(el) {
-		activateRecursively(child)
+	if el, ok := el.(ElementWithChildren); ok {
+		for child := range el.Children() {
+			activateRecursively(child)
+		}
 	}
 }
 
@@ -1143,8 +1148,8 @@ func ApplyParentData(pd ParentDataWidget, childrenOf Element) {
 	applyParentData = func(child Element) {
 		if rto, ok := child.(RenderObjectElement); ok {
 			pd.ApplyParentData(rto.RenderHandle().RenderObject)
-		} else {
-			for child2 := range Children(child) {
+		} else if child, ok := child.(ElementWithChildren); ok {
+			for child2 := range child.Children() {
 				applyParentData(child2)
 			}
 		}
