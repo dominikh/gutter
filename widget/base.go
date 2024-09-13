@@ -1198,21 +1198,6 @@ func WidgetChildrenIter(parent Widget) iter.Seq2[int, Widget] {
 	}
 }
 
-func WidgetNumChildren(parent Widget) int {
-	v := reflect.Indirect(reflect.ValueOf(parent))
-	if f := v.FieldByName("Child"); f.IsValid() {
-		if f.IsNil() {
-			return 0
-		} else {
-			return 1
-		}
-	} else if f := v.FieldByName("Children"); f.IsValid() {
-		return f.Len()
-	} else {
-		panic(fmt.Sprintf("%T does not have children", parent))
-	}
-}
-
 func WidgetChildren(parent Widget) []Widget {
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Children"); f.IsValid() {
