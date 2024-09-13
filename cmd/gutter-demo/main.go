@@ -11,12 +11,10 @@ import (
 	"os"
 	"time"
 
-	"honnef.co/go/color"
 	"honnef.co/go/gutter/application"
 	"honnef.co/go/gutter/lottie/lottie_converter"
 	"honnef.co/go/gutter/lottie/lottie_encoding"
 	"honnef.co/go/gutter/maybe"
-	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
 	"honnef.co/go/gutter/wsi"
 )
@@ -73,13 +71,7 @@ func main() {
 						Reverse:     false,
 						Width:       64,
 					},
-					&widget.Flexible{
-						Flex: 1,
-						Fit:  render.FlexFitTight,
-						Child: &widget.ColoredBox{
-							Color: color.Make(color.SRGB, 1, 0, 0, 1),
-						},
-					},
+					&widget.Spacer{},
 					&widget.Lottie{
 						Composition: comp,
 						Animate:     true,

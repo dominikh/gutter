@@ -6,6 +6,7 @@
 package widget
 
 import (
+	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/render"
 )
 
@@ -108,5 +109,21 @@ func (r *Column) Build(ctx BuildContext) Widget {
 		MainAxisSize:       r.MainAxisSize,
 		CrossAxisAlignment: r.CrossAxisAlignment,
 		Children:           r.Children,
+	}
+}
+
+type Spacer struct {
+	Flex maybe.Option[float64]
+}
+
+func (s *Spacer) CreateElement() Element {
+	return NewInteriorElement(s)
+}
+
+func (s *Spacer) Build(ctx BuildContext) Widget {
+	return &Flexible{
+		Flex:  s.Flex.UnwrapOr(1.0),
+		Fit:   render.FlexFitTight,
+		Child: &SizedBox{},
 	}
 }

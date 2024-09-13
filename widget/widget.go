@@ -48,6 +48,7 @@ var _ StatelessWidget = (*Builder)(nil)
 var _ Widget = (*MediaQuery)(nil)
 var _ Widget = (*Row)(nil)
 var _ Widget = (*Column)(nil)
+var _ Widget = (*Spacer)(nil)
 
 var _ render.Object = (*renderColoredBox)(nil)
 var _ render.ObjectWithChildren = (*renderColoredBox)(nil)
