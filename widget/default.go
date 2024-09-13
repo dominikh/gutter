@@ -26,10 +26,9 @@ func RenderObjectElementAfterMount(el RenderObjectElement, parent Element, newSl
 	// OPT(dh): optimize for the single child case, which doesn't need iterators and slices.
 	w := el.Handle().widget
 	var children []Element
-	WidgetChildrenIter(w)(func(i int, childWidget Widget) bool {
+	for i, childWidget := range WidgetChildrenIter(w) {
 		children = append(children, InflateWidget(el, childWidget, i))
-		return true
-	})
+	}
 	el.SetChildren(children)
 }
 func RenderObjectElementAfterUnmount(el RenderObjectElement) {

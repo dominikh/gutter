@@ -234,10 +234,9 @@ func Attach(obj Object, r *Renderer) {
 	if aobj, ok := obj.(Attacher); ok {
 		aobj.PerformAttach(r)
 	} else {
-		obj.VisitChildren(func(child Object) bool {
+		for child := range obj.Children() {
 			Attach(child, r)
-			return true
-		})
+		}
 	}
 }
 

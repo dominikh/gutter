@@ -7,6 +7,7 @@ package widget
 
 import (
 	"fmt"
+	"iter"
 	"math"
 	"reflect"
 	"slices"
@@ -334,11 +335,10 @@ func RenderObjectAttachingChild(el Element) Element {
 		return nil
 	}
 	var out Element
-	VisitChildren(el, func(child Element) bool {
+	for child := range Children(el) {
 		debug.Assert(out == nil)
 		out = child
-		return true
-	})
+	}
 	return out
 }
 
@@ -363,10 +363,9 @@ func AttachRenderObject(el Element, slot int) {
 		el.AttachRenderObject(slot)
 		return
 	}
-	VisitChildren(el, func(child Element) bool {
+	for child := range Children(el) {
 		AttachRenderObject(child, slot)
-		return true
-	})
+	}
 	el.Handle().slot = slot
 }
 
@@ -381,10 +380,9 @@ func DetachRenderObject(el Element) {
 		el.PerformDetachRenderObject()
 		return
 	}
-	VisitChildren(el, func(child Element) bool {
+	for child := range Children(el) {
 		DetachRenderObject(child)
-		return true
-	})
+	}
 	el.Handle().slot = int(math.MinInt)
 }
 
@@ -519,13 +517,15 @@ func Unmount(el Element) {
 }
 
 type ChildrenVisiter interface {
-	VisitChildren(yield func(el Element) bool)
+	Children() iter.Seq[Element]
 }
 
-// VisitChildren visits an element's children, by using its VisitChildren or GetChild methods.
-func VisitChildren(el Element, yield func(child Element) bool) {
+// Children visits an element's children, by using its Children method.
+func Children(el Element) iter.Seq[Element] {
 	if el, ok := el.(ChildrenVisiter); ok {
-		el.VisitChildren(yield)
+		return el.Children()
+	} else {
+		return func(yield func(Element) bool) {}
 	}
 }
 
@@ -544,7 +544,7 @@ type ParentElement interface {
 	Element
 	ChildrenVisiter
 	// XXX figure out a better API
-	Children() []Element
+	GetChildren() []Element
 	SetChildren(children []Element)
 	ForgottenChildren() map[Element]struct{}
 }
@@ -818,10 +818,9 @@ type inactiveElements struct {
 }
 
 func (els *inactiveElements) unmount(el Element) {
-	VisitChildren(el, func(child Element) bool {
+	for child := range Children(el) {
 		els.unmount(child)
-		return true
-	})
+	}
 	Unmount(el)
 }
 
@@ -865,10 +864,9 @@ func sortElements(els []Element) {
 
 func (els *inactiveElements) deactivateRecursively(el Element) {
 	Deactivate(el)
-	VisitChildren(el, func(el Element) bool {
-		els.deactivateRecursively(el)
-		return true
-	})
+	for child := range Children(el) {
+		els.deactivateRecursively(child)
+	}
 }
 
 func (els *inactiveElements) add(el Element) {
@@ -956,10 +954,9 @@ func updateDepth(el Element, parentDepth int) {
 	expectedDepth := parentDepth + 1
 	if el.Handle().depth < expectedDepth {
 		el.Handle().depth = expectedDepth
-		VisitChildren(el, func(child Element) bool {
+		for child := range Children(el) {
 			updateDepth(child, expectedDepth)
-			return true
-		})
+		}
 	}
 }
 
@@ -967,10 +964,9 @@ func activateRecursively(el Element) {
 	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
 	Activate(el)
 	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
-	VisitChildren(el, func(child Element) bool {
+	for child := range Children(el) {
 		activateRecursively(child)
-		return true
-	})
+	}
 }
 
 func updateSlotForChild(el, child Element, newSlot int) {
@@ -997,7 +993,7 @@ func forceRebuild(el Element) {
 }
 
 func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
-	oldChildren := el.Children()
+	oldChildren := el.GetChildren()
 	replaceWithNilIfForgotten := func(child Element) Element {
 		if _, ok := el.ForgottenChildren()[child]; ok {
 			return nil
@@ -1148,10 +1144,9 @@ func ApplyParentData(pd ParentDataWidget, childrenOf Element) {
 		if rto, ok := child.(RenderObjectElement); ok {
 			pd.ApplyParentData(rto.RenderHandle().RenderObject)
 		} else {
-			VisitChildren(child, func(child Element) bool {
-				applyParentData(child)
-				return true
-			})
+			for child2 := range Children(child) {
+				applyParentData(child2)
+			}
 		}
 	}
 	applyParentData(childrenOf)
@@ -1172,7 +1167,7 @@ func GetWidgetChild(parent Widget) Widget {
 	}
 }
 
-func WidgetChildrenIter(parent Widget) func(yield func(i int, w Widget) bool) {
+func WidgetChildrenIter(parent Widget) iter.Seq2[int, Widget] {
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Children"); f.IsValid() {
 		if f.Len() == 0 {
@@ -1232,7 +1227,7 @@ type SingleChildElement struct {
 	child [1]Element
 }
 
-func (s *SingleChildElement) Children() []Element {
+func (s *SingleChildElement) GetChildren() []Element {
 	if s.child[0] == nil {
 		return nil
 	} else {
@@ -1253,11 +1248,13 @@ func (s *SingleChildElement) SetChildren(children []Element) {
 	}
 }
 
-func (s *SingleChildElement) VisitChildren(yield func(e Element) bool) {
-	if s.child[0] == nil {
-		return
+func (s *SingleChildElement) Children() iter.Seq[Element] {
+	return func(yield func(Element) bool) {
+		if s.child[0] == nil {
+			return
+		}
+		yield(s.child[0])
 	}
-	yield(s.child[0])
 }
 
 func (s *SingleChildElement) Child() Element {
@@ -1283,18 +1280,20 @@ func (m *ManyChildElements) SetChildren(children []Element) {
 	clear(m.forgottenChildren)
 }
 
-func (m *ManyChildElements) VisitChildren(yield func(el Element) bool) {
-	forgotten := m.forgottenChildren
-	for _, child := range m.children {
-		if _, ok := forgotten[child]; !ok {
-			if !yield(child) {
-				break
+func (m *ManyChildElements) Children() iter.Seq[Element] {
+	return func(yield func(Element) bool) {
+		forgotten := m.forgottenChildren
+		for _, child := range m.children {
+			if _, ok := forgotten[child]; !ok {
+				if !yield(child) {
+					break
+				}
 			}
 		}
 	}
 }
 
-func (m *ManyChildElements) Children() []Element {
+func (m *ManyChildElements) GetChildren() []Element {
 	return m.children
 }
 

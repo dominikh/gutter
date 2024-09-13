@@ -6,6 +6,7 @@
 package render
 
 import (
+	"iter"
 	"math"
 
 	"honnef.co/go/color"
@@ -67,8 +68,10 @@ type FillColor struct {
 	color color.Color
 }
 
-// VisitChildren implements Object.
-func (*FillColor) VisitChildren(yield func(Object) bool) {}
+// Children implements Object.
+func (*FillColor) Children() iter.Seq[Object] {
+	return func(yield func(Object) bool) {}
+}
 
 func (fc *FillColor) SetColor(c color.Color) {
 	if fc.color != c {
@@ -496,8 +499,10 @@ type Lottie struct {
 	frame       float64
 }
 
-// VisitChildren implements Object.
-func (l *Lottie) VisitChildren(yield func(Object) bool) {}
+// Children implements Object.
+func (l *Lottie) Children() iter.Seq[Object] {
+	return func(yield func(Object) bool) {}
+}
 
 func (l *Lottie) SetComposition(c *lottie_model.Composition) {
 	if l.composition != c {
@@ -582,10 +587,9 @@ func (o *AnimatedOpacity) PerformAttach(r *Renderer) {
 	// TODO(dh): we'd prefer AfterAttach and BeforeDetach hooks instead of
 	// PerformAttach, so that we don't have to concern ourselves with attaching
 	// children
-	o.VisitChildren(func(child Object) bool {
+	for child := range o.Children() {
 		Attach(child, r)
-		return true
-	})
+	}
 	o.updateOpacityListener = o.opacity.AddListener(o.updateOpacity)
 	o.updateOpacity()
 }

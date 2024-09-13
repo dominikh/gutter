@@ -7,6 +7,7 @@ package render
 
 import (
 	"fmt"
+	"iter"
 	"slices"
 	"strings"
 
@@ -30,9 +31,9 @@ type Object interface {
 	PerformLayout() (size curve.Size)
 	PerformPaint(p *Painter, scene *jello.Scene)
 
-	// TODO(dh): why does VisitChildren have to be in Object? can't it be in
+	// TODO(dh): why does Children have to be in Object? can't it be in
 	// ObjectWithChildren instead
-	VisitChildren(yield func(Object) bool)
+	Children() iter.Seq[Object]
 	Handle() *ObjectHandle
 }
 
@@ -218,10 +219,9 @@ func FormatTree(root Object) string {
 		}
 		seen[root] = struct{}{}
 		fmt.Fprintf(&sb, "%s(%[2]T)(%[2]p) (size: %s, relayout: %t)\n", strings.Repeat("\t", depth), root, root.Handle().Size(), root.Handle().relayoutBoundary)
-		root.VisitChildren(func(o Object) bool {
-			formatTree(o, depth+1)
-			return true
-		})
+		for child := range root.Children() {
+			formatTree(child, depth+1)
+		}
 	}
 	formatTree(root, 0)
 
@@ -232,9 +232,11 @@ type SingleChild struct {
 	Child Object
 }
 
-func (c *SingleChild) VisitChildren(yield func(Object) bool) {
-	if c.Child != nil {
-		yield(c.Child)
+func (c *SingleChild) Children() iter.Seq[Object] {
+	return func(yield func(Object) bool) {
+		if c.Child != nil {
+			yield(c.Child)
+		}
 	}
 }
 
@@ -258,10 +260,12 @@ type ManyChildren struct {
 	children []Object
 }
 
-func (c *ManyChildren) VisitChildren(yield func(Object) bool) {
-	for _, child := range c.children {
-		if !yield(child) {
-			break
+func (c *ManyChildren) Children() iter.Seq[Object] {
+	return func(yield func(Object) bool) {
+		for _, child := range c.children {
+			if !yield(child) {
+				break
+			}
 		}
 	}
 }
@@ -355,11 +359,15 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) curve.Size {
 				parentRelayoutBoundary := childh.Parent.Handle().relayoutBoundary
 				if parentRelayoutBoundary != childh.relayoutBoundary {
 					childh.relayoutBoundary = parentRelayoutBoundary
-					child.VisitChildren(propagateRelayoutBoundary)
+					for child2 := range child.Children() {
+						propagateRelayoutBoundary(child2)
+					}
 				}
 				return true
 			}
-			obj.VisitChildren(propagateRelayoutBoundary)
+			for child := range obj.Children() {
+				propagateRelayoutBoundary(child)
+			}
 		}
 		return obj.Handle().size
 	}
@@ -368,7 +376,9 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) curve.Size {
 		// The local relayout boundary has changed, must notify children in case
 		// they also need updating. Otherwise, they will be confused about what
 		// their actual relayout boundary is later.
-		obj.VisitChildren(cleanRelayoutBoundary)
+		for child := range obj.Children() {
+			cleanRelayoutBoundary(child)
+		}
 	}
 	obj.Handle().size = obj.PerformLayout()
 	h.needsLayout = false
@@ -386,7 +396,9 @@ func cleanRelayoutBoundary(child Object) bool {
 	childh := child.Handle()
 	if childh.relayoutBoundary != child {
 		childh.relayoutBoundary = nil
-		child.VisitChildren(cleanRelayoutBoundary)
+		for child2 := range child.Children() {
+			cleanRelayoutBoundary(child2)
+		}
 	}
 	return true
 }
