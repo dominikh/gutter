@@ -233,7 +233,7 @@ func Attach(obj Object, r *Renderer) {
 
 	if aobj, ok := obj.(Attacher); ok {
 		aobj.PerformAttach(r)
-	} else {
+	} else if obj, ok := obj.(ObjectWithChildren); ok {
 		for child := range obj.Children() {
 			Attach(child, r)
 		}

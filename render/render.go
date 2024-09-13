@@ -31,9 +31,6 @@ type Object interface {
 	PerformLayout() (size curve.Size)
 	PerformPaint(p *Painter, scene *jello.Scene)
 
-	// TODO(dh): why does Children have to be in Object? can't it be in
-	// ObjectWithChildren instead
-	Children() iter.Seq[Object]
 	Handle() *ObjectHandle
 }
 
@@ -44,6 +41,7 @@ type Attacher interface {
 
 type ObjectWithChildren interface {
 	Object
+	Children() iter.Seq[Object]
 	PerformInsertChild(child Object, after int)
 	PerformMoveChild(child Object, after int)
 	PerformRemoveChild(child Object)
@@ -219,8 +217,10 @@ func FormatTree(root Object) string {
 		}
 		seen[root] = struct{}{}
 		fmt.Fprintf(&sb, "%s(%[2]T)(%[2]p) (size: %s, relayout: %t)\n", strings.Repeat("\t", depth), root, root.Handle().Size(), root.Handle().relayoutBoundary)
-		for child := range root.Children() {
-			formatTree(child, depth+1)
+		if root, ok := root.(ObjectWithChildren); ok {
+			for child := range root.Children() {
+				formatTree(child, depth+1)
+			}
 		}
 	}
 	formatTree(root, 0)
@@ -359,14 +359,18 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) curve.Size {
 				parentRelayoutBoundary := childh.Parent.Handle().relayoutBoundary
 				if parentRelayoutBoundary != childh.relayoutBoundary {
 					childh.relayoutBoundary = parentRelayoutBoundary
-					for child2 := range child.Children() {
-						propagateRelayoutBoundary(child2)
+					if child, ok := child.(ObjectWithChildren); ok {
+						for child2 := range child.Children() {
+							propagateRelayoutBoundary(child2)
+						}
 					}
 				}
 				return true
 			}
-			for child := range obj.Children() {
-				propagateRelayoutBoundary(child)
+			if obj, ok := obj.(ObjectWithChildren); ok {
+				for child := range obj.Children() {
+					propagateRelayoutBoundary(child)
+				}
 			}
 		}
 		return obj.Handle().size
@@ -376,8 +380,10 @@ func Layout(obj Object, cs Constraints, parentUsesSize bool) curve.Size {
 		// The local relayout boundary has changed, must notify children in case
 		// they also need updating. Otherwise, they will be confused about what
 		// their actual relayout boundary is later.
-		for child := range obj.Children() {
-			cleanRelayoutBoundary(child)
+		if obj, ok := obj.(ObjectWithChildren); ok {
+			for child := range obj.Children() {
+				cleanRelayoutBoundary(child)
+			}
 		}
 	}
 	obj.Handle().size = obj.PerformLayout()
@@ -396,8 +402,10 @@ func cleanRelayoutBoundary(child Object) bool {
 	childh := child.Handle()
 	if childh.relayoutBoundary != child {
 		childh.relayoutBoundary = nil
-		for child2 := range child.Children() {
-			cleanRelayoutBoundary(child2)
+		if child, ok := child.(ObjectWithChildren); ok {
+			for child2 := range child.Children() {
+				cleanRelayoutBoundary(child2)
+			}
 		}
 	}
 	return true

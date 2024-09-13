@@ -67,8 +67,11 @@ func hitTest(res *hitTestResult, obj Object, pos curve.Point) bool {
 		if !curve.NewRectFromPoints(curve.Pt(0, 0), curve.Point(h.size.AsVec2())).Contains(tpos) {
 			return false
 		}
-		// If we hit a child, or are opaque, then we've been hit
-		hit := hitTestChildren(res, obj, pos) || h.HitTestBehavior == Opaque
+		hit := h.HitTestBehavior == Opaque
+		if obj, ok := obj.(ObjectWithChildren); ok {
+			// If we hit a child, or are opaque, then we've been hit
+			hit = hit || hitTestChildren(res, obj, pos)
+		}
 		// If we're translucent then we're still part of the result, but don't prevent other objects from
 		// being hit.
 		if hit || h.HitTestBehavior == Translucent {
@@ -78,7 +81,7 @@ func hitTest(res *hitTestResult, obj Object, pos curve.Point) bool {
 	}
 }
 
-func hitTestChildren(res *hitTestResult, obj Object, pos curve.Point) bool {
+func hitTestChildren(res *hitTestResult, obj ObjectWithChildren, pos curve.Point) bool {
 	hit := false
 	for o := range obj.Children() {
 		res.PushOffset(o.Handle().Offset)

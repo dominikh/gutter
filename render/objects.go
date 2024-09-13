@@ -6,7 +6,6 @@
 package render
 
 import (
-	"iter"
 	"math"
 
 	"honnef.co/go/color"
@@ -66,11 +65,6 @@ func (w *Clip) PerformPaint(p *Painter, scene *jello.Scene) {
 type FillColor struct {
 	Box
 	color color.Color
-}
-
-// Children implements Object.
-func (*FillColor) Children() iter.Seq[Object] {
-	return func(yield func(Object) bool) {}
 }
 
 func (fc *FillColor) SetColor(c color.Color) {
@@ -497,11 +491,6 @@ type Lottie struct {
 
 	composition *lottie_model.Composition
 	frame       float64
-}
-
-// Children implements Object.
-func (l *Lottie) Children() iter.Seq[Object] {
-	return func(yield func(Object) bool) {}
 }
 
 func (l *Lottie) SetComposition(c *lottie_model.Composition) {
