@@ -9,3 +9,8 @@ path = ["**/testdata/zipper.json"]
 SPDX-FileCopyrightText = "Google LLC"
 SPDX-License-Identifier = "CC-BY-4.0"
 SPDX-FileAttributionText = "This is the :zipper-face: emote from https://googlefonts.github.io/noto-emoji-animation/"
+
+[[annotations]]
+path = ["text/bidi/testdata/ucd/*.txt"]
+SPDX-FileCopyrightText = "1991-2025 Unicode, Inc."
+SPDX-License-Identifier = "Unicode-3.0"

@@ -11,6 +11,7 @@ require (
 	github.com/go-json-experiment/json v0.0.0-20240815175050-ebd3a8989ca1
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
 	golang.org/x/sys v0.21.0
+	golang.org/x/text v0.21.0
 	honnef.co/go/color v0.0.0-20240902224312-bee6d5d40ebe
 	honnef.co/go/curve v0.0.0-20240905023635-08d8c2e98b68
 	honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219
