@@ -838,47 +838,33 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// type otherwise. If the NSM is the first non-BN character, change the
 		// NSM to the type of sos.
 
-		// W1
+		// W1, W2, W3
 		{
-			prevClass := sos.getAsClass(seqIdx)
+			prevClass := sos.getAsClass(seqIdx)       // W1
+			prevStrongClass := sos.getAsClass(seqIdx) // W2
 			for i := range seqIndices(seq, 0, embeddingLevels) {
-				if runeClasses[i] == bidi.NSM {
+				switch c := runeClasses[i]; c {
+				case bidi.NSM: // W1
 					if prevClass >= bidi.LRI && prevClass <= bidi.PDI {
 						runeClasses[i] = bidi.ON
 					} else {
 						runeClasses[i] = prevClass
 					}
-				}
-				if runeClasses[i] != bidi.BN {
-					prevClass = runeClasses[i]
-				}
-			}
-		}
-
-		// OPT can W1 and W2 run together?
-
-		// W2
-		{
-			prevStrongClass := sos.getAsClass(seqIdx)
-			for i := range seqIndices(seq, 0, embeddingLevels) {
-				switch runeClasses[i] {
-				case bidi.EN:
+				case bidi.EN: // W2
 					if prevStrongClass == bidi.AL {
 						runeClasses[i] = bidi.AN
 					}
-				case bidi.R, bidi.L, bidi.AL:
-					prevStrongClass = runeClasses[i]
+				case bidi.AL:
+					runeClasses[i] = bidi.R // W3
+					fallthrough
+				case bidi.R, bidi.L:
+					prevStrongClass = c // W2
 				}
-			}
-		}
-
-		// OPT W2 and W3 can run together
-
-		// W3
-		{
-			for i := range seqIndices(seq, 0, embeddingLevels) {
-				if runeClasses[i] == bidi.AL {
-					runeClasses[i] = bidi.R
+				if runeClasses[i] != bidi.BN { // W1
+					// It doesn't matter that this observes changes made by W3
+					// and W3, as we only match on prevClass values in the
+					// LRI..PDI range. W2 only changes EN to AN, and W3 AL to R.
+					prevClass = runeClasses[i]
 				}
 			}
 		}
