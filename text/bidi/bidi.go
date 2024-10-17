@@ -230,7 +230,7 @@ type Instance struct {
 	ParagraphDirection Direction
 }
 
-func printTrace(when string, runes []rune, classes []bidi.Class, levels []int8, seqs [][]levelRun, sos, eos bitset) {
+func printTrace(when string, runes []rune, classes []bidi.Class, levels []int8, seqs []isolatingRunSequence, sos, eos bitset) {
 	if !trace {
 		return
 	}
@@ -317,7 +317,7 @@ func printTrace(when string, runes []rune, classes []bidi.Class, levels []int8, 
 		fmt.Print("Seqs:\t\t")
 		cursor := 0
 
-		for _, run := range seq {
+		for _, run := range seq.runs {
 			for i := cursor; i < run.start; i++ {
 				fmt.Print("       ")
 			}
@@ -697,20 +697,19 @@ func (th *Instance) Process(text []rune) Paragraph {
 	}
 
 	// OPT check if isolatingRunSequences can be an iterator instead
-	var isolatingRunSequences [][]levelRun
+	var isolatingRunSequences []isolatingRunSequence
 	for start, end := range levelRuns {
 		if validPDIs.get(start) {
 			continue
 		}
 
-		seq := []levelRun{
-			{start, end},
-		}
+		var seq isolatingRunSequence
+		seq.runs = append(seq.runs, levelRun{start: start, end: end})
 
 		for {
 			// XXX because we retain explicit formatting characters, we have to
 			// skip over BNs at the end when looking for isolate initiators.
-			last := seq[len(seq)-1].end - 1
+			last := seq.runs[len(seq.runs)-1].end - 1
 			lastClass := runeClasses[last]
 			lastLevel := embeddingLevels[last]
 			// While the level run currently last in the sequence ends with an
@@ -739,9 +738,10 @@ func (th *Instance) Process(text []rune) Paragraph {
 			}
 			// As established previously, the PDI is at the beginning of its
 			// containing run.
-			seq = append(seq, levelRun{pdi, end})
+			seq.runs = append(seq.runs, levelRun{start: pdi, end: end})
 		}
 
+		seq.analyze(runeClasses)
 		isolatingRunSequences = append(isolatingRunSequences, seq)
 	}
 
@@ -764,7 +764,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 		// Find the first character before the start of the sequence that isn't
 		// BN.
-		prev := seq[0].start - 1
+		prev := seq.runs[0].start - 1
 		for ; prev >= 0 && (embeddingLevels[prev] == -1 || runeClasses[prev] == bidi.BN); prev-- {
 		}
 		var prevLevel int8
@@ -775,11 +775,11 @@ func (th *Instance) Process(text []rune) Paragraph {
 			prevLevel = paragraphEmbeddingLevel
 		}
 
-		thisStart := seq[0].start
-		for ; thisStart < seq[len(seq)-1].end && (embeddingLevels[thisStart] == -1 || runeClasses[thisStart] == bidi.BN); thisStart++ {
+		thisStart := seq.runs[0].start
+		for ; thisStart < seq.runs[len(seq.runs)-1].end && (embeddingLevels[thisStart] == -1 || runeClasses[thisStart] == bidi.BN); thisStart++ {
 		}
 		var thisLevel int8
-		if thisStart < seq[len(seq)-1].end {
+		if thisStart < seq.runs[len(seq.runs)-1].end {
 			thisLevel = embeddingLevels[thisStart]
 		} else {
 			thisLevel = prevLevel
@@ -790,11 +790,11 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 		// Determine end-of-sequence type
 		var nextLevel int8
-		thisEnd := seq[len(seq)-1].end - 1
-		for ; thisEnd >= seq[0].start && (embeddingLevels[thisEnd] == -1 || runeClasses[thisEnd] == bidi.BN); thisEnd-- {
+		thisEnd := seq.runs[len(seq.runs)-1].end - 1
+		for ; thisEnd >= seq.runs[0].start && (embeddingLevels[thisEnd] == -1 || runeClasses[thisEnd] == bidi.BN); thisEnd-- {
 		}
 		found := false
-		if thisEnd >= seq[0].start {
+		if thisEnd >= seq.runs[0].start {
 			if r := runeClasses[thisEnd]; r >= bidi.LRI && r <= bidi.FSI {
 				// If the last character of the sequence is an isolate initiator,
 				// use the paragraph embedding level.
@@ -804,7 +804,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 		if !found {
 			// Find the first character after the end of the sequence that isn't BN.
-			next := seq[len(seq)-1].end
+			next := seq.runs[len(seq.runs)-1].end
 			for ; next < len(runeClasses) && (embeddingLevels[next] == -1 || runeClasses[next] == bidi.BN); next++ {
 			}
 			if next < len(runeClasses) {
@@ -814,7 +814,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 				nextLevel = paragraphEmbeddingLevel
 			}
 		}
-		thisLevel = embeddingLevels[seq[len(seq)-1].end-1]
+		thisLevel = embeddingLevels[seq.runs[len(seq.runs)-1].end-1]
 		if max(nextLevel, thisLevel)%2 == 1 {
 			eos.set(i)
 		}
@@ -823,38 +823,33 @@ func (th *Instance) Process(text []rune) Paragraph {
 	printTrace("X10", text, runeClasses, embeddingLevels, isolatingRunSequences, sos, eos)
 
 	// Resolving weak types
-	for seqIdx, seq := range isolatingRunSequences {
-		// W1. Examine each nonspacing mark (NSM) in the isolating run sequence,
-		// and change the type of the NSM to Other Neutral if the previous
-		// character is an isolate initiator or PDI, and to the type of the
-		// previous character otherwise. If the NSM is at the start of the
-		// isolating run sequence, it will get the type of sos. (Note that in an
-		// isolating run sequence, an isolate initiator followed by an NSM or
-		// any type other than PDI must be an overflow isolate initiator.)
-
-		// In rule W1, search backward from each NSM to the first character in
-		// the isolating run sequence whose bidirectional type is not BN, and
-		// set the NSM to ON if it is an isolate initiator or PDI, and to its
-		// type otherwise. If the NSM is the first non-BN character, change the
-		// NSM to the type of sos.
-
+	for seqIdx := range isolatingRunSequences {
+		seq := &isolatingRunSequences[seqIdx]
 		// W1, W2, W3
-		{
+		if seq.classes&(NSM|EN|AL) != 0 {
 			prevClass := sos.getAsClass(seqIdx)       // W1
 			prevStrongClass := sos.getAsClass(seqIdx) // W2
-			for i := range seqIndices(seq, 0, embeddingLevels) {
+			for i, run := range seqIndices(seq, 0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
 				case bidi.NSM: // W1
 					if prevClass >= bidi.LRI && prevClass <= bidi.PDI {
+						run.classes |= ON
+						seq.classes |= ON
 						runeClasses[i] = bidi.ON
 					} else {
+						run.classes |= xbidiToClass[prevClass]
+						seq.classes |= xbidiToClass[prevClass]
 						runeClasses[i] = prevClass
 					}
 				case bidi.EN: // W2
 					if prevStrongClass == bidi.AL {
+						run.classes |= AN
+						seq.classes |= AN
 						runeClasses[i] = bidi.AN
 					}
 				case bidi.AL:
+					run.classes |= R
+					seq.classes |= R
 					runeClasses[i] = bidi.R // W3
 					fallthrough
 				case bidi.R, bidi.L:
@@ -870,7 +865,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W4
-		{
+		if seq.classes&(EN|AN|ES|CS) != 0 {
 			numClass := ^bidi.Class(0)
 			sepIdx := -1
 			for i := range seqIndices(seq, 0, embeddingLevels) {
@@ -907,7 +902,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// OPT combine the two W5 sub-passes
 
 		// W5, BN* ET (BN | ET)* EN
-		{
+		if seq.classes&(ET|EN) != 0 {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
 			var indices []int
@@ -952,7 +947,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W5, EN BN* ET (BN | ET)*
-		{
+		if seq.classes&(EN|ET) != 0 {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
 			var indices []int
@@ -991,22 +986,31 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W6
-		{
+		if seq.classes&(ET|ES|CS) != 0 {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
-			var indices []int
-			for i := range seqIndices(seq, 0, embeddingLevels) {
+			var indices []struct {
+				idx int
+				run *levelRun
+			}
+			for i, run := range seqIndices(seq, 0, embeddingLevels) {
 				switch state {
 				case 0:
 					switch runeClasses[i] {
 					case bidi.BN:
 						// When retaining BNs, change those that are adjacent to
 						// ET, ES, or CS.
-						indices = append(indices, i)
+						indices = append(indices, struct {
+							idx int
+							run *levelRun
+						}{i, run})
 					case bidi.ET, bidi.ES, bidi.CS:
 						for _, j := range indices {
-							runeClasses[j] = bidi.ON
+							j.run.classes |= ON
+							runeClasses[j.idx] = bidi.ON
 						}
+						run.classes |= ON
+						seq.classes |= ON
 						runeClasses[i] = bidi.ON
 						state = 1
 					default:
@@ -1015,6 +1019,8 @@ func (th *Instance) Process(text []rune) Paragraph {
 				case 1:
 					switch runeClasses[i] {
 					case bidi.BN, bidi.ET, bidi.ES, bidi.CS:
+						seq.classes |= ON
+						run.classes |= ON
 						runeClasses[i] = bidi.ON
 					default:
 						state = 0
@@ -1024,14 +1030,16 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W7
-		{
+		if seq.classes&EN != 0 {
 			prevStrongClass := sos.getAsClass(seqIdx)
-			for i := range seqIndices(seq, 0, embeddingLevels) {
+			for i, run := range seqIndices(seq, 0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
 				case bidi.R, bidi.L:
 					prevStrongClass = c
 				case bidi.EN:
 					if prevStrongClass == bidi.L {
+						run.classes |= L
+						seq.classes |= L
 						runeClasses[i] = bidi.L
 					}
 				}
@@ -1054,10 +1062,14 @@ func (th *Instance) Process(text []rune) Paragraph {
 	// sequences.
 	//
 	// TODO see if bracketPairs can be an iterator instead
-	bracketPairs := func(seq []levelRun) ([]bracketPair, bool) {
+	bracketPairs := func(seq *isolatingRunSequence) ([]bracketPair, bool) {
+		if seq.classes&ON == 0 {
+			return nil, true
+		}
+
 		var stack bracketStack
 		var brackets []bracketPair
-		for j := range seqIndices(seq, 0, embeddingLevels) {
+		for j := range seqIndicesFilter(seq, 0, embeddingLevels, ON) {
 			// As per BD14 and BD15, paired brackets must have the ON character
 			// class, using the character classes after previous rules have been
 			// applied.
@@ -1107,17 +1119,22 @@ func (th *Instance) Process(text []rune) Paragraph {
 		return brackets, true
 	}
 
-	for seqIdx, seq := range isolatingRunSequences {
-		// OPT(dh): we only need a bit per character in the sequence, not in the
-		// text.
+	for seqIdx := range isolatingRunSequences {
+		seq := &isolatingRunSequences[seqIdx]
+		// Storing bracket indices instead of using a bitmap is only marginally
+		// faster for text with few brackets, but significantly slower for text
+		// with a lot of brackets.
 		changedBrackets := newBitset(len(text))
 
 		seqDirection := bidi.L
-		if embeddingLevels[seq[0].start]%2 != 0 {
+		if embeddingLevels[seq.runs[0].start]%2 != 0 {
 			seqDirection = bidi.R
 		}
 
 		// N0
+		//
+		// Note that N0-N2 do not update the class bitmaps of sequences and
+		// runs.
 		{
 			pairs, ok := bracketPairs(seq)
 			if ok {
@@ -1259,6 +1276,12 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// N1
+		//
+		// We don't check the sequence's classes because NI includes white space
+		// and numbers, which virtually all text has.
+		//
+		// Note that N0-N2 do not update the class bitmaps of sequences and
+		// runs.
 		{
 			start := sos.getAsClass(seqIdx)
 			// OPT we don't need to store every index, just contiguous ranges
@@ -1304,37 +1327,43 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 		// N2
 		//
-		// OPT we can fold N2 into N1
-		// OPT store ranges not indices
-		var indices []int
-		var afterNeutral bool
-		for j := range seqIndices(seq, 0, embeddingLevels) {
-			switch runeClasses[j] {
-			case bidi.BN:
-				// BNs adjoining neutrals are treated like those neutrals
-				if afterNeutral {
+		// We don't check the sequence's classes because NI includes white space
+		// and numbers, which virtually all text has.
+		//
+		// Note that N0-N2 do not update the class bitmaps of sequences and
+		// runs.
+		{
+			// OPT store ranges not indices
+			var indices []int
+			var afterNeutral bool
+			for j := range seqIndices(seq, 0, embeddingLevels) {
+				switch runeClasses[j] {
+				case bidi.BN:
+					// BNs adjoining neutrals are treated like those neutrals
+					if afterNeutral {
+						runeClasses[j] = seqDirection
+					} else {
+						indices = append(indices, j)
+					}
+				// OPT with some clever sorting of the constants we might be
+				// able to turn this into a >= && <= check instead
+				// case bidi.B, bidi.S, bidi.WS, bidi.ON:
+				case bidi.B, bidi.S, bidi.WS, bidi.ON:
+					afterNeutral = true
+					for _, k := range indices {
+						runeClasses[k] = seqDirection
+					}
+					indices = indices[:0]
+					fallthrough
+				case bidi.FSI, bidi.LRI, bidi.RLI, bidi.PDI: // NI
+					// TODO the spec says to change the BNs that adjoin "neutrals",
+					// but it's not clear if neutrals refers to all of NI or only B,
+					// S, WS, and ON
 					runeClasses[j] = seqDirection
-				} else {
-					indices = append(indices, j)
+				default:
+					indices = indices[:0]
+					afterNeutral = false
 				}
-			// OPT with some clever sorting of the constants we might be
-			// able to turn this into a >= && <= check instead
-			// case bidi.B, bidi.S, bidi.WS, bidi.ON:
-			case bidi.B, bidi.S, bidi.WS, bidi.ON:
-				afterNeutral = true
-				for _, k := range indices {
-					runeClasses[k] = seqDirection
-				}
-				indices = indices[:0]
-				fallthrough
-			case bidi.FSI, bidi.LRI, bidi.RLI, bidi.PDI: // NI
-				// TODO the spec says to change the BNs that adjoin "neutrals",
-				// but it's not clear if neutrals refers to all of NI or only B,
-				// S, WS, and ON
-				runeClasses[j] = seqDirection
-			default:
-				indices = indices[:0]
-				afterNeutral = false
 			}
 		}
 	}
@@ -1371,15 +1400,80 @@ func (th *Instance) Process(text []rune) Paragraph {
 	}
 }
 
+type classBitmap uint32
+
+const (
+	L classBitmap = 1 << iota
+	R
+	EN
+	ES
+	ET
+	AN
+	CS
+	B
+	S
+	WS
+	ON
+	BN
+	NSM
+	AL
+	LRO
+	RLO
+	LRE
+	RLE
+	PDF
+	LRI
+	RLI
+	FSI
+	PDI
+
+	All = ^uint32(0)
+)
+
+var xbidiToClass = [...]classBitmap{
+	bidi.L:   L,
+	bidi.R:   R,
+	bidi.EN:  EN,
+	bidi.ES:  ES,
+	bidi.ET:  ET,
+	bidi.AN:  AN,
+	bidi.CS:  CS,
+	bidi.B:   B,
+	bidi.S:   S,
+	bidi.WS:  WS,
+	bidi.ON:  ON,
+	bidi.BN:  BN,
+	bidi.NSM: NSM,
+	bidi.AL:  AL,
+	bidi.LRO: LRO,
+	bidi.RLO: RLO,
+	bidi.LRE: LRE,
+	bidi.RLE: RLE,
+	bidi.PDF: PDF,
+	bidi.LRI: LRI,
+	bidi.RLI: RLI,
+	bidi.FSI: FSI,
+	bidi.PDI: PDI,
+}
+
 type levelRun struct {
 	start, end int
+	classes    classBitmap
+}
+
+func (run *levelRun) analyze(classes []bidi.Class) {
+	run.classes = 0
+	for i := run.start; i < run.end; i++ {
+		run.classes |= xbidiToClass[classes[i]]
+	}
 }
 
 // TODO turn seqIndices and seqIndicesReverse into methods
 
-func seqIndices(seq []levelRun, start int, levels []int8) iter.Seq[int] {
-	return func(yield func(int) bool) {
-		for _, run := range seq {
+func seqIndices(seq *isolatingRunSequence, start int, levels []int8) iter.Seq2[int, *levelRun] {
+	return func(yield func(int, *levelRun) bool) {
+		for runIdx := range seq.runs {
+			run := &seq.runs[runIdx]
 			if start >= run.end {
 				continue
 			}
@@ -1389,7 +1483,7 @@ func seqIndices(seq []levelRun, start int, levels []int8) iter.Seq[int] {
 				if levels[i] == -1 {
 					continue
 				}
-				if !yield(i) {
+				if !yield(i, run) {
 					return
 				}
 			}
@@ -1397,10 +1491,34 @@ func seqIndices(seq []levelRun, start int, levels []int8) iter.Seq[int] {
 	}
 }
 
-func seqIndicesReverse(seq []levelRun, end int, levels []int8) iter.Seq[int] {
-	return func(yield func(int) bool) {
-		for runIdx := len(seq) - 1; runIdx >= 0; runIdx-- {
-			run := seq[runIdx]
+func seqIndicesFilter(seq *isolatingRunSequence, start int, levels []int8, classes classBitmap) iter.Seq2[int, *levelRun] {
+	return func(yield func(int, *levelRun) bool) {
+		for runIdx := range seq.runs {
+			run := &seq.runs[runIdx]
+			if start >= run.end {
+				continue
+			}
+			if run.classes&classes == 0 {
+				continue
+			}
+
+			runStart := max(start, run.start)
+			for i := runStart; i < run.end; i++ {
+				if levels[i] == -1 {
+					continue
+				}
+				if !yield(i, run) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func seqIndicesReverse(seq *isolatingRunSequence, end int, levels []int8) iter.Seq2[int, *levelRun] {
+	return func(yield func(int, *levelRun) bool) {
+		for runIdx := len(seq.runs) - 1; runIdx >= 0; runIdx-- {
+			run := &seq.runs[runIdx]
 
 			if run.start > end {
 				continue
@@ -1411,10 +1529,24 @@ func seqIndicesReverse(seq []levelRun, end int, levels []int8) iter.Seq[int] {
 				if levels[i] == -1 {
 					continue
 				}
-				if !yield(i) {
+				if !yield(i, run) {
 					return
 				}
 			}
 		}
+	}
+}
+
+type isolatingRunSequence struct {
+	runs    []levelRun
+	classes classBitmap
+}
+
+func (seq *isolatingRunSequence) analyze(classes []bidi.Class) {
+	seq.classes = 0
+	for runIdx := range seq.runs {
+		run := &seq.runs[runIdx]
+		run.analyze(classes)
+		seq.classes |= run.classes
 	}
 }
