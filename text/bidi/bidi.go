@@ -189,14 +189,14 @@ func (s *bracketStack) push(entry bracketStackEntry) {
 	s.n++
 }
 
-type bitset []byte
+type bitset []uint64
 
 func newBitset(n int) bitset {
-	return make([]byte, (n+7)/8)
+	return make([]uint64, (n+63)/64)
 }
 
 func (bs bitset) get(idx int) bool {
-	return (bs[idx/8]>>(idx%8))&1 != 0
+	return (bs[idx/64]>>(idx%64))&1 != 0
 }
 
 func (bs bitset) getAsClass(idx int) bidi.Class {
@@ -208,7 +208,7 @@ func (bs bitset) getAsClass(idx int) bidi.Class {
 }
 
 func (bs bitset) set(idx int) {
-	bs[idx/8] |= 1 << (idx % 8)
+	bs[idx/64] |= 1 << (idx % 64)
 }
 
 type Paragraph struct {
@@ -1217,34 +1217,42 @@ func (th *Instance) Process(text []rune) Paragraph {
 					}
 				}
 
-				// OPT brackets and NSMs are much less common than other
-				// characters and it'd be faster to scan forward from every
-				// bracket we've found, than to scan over all text. especially
-				// because we stop scanning once we find the first non-eligible
-				// character, so this won't be O(n^2).
-
-				var afterBracket bool
-				var bracketClass bidi.Class
 				lookupClass := func(r rune) bidi.Class {
 					props, _ := bidi.LookupRune(r)
 					return props.Class()
 				}
-				for j := range seqIndices(seq, 0, embeddingLevels) {
-					if changedBrackets.get(j) {
-						bracketClass = runeClasses[j]
-						afterBracket = true
+				for n, b := range changedBrackets {
+					if b == 0 {
 						continue
 					}
-					if afterBracket && lookupClass(text[j]) == bidi.NSM {
-						// Note that we check the rune's original class, before we
-						// applied W1.
+					var afterBracket bool
+					var bracketClass bidi.Class
+					for j := range seqIndices(seq, n*64, embeddingLevels) {
+						if changedBrackets.get(j) {
+							bracketClass = runeClasses[j]
+							afterBracket = true
+							continue
+						}
+						if afterBracket {
+							if lookupClass(text[j]) == bidi.NSM {
+								// Note that we check the rune's original class, before we
+								// applied W1.
 
-						// A sequence of NSM after a paired bracket that changed to L or
-						// R under N0 changes to match the bracket's type.
+								// A sequence of NSM after a paired bracket that changed to L or
+								// R under N0 changes to match the bracket's type.
 
-						runeClasses[j] = bracketClass
-					} else if runeClasses[j] != bidi.BN {
-						afterBracket = false
+								runeClasses[j] = bracketClass
+							} else if runeClasses[j] != bidi.BN {
+								afterBracket = false
+								if j > (n+1)*64 {
+									// We've looked at all possible parens in this byte
+									break
+								}
+							}
+						} else if j > (n+1)*64 {
+							// We've looked at all possible parens in this byte
+							break
+						}
 					}
 				}
 			}
