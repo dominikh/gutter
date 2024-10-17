@@ -625,8 +625,11 @@ func (th *Instance) Process(text []rune) Paragraph {
 			// have to do more work here, such as clearing the stack.
 			embeddingLevels[i] = paragraphEmbeddingLevel
 
-		default: // X6
-			// OPT can we avoid bounds checks on runeClasses[i]?
+		case bidi.L, bidi.R, bidi.EN, bidi.ES, bidi.ET, bidi.AN, bidi.CS,
+			bidi.S, bidi.WS, bidi.ON, bidi.NSM, bidi.AL, bidi.Control: // X6
+
+			// This is the default branch. We list all possible values
+			// explicitly so that this compiles to a jump table.
 
 			status := directionalStatusStack.peek()
 			embeddingLevels[i] = status.embeddingLevel
