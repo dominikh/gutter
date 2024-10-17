@@ -1050,74 +1050,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 	// Resolving neutral and isolate formatting types
 
-	type bracketPair struct {
-		// the positions of the opening and closing brackets, in absolute text
-		// coordinates.
-		open  int
-		close int
-	}
-
-	// This implements BD16 for finding bracket pairs in isolating run
-	// sequences.
-	//
-	// TODO see if bracketPairs can be an iterator instead
-	bracketPairs := func(seq *isolatingRunSequence) ([]bracketPair, bool) {
-		if seq.classes&ON == 0 {
-			return nil, true
-		}
-
-		var stack bracketStack
-		var brackets []bracketPair
-		for j := range seqIndicesFilter(seq, 0, embeddingLevels, ON) {
-			// As per BD14 and BD15, paired brackets must have the ON character
-			// class, using the character classes after previous rules have been
-			// applied.
-			if runeClasses[j] != bidi.ON {
-				continue
-			}
-
-			r := text[j]
-			props, _ := bidi.LookupRune(r)
-			if props.IsBracket() {
-				if props.IsOpeningBracket() {
-					if stack.length() <= maxBracketDepth {
-						stack.push(bracketStackEntry{
-							position:  j,
-							character: bracketMirrors[r],
-						})
-					} else {
-						return nil, false
-					}
-				} else {
-					for n := stack.length() - 1; n >= 0; n-- {
-						top := stack.at(n)
-						r_ := r
-						if r == 0x3009 {
-							r_ = 0x232A
-						}
-						top_ := top.character
-						if top_ == 0x3009 {
-							top_ = 0x232A
-						}
-						if r_ == top_ {
-							brackets = append(brackets, bracketPair{
-								open:  top.position,
-								close: j,
-							})
-							stack.trim(n)
-							break
-						}
-					}
-				}
-			}
-		}
-
-		slices.SortFunc(brackets, func(a, b bracketPair) int {
-			return cmp.Compare(a.open, b.open)
-		})
-		return brackets, true
-	}
-
 	for seqIdx := range isolatingRunSequences {
 		seq := &isolatingRunSequences[seqIdx]
 		// Storing bracket indices instead of using a bitmap is only marginally
@@ -1135,7 +1067,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// Note that N0-N2 do not update the class bitmaps of sequences and
 		// runs.
 		{
-			pairs, ok := bracketPairs(seq)
+			pairs, ok := bracketPairs(seq, runeClasses, embeddingLevels, text)
 			if ok {
 				for _, pair := range pairs {
 					var foundStrong bool
@@ -1545,4 +1477,72 @@ func (seq *isolatingRunSequence) analyze(classes []bidi.Class) {
 		run.analyze(classes)
 		seq.classes |= run.classes
 	}
+}
+
+type bracketPair struct {
+	// the positions of the opening and closing brackets, in absolute text
+	// coordinates.
+	open  int
+	close int
+}
+
+// This implements BD16 for finding bracket pairs in isolating run
+// sequences.
+//
+// TODO see if bracketPairs can be an iterator instead
+func bracketPairs(seq *isolatingRunSequence, runeClasses []bidi.Class, embeddingLevels []int8, text []rune) ([]bracketPair, bool) {
+	if seq.classes&ON == 0 {
+		return nil, true
+	}
+
+	var stack bracketStack
+	var brackets []bracketPair
+	for j := range seqIndicesFilter(seq, 0, embeddingLevels, ON) {
+		// As per BD14 and BD15, paired brackets must have the ON character
+		// class, using the character classes after previous rules have been
+		// applied.
+		if runeClasses[j] != bidi.ON {
+			continue
+		}
+
+		r := text[j]
+		props, _ := bidi.LookupRune(r)
+		if props.IsBracket() {
+			if props.IsOpeningBracket() {
+				if stack.length() <= maxBracketDepth {
+					stack.push(bracketStackEntry{
+						position:  j,
+						character: bracketMirrors[r],
+					})
+				} else {
+					return nil, false
+				}
+			} else {
+				for n := stack.length() - 1; n >= 0; n-- {
+					top := stack.at(n)
+					r_ := r
+					if r == 0x3009 {
+						r_ = 0x232A
+					}
+					top_ := top.character
+					if top_ == 0x3009 {
+						top_ = 0x232A
+					}
+					if r_ == top_ {
+						brackets = append(brackets, bracketPair{
+							open:  top.position,
+							close: j,
+						})
+						stack.trim(n)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	slices.SortFunc(brackets, func(a, b bracketPair) int {
+		return cmp.Compare(a.open, b.open)
+	})
+	return brackets, true
 }
