@@ -650,18 +650,14 @@ func (th *Instance) Process(text []rune) Paragraph {
 	if th.RetainFormattingCharacters {
 		for i, c := range runeClasses {
 			// This turns RLE, LRE, RLO, LRO, and PDF into BN
-			// OPT use >= and <= instead of a switch
-			switch c {
-			case bidi.RLE, bidi.LRE, bidi.RLO, bidi.LRO, bidi.PDF:
+			if c >= bidi.LRO && c <= bidi.PDF {
 				runeClasses[i] = bidi.BN
 			}
 		}
 	} else {
 		for i, c := range runeClasses {
 			// This marks RLE, LRE, RLO, LRO, and PDF as deleted.
-			// OPT use >= and <= instead of a switch
-			switch c {
-			case bidi.RLE, bidi.LRE, bidi.RLO, bidi.LRO, bidi.PDF, bidi.BN:
+			if (c >= bidi.LRO && c <= bidi.PDF) || c == bidi.BN {
 				embeddingLevels[i] = -1
 			}
 		}
@@ -1310,8 +1306,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 					start = bidi.R
 					nis = nis[:0]
 				case bidi.B, bidi.BN, bidi.S, bidi.WS, bidi.ON, bidi.FSI, bidi.LRI, bidi.RLI, bidi.PDI: // NI
-					// OPT with some clever sorting of the constants we might be
-					// able to turn this into a >= && <= check instead
 					if start == bidi.L || start == bidi.R {
 						nis = append(nis, j)
 					}
@@ -1340,25 +1334,24 @@ func (th *Instance) Process(text []rune) Paragraph {
 			var indices []int
 			var afterNeutral bool
 			for j := range seqIndices(seq, 0, embeddingLevels) {
-				switch runeClasses[j] {
-				case bidi.BN:
+				// We tried using a jump table for this switch, but it didn't
+				// have a measurable effect.
+				switch c := runeClasses[j]; {
+				case c == bidi.BN:
 					// BNs adjoining neutrals are treated like those neutrals
 					if afterNeutral {
 						runeClasses[j] = seqDirection
 					} else {
 						indices = append(indices, j)
 					}
-				// OPT with some clever sorting of the constants we might be
-				// able to turn this into a >= && <= check instead
-				// case bidi.B, bidi.S, bidi.WS, bidi.ON:
-				case bidi.B, bidi.S, bidi.WS, bidi.ON:
+				case c >= bidi.B && c <= bidi.ON:
 					afterNeutral = true
 					for _, k := range indices {
 						runeClasses[k] = seqDirection
 					}
 					indices = indices[:0]
 					fallthrough
-				case bidi.FSI, bidi.LRI, bidi.RLI, bidi.PDI: // NI
+				case c >= bidi.LRI && c <= bidi.PDI: // NI
 					// TODO the spec says to change the BNs that adjoin "neutrals",
 					// but it's not clear if neutrals refers to all of NI or only B,
 					// S, WS, and ON
