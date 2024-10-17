@@ -1225,14 +1225,17 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 				var afterBracket bool
 				var bracketClass bidi.Class
+				lookupClass := func(r rune) bidi.Class {
+					props, _ := bidi.LookupRune(r)
+					return props.Class()
+				}
 				for j := range seqIndices(seq, 0, embeddingLevels) {
 					if changedBrackets.get(j) {
 						bracketClass = runeClasses[j]
 						afterBracket = true
 						continue
 					}
-					props, _ := bidi.LookupRune(text[j])
-					if props.Class() == bidi.NSM && afterBracket {
+					if afterBracket && lookupClass(text[j]) == bidi.NSM {
 						// Note that we check the rune's original class, before we
 						// applied W1.
 
