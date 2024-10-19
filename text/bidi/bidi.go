@@ -26,8 +26,6 @@ import (
 	"fmt"
 	"iter"
 	"slices"
-
-	"honnef.co/go/gutter/debug"
 )
 
 const trace = false
@@ -1040,11 +1038,9 @@ func (th *Instance) Process(text []rune) Paragraph {
 					// offset. Shouldn't matter much for normal text because sequences
 					// won't be that long, but can be abused by malicious inputs.
 					for j := range seqIndices(seq, pair.open, embeddingLevels) {
-						debug.Assert(j >= pair.open)
 						if j == pair.open {
 							continue
 						}
-						debug.Assert(j <= pair.close)
 						if j == pair.close {
 							break
 						}
