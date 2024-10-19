@@ -15,8 +15,6 @@ import (
 	"testing"
 
 	"honnef.co/go/gutter/text/bidi"
-
-	xbidi "golang.org/x/text/unicode/bidi"
 )
 
 func FuzzBidi(f *testing.F) {
@@ -286,8 +284,8 @@ func checkRes(t *testing.T, res bidi.Paragraph, runes []rune, wantLevels []int8,
 				PDF = 0x202C
 			)
 
-			props, _ := xbidi.LookupRune(r)
-			if props.Class() == xbidi.BN {
+			cls, _ := bidi.Class(r)
+			if cls == bidi.BN {
 				res.Levels[i] = -1
 			} else {
 				switch r {

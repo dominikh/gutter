@@ -4,6 +4,9 @@
 
 package bidi
 
+//go:generate go run ./internal/cmd/generate_tables
+//go:generate gofmt -w ./data.go
+
 // References:
 //
 // https://unicode.org/reports/tr9/
@@ -23,17 +26,11 @@ import (
 	"fmt"
 	"iter"
 	"slices"
-	_ "unsafe" // for go:linkname
 
 	"honnef.co/go/gutter/debug"
-
-	"golang.org/x/text/unicode/bidi"
 )
 
 const trace = false
-
-//go:linkname reverseBracket golang.org/x/text/unicode/bidi.Properties.reverseBracket
-func reverseBracket(p bidi.Properties, r rune) rune
 
 type Direction int
 
@@ -44,8 +41,8 @@ const (
 
 // TODO should we check lvl < maxDepth or lvl <= maxDepth
 
-// OPT can we turn the 'if (lvl%2 == 0 && c == bidi.RLE) || (lvl%2 != 0 && c ==
-// bidi.LRE) {' pattern into something without branches, by treating bools as
+// OPT can we turn the 'if (lvl%2 == 0 && c == RLE) || (lvl%2 != 0 && c ==
+// LRE) {' pattern into something without branches, by treating bools as
 // integers?
 
 // The maximum embedding level, as specified by BD2. We could easily support an
@@ -166,11 +163,11 @@ func (bs bitset) get(idx int) bool {
 	return (bs[idx/64]>>(idx%64))&1 != 0
 }
 
-func (bs bitset) getAsClass(idx int) bidi.Class {
+func (bs bitset) getAsClass(idx int) BidiClass {
 	if bs.get(idx) {
-		return bidi.R
+		return R
 	} else {
-		return bidi.L
+		return L
 	}
 }
 
@@ -179,7 +176,7 @@ func (bs bitset) set(idx int) {
 }
 
 type Paragraph struct {
-	Classes []bidi.Class
+	Classes []BidiClass
 	Levels  []int8
 }
 
@@ -197,7 +194,7 @@ type Instance struct {
 	ParagraphDirection Direction
 }
 
-func printTrace(when string, runes []rune, classes []bidi.Class, levels []int8, seqs []isolatingRunSequence, sos, eos bitset) {
+func printTrace(when string, runes []rune, classes []BidiClass, levels []int8, seqs []isolatingRunSequence, sos, eos bitset) {
 	if !trace {
 		return
 	}
@@ -218,51 +215,51 @@ func printTrace(when string, runes []rune, classes []bidi.Class, levels []int8, 
 	fmt.Print("Bidi_Class:\t")
 	for _, c := range classes {
 		switch c {
-		case bidi.L:
+		case L:
 			fmt.Printf(" %6s", "L")
-		case bidi.R:
+		case R:
 			fmt.Printf(" %6s", "R")
-		case bidi.EN:
+		case EN:
 			fmt.Printf(" %6s", "EN")
-		case bidi.ES:
+		case ES:
 			fmt.Printf(" %6s", "ES")
-		case bidi.ET:
+		case ET:
 			fmt.Printf(" %6s", "ET")
-		case bidi.AN:
+		case AN:
 			fmt.Printf(" %6s", "AN")
-		case bidi.CS:
+		case CS:
 			fmt.Printf(" %6s", "CS")
-		case bidi.B:
+		case B:
 			fmt.Printf(" %6s", "B")
-		case bidi.S:
+		case S:
 			fmt.Printf(" %6s", "S")
-		case bidi.WS:
+		case WS:
 			fmt.Printf(" %6s", "WS")
-		case bidi.ON:
+		case ON:
 			fmt.Printf(" %6s", "ON")
-		case bidi.BN:
+		case BN:
 			fmt.Printf(" %6s", "BN")
-		case bidi.NSM:
+		case NSM:
 			fmt.Printf(" %6s", "NSM")
-		case bidi.AL:
+		case AL:
 			fmt.Printf(" %6s", "AL")
-		case bidi.LRO:
+		case LRO:
 			fmt.Printf(" %6s", "LRO")
-		case bidi.RLO:
+		case RLO:
 			fmt.Printf(" %6s", "RLO")
-		case bidi.LRE:
+		case LRE:
 			fmt.Printf(" %6s", "LRE")
-		case bidi.RLE:
+		case RLE:
 			fmt.Printf(" %6s", "RLE")
-		case bidi.PDF:
+		case PDF:
 			fmt.Printf(" %6s", "PDF")
-		case bidi.LRI:
+		case LRI:
 			fmt.Printf(" %6s", "LRI")
-		case bidi.RLI:
+		case RLI:
 			fmt.Printf(" %6s", "RLI")
-		case bidi.FSI:
+		case FSI:
 			fmt.Printf(" %6s", "FSI")
-		case bidi.PDI:
+		case PDI:
 			fmt.Printf(" %6s", "PDI")
 		default:
 			fmt.Print(c)
@@ -337,11 +334,9 @@ func (th *Instance) Process(text []rune) Paragraph {
 	// reduce memory usage, using memory proportional to the number of class and
 	// level changes instead of to the length of the text.
 	//
-	// TODO don't depend on x/text/unicode/bidi
-	// OPT bidi.Class is type int, but 8 bits would suffice
 	// OPT can we make do without an explicit runeClasses slice?
 	// OPT allow reusing slices for multiple calls of Entry
-	runeClasses := make([]bidi.Class, len(text))
+	runeClasses := make([]BidiClass, len(text))
 	//
 	// We could parallelize this work, but it would only pay off for
 	// absurdly long paragraphs. Testing on a 3950x, to benefit from two
@@ -350,8 +345,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 	// text. Since that will almost certainly involve multiple paragraphs, the
 	// user can parallelize on a per-paragraph level instead.
 	for i, r := range text {
-		props, _ := bidi.LookupRune(r)
-		runeClasses[i] = props.Class()
+		runeClasses[i], _ = Class(r)
 	}
 
 	embeddingLevels := make([]int8, len(text))
@@ -400,7 +394,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 	for i, c := range runeClasses {
 		if th.RetainFormattingCharacters {
 			switch c {
-			case bidi.RLE, bidi.LRE, bidi.RLO, bidi.LRO:
+			case RLE, LRE, RLO, LRO:
 				// Applying the effect of "Retaining BNs and Explicit Formatting
 				// Characters" on X2-X5
 				embeddingLevels[i] = directionalStatusStack.peek().embeddingLevel
@@ -408,9 +402,9 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		switch c {
-		case bidi.RLE, bidi.LRE: // X2 and X3
+		case RLE, LRE: // X2 and X3
 			lvl := directionalStatusStack.peek().embeddingLevel + 1
-			if (lvl%2 != 1 && c == bidi.RLE) || (lvl%2 != 0 && c == bidi.LRE) {
+			if (lvl%2 != 1 && c == RLE) || (lvl%2 != 0 && c == LRE) {
 				lvl++
 			}
 			if lvl <= maxEmbeddingDepth && overflowIsolateCount == 0 && overflowEmbeddingCount == 0 {
@@ -425,17 +419,17 @@ func (th *Instance) Process(text []rune) Paragraph {
 					overflowEmbeddingCount++
 				}
 			}
-		case bidi.RLO, bidi.LRO: // X4, X5
+		case RLO, LRO: // X4, X5
 			lvl := directionalStatusStack.peek().embeddingLevel + 1
-			if (lvl%2 == 0 && c == bidi.RLO) || (lvl%2 != 0 && c == bidi.LRO) {
+			if (lvl%2 == 0 && c == RLO) || (lvl%2 != 0 && c == LRO) {
 				lvl++
 			}
 			if lvl <= maxEmbeddingDepth && overflowIsolateCount == 0 && overflowEmbeddingCount == 0 {
 				var over directionalOverride
 				switch c {
-				case bidi.RLO:
+				case RLO:
 					over = rtlOverride
-				case bidi.LRO:
+				case LRO:
 					over = ltrOverride
 				}
 				directionalStatusStack.push(directionalStatus{
@@ -449,8 +443,8 @@ func (th *Instance) Process(text []rune) Paragraph {
 					overflowEmbeddingCount++
 				}
 			}
-		case bidi.RLI, bidi.LRI, bidi.FSI: // X5a, X5b, X5c
-			if c == bidi.FSI {
+		case RLI, LRI, FSI: // X5a, X5b, X5c
+			if c == FSI {
 				// FIXME OPT For FSI, we need to find the first strong character
 				// between the FSI and its matching PDI, skipping over nested
 				// isolates. Doing this naively, by scanning forward every time
@@ -461,19 +455,19 @@ func (th *Instance) Process(text []rune) Paragraph {
 			fsiLoop:
 				for j := i + 1; j < len(runeClasses); j++ {
 					switch runeClasses[j] {
-					case bidi.L:
+					case L:
 						if stack == 1 {
-							c = bidi.LRI
+							c = LRI
 							break fsiLoop
 						}
-					case bidi.R, bidi.AL:
+					case R, AL:
 						if stack == 1 {
-							c = bidi.RLI
+							c = RLI
 							break fsiLoop
 						}
-					case bidi.FSI, bidi.LRI, bidi.RLI:
+					case FSI, LRI, RLI:
 						stack++
-					case bidi.PDI:
+					case PDI:
 						stack--
 						if stack == 0 {
 							break fsiLoop
@@ -481,10 +475,10 @@ func (th *Instance) Process(text []rune) Paragraph {
 					}
 				}
 
-				if c == bidi.FSI {
+				if c == FSI {
 					// We didn't find any strong character in the isolate,
 					// default to left-to-right.
-					c = bidi.LRI
+					c = LRI
 				}
 			}
 
@@ -494,12 +488,12 @@ func (th *Instance) Process(text []rune) Paragraph {
 			case neutral:
 				// nothing to do
 			case ltrOverride:
-				runeClasses[i] = bidi.L
+				runeClasses[i] = L
 			case rtlOverride:
-				runeClasses[i] = bidi.R
+				runeClasses[i] = R
 			}
 			lvl := status.embeddingLevel + 1
-			if (lvl%2 == 0 && c == bidi.RLI) || (lvl%2 != 0 && c == bidi.LRI) {
+			if (lvl%2 == 0 && c == RLI) || (lvl%2 != 0 && c == LRI) {
 				lvl++
 			}
 			if lvl <= maxEmbeddingDepth && overflowIsolateCount == 0 && overflowEmbeddingCount == 0 {
@@ -514,7 +508,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 				overflowIsolateCount++
 			}
 
-		case bidi.PDI: // X6a
+		case PDI: // X6a
 			if overflowIsolateCount > 0 {
 				// PDI matches an overflowing isolate initiator.
 				overflowIsolateCount--
@@ -547,14 +541,14 @@ func (th *Instance) Process(text []rune) Paragraph {
 			embeddingLevels[i] = entry.embeddingLevel
 			switch entry.directionalOverrideStatus {
 			case rtlOverride:
-				runeClasses[i] = bidi.R
+				runeClasses[i] = R
 			case ltrOverride:
-				runeClasses[i] = bidi.L
+				runeClasses[i] = L
 			case neutral:
 				// nothing to do
 			}
 
-		case bidi.PDF: // X7
+		case PDF: // X7
 			if overflowIsolateCount > 0 {
 				// Do nothing. The PDF either matches an overflow embedding
 				// initiator or it doesn't match; either case is handled
@@ -578,7 +572,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 				embeddingLevels[i] = directionalStatusStack.peek().embeddingLevel
 			}
 
-		case bidi.BN: // X6
+		case BN: // X6
 			if th.RetainFormattingCharacters {
 				// Applying the effect of "Retaining BNs and Explicit Formatting
 				// Characters" on X6, which means we have to update the embedding
@@ -587,13 +581,12 @@ func (th *Instance) Process(text []rune) Paragraph {
 				embeddingLevels[i] = status.embeddingLevel
 			}
 
-		case bidi.B:
+		case B:
 			// TODO if we were to support multiple paragraphs in one call, we'd
 			// have to do more work here, such as clearing the stack.
 			embeddingLevels[i] = paragraphEmbeddingLevel
 
-		case bidi.L, bidi.R, bidi.EN, bidi.ES, bidi.ET, bidi.AN, bidi.CS,
-			bidi.S, bidi.WS, bidi.ON, bidi.NSM, bidi.AL, bidi.Control: // X6
+		case L, R, EN, ES, ET, AN, CS, S, WS, ON, NSM, AL: // X6
 
 			// This is the default branch. We list all possible values
 			// explicitly so that this compiles to a jump table.
@@ -602,9 +595,9 @@ func (th *Instance) Process(text []rune) Paragraph {
 			embeddingLevels[i] = status.embeddingLevel
 			switch status.directionalOverrideStatus {
 			case ltrOverride:
-				runeClasses[i] = bidi.L
+				runeClasses[i] = L
 			case rtlOverride:
-				runeClasses[i] = bidi.R
+				runeClasses[i] = R
 			case neutral:
 				// nothing to do
 			}
@@ -617,14 +610,14 @@ func (th *Instance) Process(text []rune) Paragraph {
 	if th.RetainFormattingCharacters {
 		for i, c := range runeClasses {
 			// This turns RLE, LRE, RLO, LRO, and PDF into BN
-			if c >= bidi.LRO && c <= bidi.PDF {
-				runeClasses[i] = bidi.BN
+			if c >= LRO && c <= PDF {
+				runeClasses[i] = BN
 			}
 		}
 	} else {
 		for i, c := range runeClasses {
 			// This marks RLE, LRE, RLO, LRO, and PDF as deleted.
-			if (c >= bidi.LRO && c <= bidi.PDF) || c == bidi.BN {
+			if (c >= LRO && c <= PDF) || c == BN {
 				embeddingLevels[i] = -1
 			}
 		}
@@ -681,7 +674,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 			// While the level run currently last in the sequence ends with an
 			// isolate initiator...
 			//
-			if lastClass < bidi.LRI || lastClass > bidi.FSI {
+			if lastClass < LRI || lastClass > FSI {
 				break
 			}
 			// ... that has a matching PDI
@@ -731,7 +724,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// Find the first character before the start of the sequence that isn't
 		// BN.
 		prev := seq.runs[0].start - 1
-		for ; prev >= 0 && (embeddingLevels[prev] == -1 || runeClasses[prev] == bidi.BN); prev-- {
+		for ; prev >= 0 && (embeddingLevels[prev] == -1 || runeClasses[prev] == BN); prev-- {
 		}
 		var prevLevel int8
 		if prev >= 0 {
@@ -742,7 +735,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		thisStart := seq.runs[0].start
-		for ; thisStart < seq.runs[len(seq.runs)-1].end && (embeddingLevels[thisStart] == -1 || runeClasses[thisStart] == bidi.BN); thisStart++ {
+		for ; thisStart < seq.runs[len(seq.runs)-1].end && (embeddingLevels[thisStart] == -1 || runeClasses[thisStart] == BN); thisStart++ {
 		}
 		var thisLevel int8
 		if thisStart < seq.runs[len(seq.runs)-1].end {
@@ -757,11 +750,11 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// Determine end-of-sequence type
 		var nextLevel int8
 		thisEnd := seq.runs[len(seq.runs)-1].end - 1
-		for ; thisEnd >= seq.runs[0].start && (embeddingLevels[thisEnd] == -1 || runeClasses[thisEnd] == bidi.BN); thisEnd-- {
+		for ; thisEnd >= seq.runs[0].start && (embeddingLevels[thisEnd] == -1 || runeClasses[thisEnd] == BN); thisEnd-- {
 		}
 		found := false
 		if thisEnd >= seq.runs[0].start {
-			if r := runeClasses[thisEnd]; r >= bidi.LRI && r <= bidi.FSI {
+			if r := runeClasses[thisEnd]; r >= LRI && r <= FSI {
 				// If the last character of the sequence is an isolate initiator,
 				// use the paragraph embedding level.
 				nextLevel = paragraphEmbeddingLevel
@@ -771,7 +764,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		if !found {
 			// Find the first character after the end of the sequence that isn't BN.
 			next := seq.runs[len(seq.runs)-1].end
-			for ; next < len(runeClasses) && (embeddingLevels[next] == -1 || runeClasses[next] == bidi.BN); next++ {
+			for ; next < len(runeClasses) && (embeddingLevels[next] == -1 || runeClasses[next] == BN); next++ {
 			}
 			if next < len(runeClasses) {
 				nextLevel = embeddingLevels[next]
@@ -792,36 +785,36 @@ func (th *Instance) Process(text []rune) Paragraph {
 	for seqIdx := range isolatingRunSequences {
 		seq := &isolatingRunSequences[seqIdx]
 		// W1, W2, W3
-		if seq.classes&(NSM|EN|AL) != 0 {
+		if seq.classes&(bitmapNSM|bitmapEN|bitmapAL) != 0 {
 			prevClass := sos.getAsClass(seqIdx)       // W1
 			prevStrongClass := sos.getAsClass(seqIdx) // W2
 			for i, run := range seqIndices(seq, 0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
-				case bidi.NSM: // W1
-					if prevClass >= bidi.LRI && prevClass <= bidi.PDI {
-						run.classes |= ON
-						seq.classes |= ON
-						runeClasses[i] = bidi.ON
+				case NSM: // W1
+					if prevClass >= LRI && prevClass <= PDI {
+						run.classes |= bitmapON
+						seq.classes |= bitmapON
+						runeClasses[i] = ON
 					} else {
-						run.classes |= xbidiToClass[prevClass]
-						seq.classes |= xbidiToClass[prevClass]
+						run.classes |= 1 << prevClass
+						seq.classes |= 1 << prevClass
 						runeClasses[i] = prevClass
 					}
-				case bidi.EN: // W2
-					if prevStrongClass == bidi.AL {
-						run.classes |= AN
-						seq.classes |= AN
-						runeClasses[i] = bidi.AN
+				case EN: // W2
+					if prevStrongClass == AL {
+						run.classes |= bitmapAN
+						seq.classes |= bitmapAN
+						runeClasses[i] = AN
 					}
-				case bidi.AL:
-					run.classes |= R
-					seq.classes |= R
-					runeClasses[i] = bidi.R // W3
+				case AL:
+					run.classes |= bitmapR
+					seq.classes |= bitmapR
+					runeClasses[i] = R // W3
 					fallthrough
-				case bidi.R, bidi.L:
+				case R, L:
 					prevStrongClass = c // W2
 				}
-				if runeClasses[i] != bidi.BN { // W1
+				if runeClasses[i] != BN { // W1
 					// It doesn't matter that this observes changes made by W3
 					// and W3, as we only match on prevClass values in the
 					// LRI..PDI range. W2 only changes EN to AN, and W3 AL to R.
@@ -831,35 +824,35 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W4
-		if seq.classes&(EN|AN|ES|CS) != 0 {
-			numClass := ^bidi.Class(0)
+		if seq.classes&(bitmapEN|bitmapAN|bitmapES|bitmapCS) != 0 {
+			numClass := ^BidiClass(0)
 			sepIdx := -1
 			for i := range seqIndices(seq, 0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
-				case bidi.EN, bidi.AN:
+				case EN, AN:
 					if sepIdx != -1 && c == numClass {
 						runeClasses[sepIdx] = numClass
 					}
 					numClass = c
 					sepIdx = -1
-				case bidi.ES:
-					if numClass == bidi.EN && sepIdx == -1 {
+				case ES:
+					if numClass == EN && sepIdx == -1 {
 						sepIdx = i
 					} else {
-						numClass = ^bidi.Class(0)
+						numClass = ^BidiClass(0)
 						sepIdx = -1
 					}
-				case bidi.CS:
-					if numClass != ^bidi.Class(0) && sepIdx == -1 {
+				case CS:
+					if numClass != ^BidiClass(0) && sepIdx == -1 {
 						sepIdx = i
 					} else {
-						numClass = ^bidi.Class(0)
+						numClass = ^BidiClass(0)
 						sepIdx = -1
 					}
-				case bidi.BN:
+				case BN:
 					// When retaining BNs, scan past them.
 				default:
-					numClass = ^bidi.Class(0)
+					numClass = ^BidiClass(0)
 					sepIdx = -1
 				}
 			}
@@ -868,7 +861,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// OPT combine the two W5 sub-passes
 
 		// W5, BN* ET (BN | ET)* EN
-		if seq.classes&(ET|EN) != 0 {
+		if seq.classes&(bitmapET|bitmapEN) != 0 {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
 			var indices []int
@@ -876,18 +869,18 @@ func (th *Instance) Process(text []rune) Paragraph {
 				switch state {
 				case 0:
 					switch runeClasses[i] {
-					case bidi.BN:
+					case BN:
 						indices = append(indices, i)
 						state = 1
-					case bidi.ET:
+					case ET:
 						indices = append(indices, i)
 						state = 2
 					}
 				case 1:
 					switch runeClasses[i] {
-					case bidi.BN:
+					case BN:
 						indices = append(indices, i)
-					case bidi.ET:
+					case ET:
 						indices = append(indices, i)
 						state = 2
 					default:
@@ -896,11 +889,11 @@ func (th *Instance) Process(text []rune) Paragraph {
 					}
 				case 2:
 					switch runeClasses[i] {
-					case bidi.BN, bidi.ET:
+					case BN, ET:
 						indices = append(indices, i)
-					case bidi.EN:
+					case EN:
 						for _, j := range indices {
-							runeClasses[j] = bidi.EN
+							runeClasses[j] = EN
 						}
 						indices = indices[:0]
 						state = 0
@@ -913,28 +906,28 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W5, EN BN* ET (BN | ET)*
-		if seq.classes&(EN|ET) != 0 {
+		if seq.classes&(bitmapEN|bitmapET) != 0 {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
 			var indices []int
 			for i := range seqIndices(seq, 0, embeddingLevels) {
 				switch state {
 				case 0:
-					if runeClasses[i] == bidi.EN {
+					if runeClasses[i] == EN {
 						state = 1
 					}
 				case 1:
 					switch runeClasses[i] {
-					case bidi.BN:
+					case BN:
 						indices = append(indices, i)
-					case bidi.ET:
+					case ET:
 						for _, j := range indices {
-							runeClasses[j] = bidi.EN
+							runeClasses[j] = EN
 						}
 						indices = indices[:0]
-						runeClasses[i] = bidi.EN
+						runeClasses[i] = EN
 						state = 2
-					case bidi.EN:
+					case EN:
 						indices = indices[:0]
 					default:
 						indices = indices[:0]
@@ -942,8 +935,8 @@ func (th *Instance) Process(text []rune) Paragraph {
 					}
 				case 2:
 					switch runeClasses[i] {
-					case bidi.BN, bidi.ET:
-						runeClasses[i] = bidi.EN
+					case BN, ET:
+						runeClasses[i] = EN
 					default:
 						state = 0
 					}
@@ -952,7 +945,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W6
-		if seq.classes&(ET|ES|CS) != 0 {
+		if seq.classes&(bitmapET|bitmapES|bitmapCS) != 0 {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
 			var indices []struct {
@@ -963,31 +956,31 @@ func (th *Instance) Process(text []rune) Paragraph {
 				switch state {
 				case 0:
 					switch runeClasses[i] {
-					case bidi.BN:
+					case BN:
 						// When retaining BNs, change those that are adjacent to
 						// ET, ES, or CS.
 						indices = append(indices, struct {
 							idx int
 							run *levelRun
 						}{i, run})
-					case bidi.ET, bidi.ES, bidi.CS:
+					case ET, ES, CS:
 						for _, j := range indices {
-							j.run.classes |= ON
-							runeClasses[j.idx] = bidi.ON
+							j.run.classes |= bitmapON
+							runeClasses[j.idx] = ON
 						}
-						run.classes |= ON
-						seq.classes |= ON
-						runeClasses[i] = bidi.ON
+						run.classes |= bitmapON
+						seq.classes |= bitmapON
+						runeClasses[i] = ON
 						state = 1
 					default:
 						indices = indices[:0]
 					}
 				case 1:
 					switch runeClasses[i] {
-					case bidi.BN, bidi.ET, bidi.ES, bidi.CS:
-						seq.classes |= ON
-						run.classes |= ON
-						runeClasses[i] = bidi.ON
+					case BN, ET, ES, CS:
+						seq.classes |= bitmapON
+						run.classes |= bitmapON
+						runeClasses[i] = ON
 					default:
 						state = 0
 					}
@@ -996,17 +989,17 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 
 		// W7
-		if seq.classes&EN != 0 {
+		if seq.classes&bitmapEN != 0 {
 			prevStrongClass := sos.getAsClass(seqIdx)
 			for i, run := range seqIndices(seq, 0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
-				case bidi.R, bidi.L:
+				case R, L:
 					prevStrongClass = c
-				case bidi.EN:
-					if prevStrongClass == bidi.L {
-						run.classes |= L
-						seq.classes |= L
-						runeClasses[i] = bidi.L
+				case EN:
+					if prevStrongClass == L {
+						run.classes |= bitmapL
+						seq.classes |= bitmapL
+						runeClasses[i] = L
 					}
 				}
 			}
@@ -1024,9 +1017,9 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// with a lot of brackets.
 		changedBrackets := newBitset(len(text))
 
-		seqDirection := bidi.L
+		seqDirection := L
 		if embeddingLevels[seq.runs[0].start]%2 != 0 {
-			seqDirection = bidi.R
+			seqDirection = R
 		}
 
 		// N0
@@ -1058,10 +1051,10 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 						rc := runeClasses[j]
 						switch rc {
-						case bidi.EN, bidi.AN:
-							rc = bidi.R
+						case EN, AN:
+							rc = R
 							fallthrough
-						case bidi.R, bidi.L:
+						case R, L:
 							foundStrong = true
 						}
 						if rc == seqDirection {
@@ -1095,12 +1088,12 @@ func (th *Instance) Process(text []rune) Paragraph {
 						for k := range seqIndicesReverse(seq, pair.open, embeddingLevels) {
 							rck := runeClasses[k]
 							switch rck {
-							case bidi.EN, bidi.AN:
-								rck = bidi.R
+							case EN, AN:
+								rck = R
 							}
 
 							switch rck {
-							case bidi.L, bidi.R:
+							case L, R:
 								// If the preceding strong type also doesn't match
 								// the embedidng direction, we use the preceding
 								// strong type. If it does match the embedding
@@ -1132,16 +1125,16 @@ func (th *Instance) Process(text []rune) Paragraph {
 					}
 				}
 
-				lookupClass := func(r rune) bidi.Class {
-					props, _ := bidi.LookupRune(r)
-					return props.Class()
+				lookupClass := func(r rune) BidiClass {
+					class, _ := Class(r)
+					return class
 				}
 				for n, b := range changedBrackets {
 					if b == 0 {
 						continue
 					}
 					var afterBracket bool
-					var bracketClass bidi.Class
+					var bracketClass BidiClass
 					for j := range seqIndices(seq, n*64, embeddingLevels) {
 						if changedBrackets.get(j) {
 							bracketClass = runeClasses[j]
@@ -1149,7 +1142,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 							continue
 						}
 						if afterBracket {
-							if lookupClass(text[j]) == bidi.NSM {
+							if lookupClass(text[j]) == NSM {
 								// Note that we check the rune's original class, before we
 								// applied W1.
 
@@ -1157,7 +1150,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 								// R under N0 changes to match the bracket's type.
 
 								runeClasses[j] = bracketClass
-							} else if runeClasses[j] != bidi.BN {
+							} else if runeClasses[j] != BN {
 								afterBracket = false
 								if j > (n+1)*64 {
 									// We've looked at all possible parens in this byte
@@ -1186,30 +1179,30 @@ func (th *Instance) Process(text []rune) Paragraph {
 			var nis []int
 			for j := range seqIndices(seq, 0, embeddingLevels) {
 				switch runeClasses[j] {
-				case bidi.L:
-					if start == bidi.L {
+				case L:
+					if start == L {
 						for _, k := range nis {
-							runeClasses[k] = bidi.L
+							runeClasses[k] = L
 						}
 					}
 
-					start = bidi.L
+					start = L
 					nis = nis[:0]
-				case bidi.R, bidi.AN, bidi.EN:
-					if start == bidi.R {
+				case R, AN, EN:
+					if start == R {
 						for _, k := range nis {
-							runeClasses[k] = bidi.R
+							runeClasses[k] = R
 						}
 					}
 
-					start = bidi.R
+					start = R
 					nis = nis[:0]
-				case bidi.B, bidi.BN, bidi.S, bidi.WS, bidi.ON, bidi.FSI, bidi.LRI, bidi.RLI, bidi.PDI: // NI
-					if start == bidi.L || start == bidi.R {
+				case B, BN, S, WS, ON, FSI, LRI, RLI, PDI: // NI
+					if start == L || start == R {
 						nis = append(nis, j)
 					}
 				default:
-					start = ^bidi.Class(0)
+					start = ^BidiClass(0)
 					nis = nis[:0]
 				}
 			}
@@ -1236,21 +1229,21 @@ func (th *Instance) Process(text []rune) Paragraph {
 				// We tried using a jump table for this switch, but it didn't
 				// have a measurable effect.
 				switch c := runeClasses[j]; {
-				case c == bidi.BN:
+				case c == BN:
 					// BNs adjoining neutrals are treated like those neutrals
 					if afterNeutral {
 						runeClasses[j] = seqDirection
 					} else {
 						indices = append(indices, j)
 					}
-				case c >= bidi.B && c <= bidi.ON:
+				case c >= B && c <= ON:
 					afterNeutral = true
 					for _, k := range indices {
 						runeClasses[k] = seqDirection
 					}
 					indices = indices[:0]
 					fallthrough
-				case c >= bidi.LRI && c <= bidi.PDI: // NI
+				case c >= LRI && c <= PDI: // NI
 					// TODO the spec says to change the BNs that adjoin "neutrals",
 					// but it's not clear if neutrals refers to all of NI or only B,
 					// S, WS, and ON
@@ -1273,15 +1266,15 @@ func (th *Instance) Process(text []rune) Paragraph {
 		if embeddingLevels[j]%2 == 0 {
 			// I1
 			switch c {
-			case bidi.R:
+			case R:
 				embeddingLevels[j] += 1
-			case bidi.AN, bidi.EN:
+			case AN, EN:
 				embeddingLevels[j] += 2
 			}
 		} else {
 			// I2
 			switch c {
-			case bidi.L, bidi.EN, bidi.AN:
+			case L, EN, AN:
 				embeddingLevels[j] += 1
 			}
 		}
@@ -1297,8 +1290,10 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 type classBitmap uint32
 
+type BidiClass uint8
+
 const (
-	L classBitmap = 1 << iota
+	L BidiClass = iota
 	R
 	EN
 	ES
@@ -1321,45 +1316,45 @@ const (
 	RLI
 	FSI
 	PDI
-
-	All = ^uint32(0)
 )
 
-var xbidiToClass = [...]classBitmap{
-	bidi.L:   L,
-	bidi.R:   R,
-	bidi.EN:  EN,
-	bidi.ES:  ES,
-	bidi.ET:  ET,
-	bidi.AN:  AN,
-	bidi.CS:  CS,
-	bidi.B:   B,
-	bidi.S:   S,
-	bidi.WS:  WS,
-	bidi.ON:  ON,
-	bidi.BN:  BN,
-	bidi.NSM: NSM,
-	bidi.AL:  AL,
-	bidi.LRO: LRO,
-	bidi.RLO: RLO,
-	bidi.LRE: LRE,
-	bidi.RLE: RLE,
-	bidi.PDF: PDF,
-	bidi.LRI: LRI,
-	bidi.RLI: RLI,
-	bidi.FSI: FSI,
-	bidi.PDI: PDI,
-}
+const (
+	bitmapL classBitmap = 1 << iota
+	bitmapR
+	bitmapEN
+	bitmapES
+	bitmapET
+	bitmapAN
+	bitmapCS
+	bitmapB
+	bitmapS
+	bitmapWS
+	bitmapON
+	bitmapBN
+	bitmapNSM
+	bitmapAL
+	bitmapLRO
+	bitmapRLO
+	bitmapLRE
+	bitmapRLE
+	bitmapPDF
+	bitmapLRI
+	bitmapRLI
+	bitmapFSI
+	bitmapPDI
+
+	bitmapAll = ^uint32(0)
+)
 
 type levelRun struct {
 	start, end int
 	classes    classBitmap
 }
 
-func (run *levelRun) analyze(classes []bidi.Class) {
+func (run *levelRun) analyze(classes []BidiClass) {
 	run.classes = 0
 	for i := run.start; i < run.end; i++ {
-		run.classes |= xbidiToClass[classes[i]]
+		run.classes |= 1 << classes[i]
 	}
 }
 
@@ -1437,7 +1432,7 @@ type isolatingRunSequence struct {
 	classes classBitmap
 }
 
-func (seq *isolatingRunSequence) analyze(classes []bidi.Class) {
+func (seq *isolatingRunSequence) analyze(classes []BidiClass) {
 	seq.classes = 0
 	for runIdx := range seq.runs {
 		run := &seq.runs[runIdx]
@@ -1457,29 +1452,28 @@ type bracketPair struct {
 // sequences.
 //
 // TODO see if bracketPairs can be an iterator instead
-func bracketPairs(seq *isolatingRunSequence, runeClasses []bidi.Class, embeddingLevels []int8, text []rune) ([]bracketPair, bool) {
-	if seq.classes&ON == 0 {
+func bracketPairs(seq *isolatingRunSequence, runeClasses []BidiClass, embeddingLevels []int8, text []rune) ([]bracketPair, bool) {
+	if seq.classes&bitmapON == 0 {
 		return nil, true
 	}
 
 	var stack bracketStack
 	var brackets []bracketPair
-	for j := range seqIndicesFilter(seq, 0, embeddingLevels, ON) {
+	for j := range seqIndicesFilter(seq, 0, embeddingLevels, bitmapON) {
 		// As per BD14 and BD15, paired brackets must have the ON character
 		// class, using the character classes after previous rules have been
 		// applied.
-		if runeClasses[j] != bidi.ON {
+		if runeClasses[j] != ON {
 			continue
 		}
 
 		r := text[j]
-		props, _ := bidi.LookupRune(r)
-		if props.IsBracket() {
-			if props.IsOpeningBracket() {
+		if _, isBracket := Class(r); isBracket {
+			if isOpen, pair := Bracket(r); isOpen {
 				if stack.length() <= maxBracketDepth {
 					stack.push(bracketStackEntry{
 						position:  j,
-						character: reverseBracket(props, r),
+						character: pair,
 					})
 				} else {
 					return nil, false
@@ -1512,4 +1506,42 @@ func bracketPairs(seq *isolatingRunSequence, runeClasses []bidi.Class, embedding
 		return cmp.Compare(a.open, b.open)
 	})
 	return brackets, true
+}
+
+// datum returns bidi class and bracket pair information about a rune.
+//
+// ret & 0b11100000 contains a 3 bit, two's complement offset from r to the
+// paired bracket. It is 0 for runes that aren't paired brackets.
+//
+// ret & 0b00011111 contains a 5 bit bidi class.
+func datum(r rune) uint8 {
+	// Valid Unicode code points are at most 21 bits long. The low 8 bits are
+	// used as the offset in a block, leaving us with 13 bits for looking up the
+	// block index. Masking with 0x1FFF lets the compiler elide the bounds
+	// check, although it means we'll return invalid data for invalid runes.
+	blockID := index[(r>>8)&0x1FFF]
+	blockOff := uint(blockID)<<8 + uint(r&0xFF)
+	// This doesn't emit a bounds check because blockID is uint8, which means
+	// blockOff can be at most 256*255, which is less than len(data). (Though it
+	// seems important that len(data) is at least 256*256.)
+	v := data[blockOff]
+	return v
+}
+
+func Class(r rune) (class BidiClass, isBracket bool) {
+	v := datum(r)
+	return BidiClass(v & 0x1F), v>>5 != 0
+}
+
+func Bracket(r rune) (isOpen bool, pair rune) {
+	switch r {
+	case 0x298E:
+		return false, 0x298F
+	case 0x298F:
+		return true, 0x298E
+	default:
+		v := datum(r)
+		d := int8(v) >> 5
+		return d > 0, r + rune(d)
+	}
 }

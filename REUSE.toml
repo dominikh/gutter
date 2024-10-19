@@ -1,6 +1,6 @@
 version = 1
 [[annotations]]
-path = ["**/*_string.go"]
+path = ["**/*_string.go", "text/bidi/data.go"]
 SPDX-FileCopyrightText = "none"
 SPDX-License-Identifier = "CC0-1.0"
 
@@ -11,6 +11,10 @@ SPDX-License-Identifier = "CC-BY-4.0"
 SPDX-FileAttributionText = "This is the :zipper-face: emote from https://googlefonts.github.io/noto-emoji-animation/"
 
 [[annotations]]
-path = ["text/bidi/testdata/ucd/*.txt"]
+path = [
+  "text/bidi/testdata/ucd/*.txt",
+  "text/bidi/BidiBrackets.txt",
+  "text/bidi/DerivedBidiClass.txt"
+]
 SPDX-FileCopyrightText = "1991-2025 Unicode, Inc."
 SPDX-License-Identifier = "Unicode-3.0"
