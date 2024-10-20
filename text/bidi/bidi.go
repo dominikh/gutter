@@ -137,15 +137,6 @@ func (s *bracketStack) length() int {
 	return s.n
 }
 
-func (s *bracketStack) pop() bracketStackEntry {
-	s.n--
-	return s.values[s.n]
-}
-
-func (s *bracketStack) peek() bracketStackEntry {
-	return s.values[s.n-1]
-}
-
 func (s *bracketStack) push(entry bracketStackEntry) {
 	if s.n >= len(s.values) {
 		panic("internal error: stack is full")
@@ -1481,7 +1472,6 @@ const (
 	bitmapRLI
 	bitmapFSI
 	bitmapPDI
-
 	bitmapAll = ^uint32(0)
 )
 
