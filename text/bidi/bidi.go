@@ -796,7 +796,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		if seq.classes&(bitmapNSM|bitmapEN|bitmapAL) != 0 {
 			prevClass := sos.getAsClass(seqIdx)       // W1
 			prevStrongClass := sos.getAsClass(seqIdx) // W2
-			for i, run := range seqIndices(seq, 0, embeddingLevels) {
+			for i, run := range seq.indices(0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
 				case NSM: // W1
 					if prevClass >= LRI && prevClass <= PDI {
@@ -835,7 +835,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		if seq.classes&(bitmapEN|bitmapAN|bitmapES|bitmapCS) != 0 {
 			numClass := ^BidiClass(0)
 			sepIdx := -1
-			for i := range seqIndices(seq, 0, embeddingLevels) {
+			for i := range seq.indices(0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
 				case EN, AN:
 					if sepIdx != -1 && c == numClass {
@@ -873,7 +873,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
 			var indices []int
-			for i := range seqIndices(seq, 0, embeddingLevels) {
+			for i := range seq.indices(0, embeddingLevels) {
 				switch state {
 				case 0:
 					switch runeClasses[i] {
@@ -918,7 +918,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 			var state int
 			// OPT we don't need to store every index, just contiguous ranges
 			var indices []int
-			for i := range seqIndices(seq, 0, embeddingLevels) {
+			for i := range seq.indices(0, embeddingLevels) {
 				switch state {
 				case 0:
 					if runeClasses[i] == EN {
@@ -960,7 +960,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 				idx int
 				run *levelRun
 			}
-			for i, run := range seqIndices(seq, 0, embeddingLevels) {
+			for i, run := range seq.indices(0, embeddingLevels) {
 				switch state {
 				case 0:
 					switch runeClasses[i] {
@@ -999,7 +999,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// W7
 		if seq.classes&bitmapEN != 0 {
 			prevStrongClass := sos.getAsClass(seqIdx)
-			for i, run := range seqIndices(seq, 0, embeddingLevels) {
+			for i, run := range seq.indices(0, embeddingLevels) {
 				switch c := runeClasses[i]; c {
 				case R, L:
 					prevStrongClass = c
@@ -1047,7 +1047,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 					// when we know that the new offset can't be less than the old
 					// offset. Shouldn't matter much for normal text because sequences
 					// won't be that long, but can be abused by malicious inputs.
-					for j := range seqIndices(seq, pair.open, embeddingLevels) {
+					for j := range seq.indices(pair.open, embeddingLevels) {
 						if j == pair.open {
 							continue
 						}
@@ -1091,7 +1091,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 						// have to scan as far back as the previous pair, possibly
 						// reusing the previous pair's result.
 					revLoop:
-						for k := range seqIndicesReverse(seq, pair.open, embeddingLevels) {
+						for k := range seq.indicesReversed(pair.open, embeddingLevels) {
 							rck := runeClasses[k]
 							switch rck {
 							case EN, AN:
@@ -1141,7 +1141,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 					}
 					var afterBracket bool
 					var bracketClass BidiClass
-					for j := range seqIndices(seq, n*64, embeddingLevels) {
+					for j := range seq.indices(n*64, embeddingLevels) {
 						if changedBrackets.get(j) {
 							bracketClass = runeClasses[j]
 							afterBracket = true
@@ -1183,7 +1183,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 			start := sos.getAsClass(seqIdx)
 			// OPT we don't need to store every index, just contiguous ranges
 			var nis []int
-			for j := range seqIndices(seq, 0, embeddingLevels) {
+			for j := range seq.indices(0, embeddingLevels) {
 				switch runeClasses[j] {
 				case L:
 					if start == L {
@@ -1231,7 +1231,7 @@ func (th *Instance) Process(text []rune) Paragraph {
 			// OPT store ranges not indices
 			var indices []int
 			var afterNeutral bool
-			for j := range seqIndices(seq, 0, embeddingLevels) {
+			for j := range seq.indices(0, embeddingLevels) {
 				// We tried using a jump table for this switch, but it didn't
 				// have a measurable effect.
 				switch c := runeClasses[j]; {
@@ -1487,9 +1487,12 @@ func (run *levelRun) analyze(classes []BidiClass) {
 	}
 }
 
-// TODO turn seqIndices and seqIndicesReverse into methods
+type isolatingRunSequence struct {
+	runs    []levelRun
+	classes classBitmap
+}
 
-func seqIndices(seq *isolatingRunSequence, start int, levels []int8) iter.Seq2[int, *levelRun] {
+func (seq *isolatingRunSequence) indices(start int, levels []int8) iter.Seq2[int, *levelRun] {
 	return func(yield func(int, *levelRun) bool) {
 		for runIdx := range seq.runs {
 			run := &seq.runs[runIdx]
@@ -1510,7 +1513,7 @@ func seqIndices(seq *isolatingRunSequence, start int, levels []int8) iter.Seq2[i
 	}
 }
 
-func seqIndicesFilter(seq *isolatingRunSequence, start int, levels []int8, classes classBitmap) iter.Seq2[int, *levelRun] {
+func (seq *isolatingRunSequence) filteredIndices(start int, levels []int8, classes classBitmap) iter.Seq2[int, *levelRun] {
 	return func(yield func(int, *levelRun) bool) {
 		for runIdx := range seq.runs {
 			run := &seq.runs[runIdx]
@@ -1534,7 +1537,7 @@ func seqIndicesFilter(seq *isolatingRunSequence, start int, levels []int8, class
 	}
 }
 
-func seqIndicesReverse(seq *isolatingRunSequence, end int, levels []int8) iter.Seq2[int, *levelRun] {
+func (seq *isolatingRunSequence) indicesReversed(end int, levels []int8) iter.Seq2[int, *levelRun] {
 	return func(yield func(int, *levelRun) bool) {
 		for runIdx := len(seq.runs) - 1; runIdx >= 0; runIdx-- {
 			run := &seq.runs[runIdx]
@@ -1554,11 +1557,6 @@ func seqIndicesReverse(seq *isolatingRunSequence, end int, levels []int8) iter.S
 			}
 		}
 	}
-}
-
-type isolatingRunSequence struct {
-	runs    []levelRun
-	classes classBitmap
 }
 
 func (seq *isolatingRunSequence) analyze(classes []BidiClass) {
@@ -1588,7 +1586,7 @@ func bracketPairs(seq *isolatingRunSequence, runeClasses []BidiClass, embeddingL
 
 	var stack bracketStack
 	var brackets []bracketPair
-	for j := range seqIndicesFilter(seq, 0, embeddingLevels, bitmapON) {
+	for j := range seq.filteredIndices(0, embeddingLevels, bitmapON) {
 		// As per BD14 and BD15, paired brackets must have the ON character
 		// class, using the character classes after previous rules have been
 		// applied.
