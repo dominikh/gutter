@@ -47,84 +47,69 @@ func (s benchmarkDir) String() string {
 	}
 }
 
-func BenchmarkProcess(b *testing.B) {
-	dirs := []benchmarkDir{benchmarkDir(bidi.LeftToRight), benchmarkDir(bidi.RightToLeft)}
+type benchmarkInput struct {
+	name       string
+	paragraphs [][]rune
+	length     int
+}
 
-	// Test with various texts from Wikipedia, in various LTR and RTL languages.
-	m, err := filepath.Glob("./testdata/wikipedia/*.txt")
-	if err != nil {
-		b.Fatal(err)
-	}
+var benchmarkInputs []benchmarkInput
 
-	for _, path := range m {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			b.Fatal(err)
-		}
+func init() {
+	do := func(name string, data []byte) {
 		var runeCount int
-		var runes [][]rune
+		var paras [][]rune
 		for para := range bytes.SplitSeq(data, []byte("\n")) {
 			para = bytes.TrimSpace(para)
 			if len(para) == 0 {
 				continue
 			}
 			paraRunes := []rune(string(para))
-			runes = append(runes, paraRunes)
+			paras = append(paras, paraRunes)
 			runeCount += len(paraRunes)
 		}
+		benchmarkInputs = append(benchmarkInputs, benchmarkInput{
+			name:       name,
+			paragraphs: paras,
+			length:     runeCount,
+		})
+	}
 
-		for _, dir := range dirs {
-			b.Run(fmt.Sprintf("text=wikipedia-%s/dir=%s", filepath.Base(path), dir), func(b *testing.B) {
-				for range b.N {
-					for _, para := range runes {
-						th := bidi.Instance{
-							ParagraphDirection: bidi.Direction(dir),
-						}
-						th.Process(para)
-					}
-				}
-				b.ReportMetric(float64(runeCount*b.N)/b.Elapsed().Seconds(), "runes/s")
-			})
+	doRunes := func(name string, data []rune) {
+		benchmarkInputs = append(benchmarkInputs, benchmarkInput{
+			name:       name,
+			paragraphs: [][]rune{data},
+			length:     len(data),
+		})
+	}
+
+	mustRead := func(name string) []byte {
+		b, err := os.ReadFile(name)
+		if err != nil {
+			panic(err)
 		}
+		return b
+	}
+
+	// Test with various texts from Wikipedia, in various LTR and RTL languages.
+	m, err := filepath.Glob("./testdata/wikipedia/*.txt")
+	if err != nil {
+		panic(err)
+	}
+	for _, path := range m {
+		do("wikipedia-"+filepath.Base(path), mustRead(path))
 	}
 
 	// Test processing source code
-	data, err := os.ReadFile("bidi.go")
-	if err != nil {
-		b.Fatal(err)
-	}
-	runes := []rune(string(data))
-	for _, dir := range dirs {
-		b.Run(fmt.Sprintf("text=bidi.go/dir=%s", dir), func(b *testing.B) {
-			for range b.N {
-				th := bidi.Instance{
-					ParagraphDirection: bidi.Direction(dir),
-				}
-				th.Process(runes)
-			}
-			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
-		})
-	}
+	do("bidi.go", mustRead("bidi.go"))
 
 	// This tests one of the most trivial inputs: a long string of strong
 	// characters with the same direction.
-	runes = make([]rune, 1000)
+	runes := make([]rune, 1000)
 	for i := range runes {
 		runes[i] = 'A'
 	}
-
-	for _, dir := range dirs {
-		b.Run(fmt.Sprintf("text=aaaaa/dir=%s", dir), func(b *testing.B) {
-			for range b.N {
-				th := bidi.Instance{
-					ParagraphDirection: bidi.Direction(dir),
-				}
-				th.Process(runes)
-			}
-
-			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
-		})
-	}
+	doRunes("aaaaa", runes)
 
 	// Text densely packed with parentheses and NSMs.
 	runes = make([]rune, 1000)
@@ -134,42 +119,32 @@ func BenchmarkProcess(b *testing.B) {
 		runes[i+2] = ')'
 		runes[i+3] = '\u0331'
 	}
-
-	for _, dir := range dirs {
-		b.Run(fmt.Sprintf("text=nsm/dir=%s", dir), func(b *testing.B) {
-			for range b.N {
-				th := bidi.Instance{
-					ParagraphDirection: bidi.Direction(dir),
-				}
-				th.Process(runes)
-			}
-			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
-		})
-	}
+	doRunes("nsm", runes)
 
 	// Text with some parentheses and NSMs.
 	runes = make([]rune, 1000)
 	for i := range runes {
 		runes[i] = 'a'
 	}
-	for i := range []int{0, 200, 400, 600, 800} {
-		runes[i] = '('
-		runes[i+1] = 'x'
-		runes[i+2] = ')'
-		runes[i+3] = '\u0331'
-	}
+	doRunes("nsm-sparse", runes)
+}
 
-	for _, dir := range dirs {
-		b.Run(fmt.Sprintf("text=nsm-sparse/dir=%s", dir), func(b *testing.B) {
-			for range b.N {
-				th := bidi.Instance{
-					ParagraphDirection: bidi.Direction(dir),
+func BenchmarkProcess(b *testing.B) {
+	dirs := []benchmarkDir{benchmarkDir(bidi.LeftToRight), benchmarkDir(bidi.RightToLeft)}
+	for _, input := range benchmarkInputs {
+		for _, dir := range dirs {
+			b.Run(fmt.Sprintf("text=%s/dir=%s", input.name, dir), func(b *testing.B) {
+				for range b.N {
+					for _, para := range input.paragraphs {
+						th := bidi.Instance{
+							ParagraphDirection: bidi.Direction(dir),
+						}
+						th.Process(para)
+					}
 				}
-				th.Process(runes)
-			}
-
-			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
-		})
+				b.ReportMetric(float64(input.length*b.N)/b.Elapsed().Seconds(), "runes/s")
+			})
+		}
 	}
 }
 
