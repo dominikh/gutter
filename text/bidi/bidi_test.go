@@ -129,6 +129,31 @@ func init() {
 	doRunes("nsm-sparse", runes)
 }
 
+func BenchmarkOrder(b *testing.B) {
+	dirs := []benchmarkDir{benchmarkDir(bidi.LeftToRight), benchmarkDir(bidi.RightToLeft)}
+	for _, input := range benchmarkInputs {
+		for _, dir := range dirs {
+			b.Run(fmt.Sprintf("text=%s/dir=%s", input.name, dir), func(b *testing.B) {
+				var paras []bidi.Paragraph
+				for _, para := range input.paragraphs {
+					th := bidi.Instance{
+						ParagraphDirection: bidi.Direction(dir),
+					}
+					paras = append(paras, th.Process(para))
+				}
+
+				b.ResetTimer()
+				for range b.N {
+					for _, para := range paras {
+						para.Order(0, len(para.Text))
+					}
+				}
+				b.ReportMetric(float64(input.length*b.N)/b.Elapsed().Seconds(), "runes/s")
+			})
+		}
+	}
+}
+
 func BenchmarkProcess(b *testing.B) {
 	dirs := []benchmarkDir{benchmarkDir(bidi.LeftToRight), benchmarkDir(bidi.RightToLeft)}
 	for _, input := range benchmarkInputs {
