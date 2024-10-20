@@ -1339,7 +1339,13 @@ func (p *Paragraph) Order(start, end int) []Run {
 			if beforeSeparator || eol {
 				levels[i] = p.Level
 			}
-		default:
+		case L, R, EN, ES, ET, AN, CS, ON, BN, NSM, AL, LRO, RLO, LRE, RLE, PDF:
+			// With go version devel go1.24-cbdb3545ad on amd64, listing all the
+			// possible values instead of using a default branch needs one fewer
+			// taken jump to get here. Because the default branch is the most
+			// common one, it makes this function faster for some kinds of
+			// inputs. (It does have a negative effect on other inputs, but the
+			// improvement outweighs the regression.)
 			eol = false
 			beforeSeparator = false
 		}
