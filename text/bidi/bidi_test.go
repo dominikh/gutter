@@ -158,17 +158,20 @@ func BenchmarkProcess(b *testing.B) {
 	dirs := []benchmarkDir{benchmarkDir(bidi.LeftToRight), benchmarkDir(bidi.RightToLeft)}
 	for _, input := range benchmarkInputs {
 		for _, dir := range dirs {
-			b.Run(fmt.Sprintf("text=%s/dir=%s", input.name, dir), func(b *testing.B) {
-				for range b.N {
-					for _, para := range input.paragraphs {
-						th := bidi.Instance{
-							ParagraphDirection: bidi.Direction(dir),
+			for _, retain := range []bool{false, true} {
+				b.Run(fmt.Sprintf("text=%s/dir=%s/retain=%t", input.name, dir, retain), func(b *testing.B) {
+					for range b.N {
+						for _, para := range input.paragraphs {
+							th := bidi.Instance{
+								ParagraphDirection:         bidi.Direction(dir),
+								RetainFormattingCharacters: retain,
+							}
+							th.Process(para)
 						}
-						th.Process(para)
 					}
-				}
-				b.ReportMetric(float64(input.length*b.N)/b.Elapsed().Seconds(), "runes/s")
-			})
+					b.ReportMetric(float64(input.length*b.N)/b.Elapsed().Seconds(), "runes/s")
+				})
+			}
 		}
 	}
 }

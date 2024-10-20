@@ -663,7 +663,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 		}
 	}
 
-	// OPT check if isolatingRunSequences can be an iterator instead
 	var isolatingRunSequences []isolatingRunSequence
 	for start, end := range levelRuns {
 		if validPDIs.get(start) {
@@ -870,44 +869,60 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 		// W5, BN* ET (BN | ET)* EN
 		if seq.classes&(bitmapET|bitmapEN) != 0 {
-			var state int
-			// OPT we don't need to store every index, just contiguous ranges
-			var indices []int
-			for i := range seq.indices(0, embeddingLevels) {
-				switch state {
-				case 0:
-					switch runeClasses[i] {
-					case BN:
-						indices = append(indices, i)
-						state = 1
-					case ET:
-						indices = append(indices, i)
-						state = 2
-					}
-				case 1:
-					switch runeClasses[i] {
-					case BN:
-						indices = append(indices, i)
-					case ET:
-						indices = append(indices, i)
-						state = 2
-					default:
-						indices = indices[:0]
-						state = 0
-					}
-				case 2:
-					switch runeClasses[i] {
-					case BN, ET:
-						indices = append(indices, i)
-					case EN:
-						for _, j := range indices {
-							runeClasses[j] = EN
+			if th.RetainFormattingCharacters {
+				var state int
+				// OPT we don't need to store every index, just contiguous ranges
+				var indices []int
+				for i := range seq.indices(0, embeddingLevels) {
+					switch state {
+					case 0:
+						switch runeClasses[i] {
+						case BN:
+							indices = append(indices, i)
+							state = 1
+						case ET:
+							indices = append(indices, i)
+							state = 2
 						}
-						indices = indices[:0]
-						state = 0
+					case 1:
+						switch runeClasses[i] {
+						case BN:
+							indices = append(indices, i)
+						case ET:
+							indices = append(indices, i)
+							state = 2
+						default:
+							indices = indices[:0]
+							state = 0
+						}
+					case 2:
+						switch runeClasses[i] {
+						case BN, ET:
+							indices = append(indices, i)
+						case EN:
+							for _, j := range indices {
+								runeClasses[j] = EN
+							}
+							indices = indices[:0]
+							state = 0
+						default:
+							indices = indices[:0]
+							state = 0
+						}
+					}
+				}
+			} else {
+				beforeEN := false
+				for i := range seq.indicesReversed(-1, embeddingLevels) {
+					switch runeClasses[i] {
+					case ET:
+						if beforeEN {
+							runeClasses[i] = EN
+						}
+					case EN:
+						beforeEN = true
 					default:
-						indices = indices[:0]
-						state = 0
+						beforeEN = false
 					}
 				}
 			}
@@ -915,38 +930,57 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 		// W5, EN BN* ET (BN | ET)*
 		if seq.classes&(bitmapEN|bitmapET) != 0 {
-			var state int
-			// OPT we don't need to store every index, just contiguous ranges
-			var indices []int
-			for i := range seq.indices(0, embeddingLevels) {
-				switch state {
-				case 0:
-					if runeClasses[i] == EN {
-						state = 1
-					}
-				case 1:
-					switch runeClasses[i] {
-					case BN:
-						indices = append(indices, i)
-					case ET:
-						for _, j := range indices {
-							runeClasses[j] = EN
+			// XXX why aren't we updating the run's bits? the BN or ET could be
+			// in different runs than the EN?
+
+			if th.RetainFormattingCharacters {
+				var state int
+				// OPT we don't need to store every index, just contiguous ranges
+				var indices []int
+				for i := range seq.indices(0, embeddingLevels) {
+					switch state {
+					case 0:
+						if runeClasses[i] == EN {
+							state = 1
 						}
-						indices = indices[:0]
-						runeClasses[i] = EN
-						state = 2
-					case EN:
-						indices = indices[:0]
-					default:
-						indices = indices[:0]
-						state = 0
+					case 1:
+						switch runeClasses[i] {
+						case BN:
+							indices = append(indices, i)
+						case ET:
+							for _, j := range indices {
+								runeClasses[j] = EN
+							}
+							indices = indices[:0]
+							runeClasses[i] = EN
+							state = 2
+						case EN:
+							indices = indices[:0]
+						default:
+							indices = indices[:0]
+							state = 0
+						}
+					case 2:
+						switch runeClasses[i] {
+						case BN, ET:
+							runeClasses[i] = EN
+						default:
+							state = 0
+						}
 					}
-				case 2:
+				}
+			} else {
+				afterEN := false
+				for i := range seq.indices(0, embeddingLevels) {
 					switch runeClasses[i] {
-					case BN, ET:
-						runeClasses[i] = EN
+					case EN:
+						afterEN = true
+					case ET:
+						if afterEN {
+							runeClasses[i] = EN
+						}
 					default:
-						state = 0
+						afterEN = false
 					}
 				}
 			}
@@ -954,43 +988,54 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 		// W6
 		if seq.classes&(bitmapET|bitmapES|bitmapCS) != 0 {
-			var state int
-			// OPT we don't need to store every index, just contiguous ranges
-			var indices []struct {
-				idx int
-				run *levelRun
-			}
-			for i, run := range seq.indices(0, embeddingLevels) {
-				switch state {
-				case 0:
-					switch runeClasses[i] {
-					case BN:
-						// When retaining BNs, change those that are adjacent to
-						// ET, ES, or CS.
-						indices = append(indices, struct {
-							idx int
-							run *levelRun
-						}{i, run})
-					case ET, ES, CS:
-						for _, j := range indices {
-							j.run.classes |= bitmapON
-							runeClasses[j.idx] = ON
+			if th.RetainFormattingCharacters {
+				var state int
+				// OPT we don't need to store every index, just contiguous ranges
+				var indices []struct {
+					idx int
+					run *levelRun
+				}
+				for i, run := range seq.indices(0, embeddingLevels) {
+					switch state {
+					case 0:
+						switch runeClasses[i] {
+						case BN:
+							// When retaining BNs, change those that are adjacent to
+							// ET, ES, or CS.
+							indices = append(indices, struct {
+								idx int
+								run *levelRun
+							}{i, run})
+						case ET, ES, CS:
+							for _, j := range indices {
+								j.run.classes |= bitmapON
+								runeClasses[j.idx] = ON
+							}
+							run.classes |= bitmapON
+							seq.classes |= bitmapON
+							runeClasses[i] = ON
+							state = 1
+						default:
+							indices = indices[:0]
 						}
-						run.classes |= bitmapON
-						seq.classes |= bitmapON
-						runeClasses[i] = ON
-						state = 1
-					default:
-						indices = indices[:0]
+					case 1:
+						switch runeClasses[i] {
+						case BN, ET, ES, CS:
+							seq.classes |= bitmapON
+							run.classes |= bitmapON
+							runeClasses[i] = ON
+						default:
+							state = 0
+						}
 					}
-				case 1:
+				}
+			} else {
+				for i, run := range seq.indices(0, embeddingLevels) {
 					switch runeClasses[i] {
-					case BN, ET, ES, CS:
+					case ET, ES, CS:
+						runeClasses[i] = ON
 						seq.classes |= bitmapON
 						run.classes |= bitmapON
-						runeClasses[i] = ON
-					default:
-						state = 0
 					}
 				}
 			}
@@ -1228,35 +1273,47 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// Note that N0-N2 do not update the class bitmaps of sequences and
 		// runs.
 		{
-			// OPT store ranges not indices
-			var indices []int
-			var afterNeutral bool
-			for j := range seq.indices(0, embeddingLevels) {
-				// We tried using a jump table for this switch, but it didn't
-				// have a measurable effect.
-				switch c := runeClasses[j]; {
-				case c == BN:
-					// BNs adjoining neutrals are treated like those neutrals
-					if afterNeutral {
+			if th.RetainFormattingCharacters {
+				// OPT store ranges not indices
+				var indices []int
+				var afterNeutral bool
+				for j := range seq.indices(0, embeddingLevels) {
+					// We tried using a jump table for this switch, but it didn't
+					// have a measurable effect.
+					//
+					// TODO(dh): we should be able to use an expression switch
+					// and let the compiler find the ranges to check
+					switch c := runeClasses[j]; {
+					case c == BN:
+						// BNs adjoining neutrals are treated like those neutrals
+						if afterNeutral {
+							runeClasses[j] = seqDirection
+						} else {
+							indices = append(indices, j)
+						}
+					case c >= B && c <= ON:
+						afterNeutral = true
+						for _, k := range indices {
+							runeClasses[k] = seqDirection
+						}
+						indices = indices[:0]
+						fallthrough
+					case c >= LRI && c <= PDI: // NI
+						// TODO the spec says to change the BNs that adjoin "neutrals",
+						// but it's not clear if neutrals refers to all of NI or only B,
+						// S, WS, and ON
 						runeClasses[j] = seqDirection
-					} else {
-						indices = append(indices, j)
+					default:
+						indices = indices[:0]
+						afterNeutral = false
 					}
-				case c >= B && c <= ON:
-					afterNeutral = true
-					for _, k := range indices {
-						runeClasses[k] = seqDirection
+				}
+			} else {
+				for j := range seq.indices(0, embeddingLevels) {
+					switch runeClasses[j] {
+					case B, S, WS, ON, FSI, LRI, RLI, PDI:
+						runeClasses[j] = seqDirection
 					}
-					indices = indices[:0]
-					fallthrough
-				case c >= LRI && c <= PDI: // NI
-					// TODO the spec says to change the BNs that adjoin "neutrals",
-					// but it's not clear if neutrals refers to all of NI or only B,
-					// S, WS, and ON
-					runeClasses[j] = seqDirection
-				default:
-					indices = indices[:0]
-					afterNeutral = false
 				}
 			}
 		}
@@ -1539,6 +1596,9 @@ func (seq *isolatingRunSequence) filteredIndices(start int, levels []int8, class
 
 func (seq *isolatingRunSequence) indicesReversed(end int, levels []int8) iter.Seq2[int, *levelRun] {
 	return func(yield func(int, *levelRun) bool) {
+		if end < 0 {
+			end = seq.runs[len(seq.runs)-1].end
+		}
 		for runIdx := len(seq.runs) - 1; runIdx >= 0; runIdx-- {
 			run := &seq.runs[runIdx]
 
