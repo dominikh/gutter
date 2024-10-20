@@ -42,10 +42,6 @@ const (
 	RightToLeft
 )
 
-// OPT can we turn the 'if (lvl%2 == 0 && c == RLE) || (lvl%2 != 0 && c ==
-// LRE) {' pattern into something without branches, by treating bools as
-// integers?
-
 // The maximum embedding level, as specified by BD2. We could easily support an
 // arbitrary number of stack entries, only limited by available memory, but the
 // standard specifies a maximum value "to provide a precise stack limit for
@@ -67,17 +63,8 @@ const (
 
 type directionalStatus struct {
 	// the rune's index
-	index          int
-	embeddingLevel int8
-	// OPT directionalOverride needs 2 bits, directionalIsolateStatus needs 1 bit.
-	//
-	// OPT are directional override and isolate status mutually exclusive? then
-	// we only need 2 bits for both, not 3, as the override currently only has 3
-	// out of 4 possible values.
-	//
-	// OPT note that we'll have at most 256 instances of directionalStatus, of
-	// which only maxDepth will ever be accessed. While there is some benefit to
-	// keeping this small, it's not crucial.
+	index                     int
+	embeddingLevel            int8
 	directionalOverrideStatus directionalOverride
 	// TODO rename to isIsolate
 	directionalIsolateStatus bool
@@ -330,7 +317,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 	// reduce memory usage, using memory proportional to the number of class and
 	// level changes instead of to the length of the text.
 	//
-	// OPT can we make do without an explicit runeClasses slice?
 	// OPT allow reusing slices for multiple calls of Entry
 	runeClasses := make([]BidiClass, len(text))
 	//
@@ -886,7 +872,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 		if seq.classes&(bitmapET|bitmapEN) != 0 {
 			if th.RetainFormattingCharacters {
 				var state int
-				// OPT we don't need to store every index, just contiguous ranges
 				var indices []int
 				for i := range seq.indices(0, embeddingLevels) {
 					switch state {
@@ -950,7 +935,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 			if th.RetainFormattingCharacters {
 				var state int
-				// OPT we don't need to store every index, just contiguous ranges
 				var indices []int
 				for i := range seq.indices(0, embeddingLevels) {
 					switch state {
@@ -1005,7 +989,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 		if seq.classes&(bitmapET|bitmapES|bitmapCS) != 0 {
 			if th.RetainFormattingCharacters {
 				var state int
-				// OPT we don't need to store every index, just contiguous ranges
 				var indices []struct {
 					idx int
 					run *levelRun
@@ -1241,7 +1224,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// runs.
 		{
 			start := sos.getAsClass(seqIdx)
-			// OPT we don't need to store every index, just contiguous ranges
 			var nis []int
 			for j := range seq.indices(0, embeddingLevels) {
 				switch runeClasses[j] {
@@ -1289,7 +1271,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 		// runs.
 		{
 			if th.RetainFormattingCharacters {
-				// OPT store ranges not indices
 				var indices []int
 				var afterNeutral bool
 				for j := range seq.indices(0, embeddingLevels) {
