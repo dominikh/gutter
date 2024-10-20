@@ -29,6 +29,8 @@ import (
 	"iter"
 	"math"
 	"slices"
+
+	"honnef.co/go/safeish"
 )
 
 const trace = false
@@ -636,12 +638,16 @@ func (th *Instance) Process(text []rune) Paragraph {
 		if start == len(embeddingLevels) {
 			return
 		}
+		levels64 := safeish.SliceCast[[]uint64](embeddingLevels)
 		curLevel := embeddingLevels[start]
-		for i, lvl := range embeddingLevels {
-			if lvl == -1 {
-				continue
-			}
-			if lvl != curLevel {
+		const neg64 = 0xFFFFFFFFFFFFFFFF
+		curLevel64 := uint64(curLevel) * 0x0101010101010101
+		do := func(start2, end2 int) {
+			for i := start2; i < end2; i++ {
+				lvl := embeddingLevels[i]
+				if lvl == -1 || lvl == curLevel {
+					continue
+				}
 				if !yield(start, i) {
 					return
 				}
@@ -649,6 +655,14 @@ func (th *Instance) Process(text []rune) Paragraph {
 				curLevel = lvl
 			}
 		}
+		for j, lvl64 := range levels64 {
+			if lvl64 == neg64 || lvl64 == curLevel64 {
+				continue
+			}
+			do(j*8, j*8+8)
+			curLevel64 = uint64(curLevel) * 0x0101010101010101
+		}
+		do(len(levels64)*8, len(embeddingLevels))
 		// Cut off trailing deleted characters
 		end := len(embeddingLevels)
 		for ; end >= 1 && embeddingLevels[end-1] == -1; end-- {
@@ -1335,24 +1349,42 @@ func (p *Paragraph) Order(start, end int) []Run {
 	minOdd := int8(math.MaxInt8)
 	{
 		prevLevel := levels[0]
+		if prevLevel%2 != 0 {
+			minOdd = prevLevel
+		}
 		var runStart int
-		for i, lvl := range levels {
-			if lvl == -1 {
-				continue
-			}
-			if lvl < minOdd && lvl%2 != 0 {
-				minOdd = lvl
-			}
-			if lvl != prevLevel {
-				runs = append(runs, Run{
-					Level: levels[runStart],
-					Start: runStart + start,
-					End:   i + start,
-				})
-				runStart = i
-				prevLevel = lvl
+		levels64 := safeish.SliceCast[[]uint64](levels)
+		const neg1 = 0xFFFFFFFFFFFFFFFF
+		prevLevel64 := uint64(prevLevel) * 0x0101010101010101
+		do := func(start2, end2 int) {
+			for i := start2; i < end2; i++ {
+				lvl := levels[i]
+				if lvl == -1 {
+					continue
+				}
+				if lvl < minOdd && lvl%2 != 0 {
+					minOdd = lvl
+				}
+				if lvl != prevLevel {
+					runs = append(runs, Run{
+						Level: levels[runStart],
+						Start: runStart + start,
+						End:   i + start,
+					})
+					runStart = i
+					prevLevel = lvl
+				}
 			}
 		}
+		for j, lvl64 := range levels64 {
+			if lvl64 == neg1 || lvl64 == prevLevel64 {
+				continue
+			}
+			do(j*8, j*8+8)
+			prevLevel64 = uint64(prevLevel) * 0x101010101010101
+		}
+		do(len(levels64)*8, len(levels))
+
 		runs = append(runs, Run{
 			Level: levels[runStart],
 			Start: runStart,
