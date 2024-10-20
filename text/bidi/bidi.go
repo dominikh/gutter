@@ -441,41 +441,56 @@ func (th *Instance) Process(text []rune) Paragraph {
 			}
 		case RLI, LRI, FSI: // X5a, X5b, X5c
 			if c == FSI {
-				// FIXME OPT For FSI, we need to find the first strong character
-				// between the FSI and its matching PDI, skipping over nested
-				// isolates. Doing this naively, by scanning forward every time
-				// we see an FSI, means that malicious input of the kind "FSI
-				// FSI FSI ..." results in quadratic behavior.
+				type iniStackEntry struct {
+					orig BidiClass
+					idx  int
+				}
 
-				stack := 1
+				// To avoid quadratic behavior when encountering a string of
+				// FSIs, we process any nested FSIs we encounter while resolving
+				// this one.
+				iniStack := []iniStackEntry{{FSI, i}}
 			fsiLoop:
 				for j := i + 1; j < len(runeClasses); j++ {
-					switch runeClasses[j] {
+					switch jc := runeClasses[j]; jc {
 					case L:
-						if stack == 1 {
-							c = LRI
+						if runeClasses[iniStack[len(iniStack)-1].idx] == FSI {
+							runeClasses[iniStack[len(iniStack)-1].idx] = LRI
+						}
+						if len(iniStack) == 1 {
 							break fsiLoop
 						}
 					case R, AL:
-						if stack == 1 {
-							c = RLI
+						if runeClasses[iniStack[len(iniStack)-1].idx] == FSI {
+							runeClasses[iniStack[len(iniStack)-1].idx] = RLI
+						}
+						if len(iniStack) == 1 {
 							break fsiLoop
 						}
 					case FSI, LRI, RLI:
-						stack++
+						iniStack = append(iniStack, iniStackEntry{jc, j})
 					case PDI:
-						stack--
-						if stack == 0 {
+						if runeClasses[iniStack[len(iniStack)-1].idx] == FSI {
+							// We didn't find any strong character in the isolate,
+							// default to left-to-right.
+							runeClasses[iniStack[len(iniStack)-1].idx] = LRI
+						}
+						iniStack = iniStack[:len(iniStack)-1]
+						if len(iniStack) == 0 {
 							break fsiLoop
 						}
 					}
 				}
 
-				if c == FSI {
-					// We didn't find any strong character in the isolate,
-					// default to left-to-right.
-					c = LRI
+				// If we've reached the end of the text, any entry in iniStack
+				// that's still FSI will become LRI.
+				for _, entry := range iniStack {
+					if runeClasses[entry.idx] == FSI {
+						runeClasses[entry.idx] = LRI
+					}
 				}
+
+				c = runeClasses[i]
 			}
 
 			status := directionalStatusStack.peek()

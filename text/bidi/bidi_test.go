@@ -127,6 +127,13 @@ func init() {
 		runes[i] = 'a'
 	}
 	doRunes("nsm-sparse", runes)
+
+	// Test that a string of FSIs doesn't have quadratic behavior
+	runes = make([]rune, 1000)
+	for i := range runes {
+		runes[i] = 0x2068
+	}
+	doRunes("fsi", runes)
 }
 
 func BenchmarkOrder(b *testing.B) {
