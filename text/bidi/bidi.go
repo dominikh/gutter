@@ -4,6 +4,8 @@
 
 package bidi
 
+// XXX consider bracket mirroring
+
 //go:generate go run ./internal/cmd/generate_tables
 //go:generate gofmt -w ./data.go
 
@@ -25,6 +27,7 @@ import (
 	"cmp"
 	"fmt"
 	"iter"
+	"math"
 	"slices"
 )
 
@@ -36,8 +39,6 @@ const (
 	LeftToRight Direction = iota
 	RightToLeft
 )
-
-// TODO should we check lvl < maxDepth or lvl <= maxDepth
 
 // OPT can we turn the 'if (lvl%2 == 0 && c == RLE) || (lvl%2 != 0 && c ==
 // LRE) {' pattern into something without branches, by treating bools as
@@ -174,8 +175,12 @@ func (bs bitset) set(idx int) {
 }
 
 type Paragraph struct {
+	Text    []rune
+	Level   int8
 	Classes []BidiClass
 	Levels  []int8
+
+	highestLevel int8
 }
 
 type Instance struct {
@@ -1278,10 +1283,110 @@ func (th *Instance) Process(text []rune) Paragraph {
 
 	printTrace("I0-I2", text, runeClasses, embeddingLevels, nil, nil, nil)
 
-	return Paragraph{
-		Classes: runeClasses,
-		Levels:  embeddingLevels,
+	var max int8
+	for _, lvl := range embeddingLevels {
+		if lvl > max {
+			max = lvl
+		}
 	}
+
+	return Paragraph{
+		Text:         text,
+		Level:        paragraphEmbeddingLevel,
+		Classes:      runeClasses,
+		Levels:       embeddingLevels,
+		highestLevel: max,
+	}
+}
+
+type Run struct {
+	Level    int8
+	Reversed bool
+	Start    int
+	End      int
+}
+
+func (p *Paragraph) Order(start, end int) []Run {
+	levels := make([]int8, end-start)
+	copy(levels, p.Levels[start:end])
+
+	eol := true
+	beforeSeparator := false
+	for i := len(p.Text) - 1; i >= 0; i-- {
+		if levels[i] == -1 {
+			continue
+		}
+		switch class, _ := Class(p.Text[i]); class {
+		case B, S:
+			levels[i] = p.Level
+			beforeSeparator = true
+			eol = false
+		case FSI, LRI, RLI, PDI, WS:
+			if beforeSeparator || eol {
+				levels[i] = p.Level
+			}
+		default:
+			eol = false
+			beforeSeparator = false
+		}
+	}
+
+	var runs []Run
+	minOdd := int8(math.MaxInt8)
+	{
+		prevLevel := levels[0]
+		var runStart int
+		for i, lvl := range levels {
+			if lvl == -1 {
+				continue
+			}
+			if lvl < minOdd && lvl%2 != 0 {
+				minOdd = lvl
+			}
+			if lvl != prevLevel {
+				runs = append(runs, Run{
+					Level: levels[runStart],
+					Start: runStart + start,
+					End:   i + start,
+				})
+				runStart = i
+				prevLevel = lvl
+			}
+		}
+		runs = append(runs, Run{
+			Level: levels[runStart],
+			Start: runStart,
+			End:   len(levels),
+		})
+	}
+
+	if minOdd < math.MaxInt8 {
+		for i := p.highestLevel; i >= minOdd; i-- {
+			startIndex := -1
+			for j, run := range runs {
+				if run.Level >= i {
+					if startIndex == -1 {
+						startIndex = j
+					}
+				} else if startIndex != -1 {
+					for i := startIndex; i < j; i++ {
+						runs[i].Reversed = !runs[i].Reversed
+					}
+					slices.Reverse(runs[startIndex:j])
+					startIndex = -1
+				}
+			}
+
+			if startIndex != -1 {
+				for i := startIndex; i < len(runs); i++ {
+					runs[i].Reversed = !runs[i].Reversed
+				}
+				slices.Reverse(runs[startIndex:])
+			}
+		}
+	}
+
+	return runs
 }
 
 type classBitmap uint32

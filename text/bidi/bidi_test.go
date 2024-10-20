@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"honnef.co/go/gutter/text/bidi"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func FuzzBidi(f *testing.F) {
@@ -184,6 +186,7 @@ func TestBidi(t *testing.T) {
 	i := 0
 
 	var levels []int8
+	var indices []int
 	for sc.Scan() {
 		i++
 		line := sc.Text()
@@ -207,6 +210,16 @@ func TestBidi(t *testing.T) {
 						}
 						levels = append(levels, int8(lvl))
 					}
+				}
+			} else if strings.HasPrefix(line, "@Reorder:") {
+				line = line[len("@Reorder: "):]
+				indices = nil
+				for field := range strings.FieldsSeq(line) {
+					idx, err := strconv.ParseInt(field, 10, 64)
+					if err != nil {
+						t.Fatal(err)
+					}
+					indices = append(indices, int(idx))
 				}
 			}
 			continue
@@ -241,14 +254,14 @@ func TestBidi(t *testing.T) {
 					ParagraphDirection:         bidi.LeftToRight,
 				}
 				res := th.Process(runes)
-				checkRes(t, res, runes, levels, bidi.LeftToRight, false)
+				checkRes(t, res, runes, levels, indices, bidi.LeftToRight, false)
 
 				th = bidi.Instance{
 					RetainFormattingCharacters: true,
 					ParagraphDirection:         bidi.LeftToRight,
 				}
 				res = th.Process(runes)
-				checkRes(t, res, runes, levels, bidi.LeftToRight, true)
+				checkRes(t, res, runes, levels, indices, bidi.LeftToRight, true)
 			}
 			if dirs&4 != 0 {
 				// RTL
@@ -257,7 +270,7 @@ func TestBidi(t *testing.T) {
 					ParagraphDirection:         bidi.RightToLeft,
 				}
 				res := th.Process(runes)
-				checkRes(t, res, runes, levels, bidi.RightToLeft, false)
+				checkRes(t, res, runes, levels, indices, bidi.RightToLeft, false)
 
 				// RTL
 				th = bidi.Instance{
@@ -265,13 +278,13 @@ func TestBidi(t *testing.T) {
 					ParagraphDirection:         bidi.RightToLeft,
 				}
 				res = th.Process(runes)
-				checkRes(t, res, runes, levels, bidi.RightToLeft, true)
+				checkRes(t, res, runes, levels, indices, bidi.RightToLeft, true)
 			}
 		})
 	}
 }
 
-func checkRes(t *testing.T, res bidi.Paragraph, runes []rune, wantLevels []int8, dir bidi.Direction, retain bool) {
+func checkRes(t *testing.T, res bidi.Paragraph, runes []rune, wantLevels []int8, wantIndices []int, dir bidi.Direction, retain bool) {
 	if len(res.Levels) != len(wantLevels) {
 		t.Fatalf("got %d levels, expected %d (dir=%v, retain=%t)", len(res.Levels), len(wantLevels), dir, retain)
 	}
@@ -301,6 +314,29 @@ func checkRes(t *testing.T, res bidi.Paragraph, runes []rune, wantLevels []int8,
 				}
 			}
 		}
+	}
+
+	runs := res.Order(0, len(runes))
+	var indices []int
+	for _, run := range runs {
+		if run.Reversed {
+			for j := run.End - 1; j >= run.Start; j-- {
+				if res.Levels[j] == -1 {
+					continue
+				}
+				indices = append(indices, j)
+			}
+		} else {
+			for j := run.Start; j < run.End; j++ {
+				if res.Levels[j] == -1 {
+					continue
+				}
+				indices = append(indices, j)
+			}
+		}
+	}
+	if d := cmp.Diff(wantIndices, indices); d != "" {
+		t.Fatalf("got wrong order:\n%s", d)
 	}
 
 	// BidiTest assumes that we've run L1. For the time being we do that here.
@@ -404,6 +440,7 @@ func TestCharacter(t *testing.T) {
 
 			cpoints := strings.Fields(fields[0])
 			strLevels := strings.Fields(fields[3])
+			strIndices := strings.Fields(fields[4])
 			var levels []int8
 			for _, s := range strLevels {
 				if s == "x" {
@@ -422,6 +459,15 @@ func TestCharacter(t *testing.T) {
 					len(cpoints), len(levels))
 			}
 
+			var indices []int
+			for _, s := range strIndices {
+				n, err := strconv.ParseInt(s, 10, 64)
+				if err != nil {
+					t.Fatal(err)
+				}
+				indices = append(indices, int(n))
+			}
+
 			runes := make([]rune, 0, len(cpoints))
 			for _, cpoint := range cpoints {
 				r, err := strconv.ParseInt(cpoint, 16, 24)
@@ -436,7 +482,7 @@ func TestCharacter(t *testing.T) {
 				ParagraphDirection:         dir,
 			}
 			res := th.Process(runes)
-			checkRes(t, res, runes, levels, dir, false)
+			checkRes(t, res, runes, levels, indices, dir, false)
 
 			// This test has an LRI LRI PDF PDF sequence. When retaining
 			// formatting characters, this introduces an extra run, which
@@ -455,7 +501,7 @@ func TestCharacter(t *testing.T) {
 				ParagraphDirection:         dir,
 			}
 			res = th.Process(runes)
-			checkRes(t, res, runes, levels, dir, true)
+			checkRes(t, res, runes, levels, indices, dir, true)
 		})
 	}
 	if err := sc.Err(); err != nil {
