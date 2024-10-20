@@ -32,23 +32,22 @@ func FuzzBidi(f *testing.F) {
 	})
 }
 
-func BenchmarkCode(b *testing.B) {
-	// Test processing source code
-	data, err := os.ReadFile("bidi.go")
-	if err != nil {
-		b.Fatal(err)
+type benchmarkDir int
+
+func (s benchmarkDir) String() string {
+	switch s {
+	case benchmarkDir(bidi.LeftToRight):
+		return "ltr"
+	case benchmarkDir(bidi.RightToLeft):
+		return "rtl"
+	default:
+		panic("benchmarkDir")
 	}
-	runes := []rune(string(data))
-	for range b.N {
-		th := bidi.Instance{
-			ParagraphDirection: bidi.LeftToRight,
-		}
-		th.Process(runes)
-	}
-	b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
 }
 
-func BenchmarkWikipedia(b *testing.B) {
+func BenchmarkProcess(b *testing.B) {
+	dirs := []benchmarkDir{benchmarkDir(bidi.LeftToRight), benchmarkDir(bidi.RightToLeft)}
+
 	// Test with various texts from Wikipedia, in various LTR and RTL languages.
 	m, err := filepath.Glob("./testdata/wikipedia/*.txt")
 	if err != nil {
@@ -72,55 +71,61 @@ func BenchmarkWikipedia(b *testing.B) {
 			runeCount += len(paraRunes)
 		}
 
-		b.Run(filepath.Base(path)+"-ltr", func(b *testing.B) {
-			for range b.N {
-				for _, para := range runes {
-					th := bidi.Instance{
-						ParagraphDirection: bidi.LeftToRight,
+		for _, dir := range dirs {
+			b.Run(fmt.Sprintf("text=wikipedia-%s/dir=%s", filepath.Base(path), dir), func(b *testing.B) {
+				for range b.N {
+					for _, para := range runes {
+						th := bidi.Instance{
+							ParagraphDirection: bidi.Direction(dir),
+						}
+						th.Process(para)
 					}
-					th.Process(para)
 				}
-			}
-			b.ReportMetric(float64(runeCount*b.N)/b.Elapsed().Seconds(), "runes/s")
-		})
-		b.Run(filepath.Base(path)+"-rtl", func(b *testing.B) {
+				b.ReportMetric(float64(runeCount*b.N)/b.Elapsed().Seconds(), "runes/s")
+			})
+		}
+	}
+
+	// Test processing source code
+	data, err := os.ReadFile("bidi.go")
+	if err != nil {
+		b.Fatal(err)
+	}
+	runes := []rune(string(data))
+	for _, dir := range dirs {
+		b.Run(fmt.Sprintf("text=bidi.go/dir=%s", dir), func(b *testing.B) {
 			for range b.N {
-				for _, para := range runes {
-					th := bidi.Instance{
-						ParagraphDirection: bidi.RightToLeft,
-					}
-					th.Process(para)
+				th := bidi.Instance{
+					ParagraphDirection: bidi.Direction(dir),
 				}
+				th.Process(runes)
 			}
-			b.ReportMetric(float64(runeCount*b.N)/b.Elapsed().Seconds(), "runes/s")
+			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
 		})
 	}
-}
 
-func BenchmarkTrivial(b *testing.B) {
 	// This tests one of the most trivial inputs: a long string of strong
 	// characters with the same direction.
-
-	runes := make([]rune, 1000)
+	runes = make([]rune, 1000)
 	for i := range runes {
 		runes[i] = 'A'
 	}
 
-	b.ResetTimer()
-	for range b.N {
-		th := bidi.Instance{
-			ParagraphDirection: bidi.LeftToRight,
-		}
-		th.Process(runes)
+	for _, dir := range dirs {
+		b.Run(fmt.Sprintf("text=aaaaa/dir=%s", dir), func(b *testing.B) {
+			for range b.N {
+				th := bidi.Instance{
+					ParagraphDirection: bidi.Direction(dir),
+				}
+				th.Process(runes)
+			}
+
+			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
+		})
 	}
 
-	b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
-}
-
-func BenchmarkNSMAfterBracketDense(b *testing.B) {
 	// Text densely packed with parentheses and NSMs.
-
-	runes := make([]rune, 1000)
+	runes = make([]rune, 1000)
 	for i := 0; i < 1000; i += 4 {
 		runes[i] = '('
 		runes[i+1] = 'x'
@@ -128,21 +133,20 @@ func BenchmarkNSMAfterBracketDense(b *testing.B) {
 		runes[i+3] = '\u0331'
 	}
 
-	b.ResetTimer()
-	for range b.N {
-		th := bidi.Instance{
-			ParagraphDirection: bidi.LeftToRight,
-		}
-		th.Process(runes)
+	for _, dir := range dirs {
+		b.Run(fmt.Sprintf("text=nsm/dir=%s", dir), func(b *testing.B) {
+			for range b.N {
+				th := bidi.Instance{
+					ParagraphDirection: bidi.Direction(dir),
+				}
+				th.Process(runes)
+			}
+			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
+		})
 	}
 
-	b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
-}
-
-func BenchmarkNSMAfterBracketSparse(b *testing.B) {
 	// Text with some parentheses and NSMs.
-
-	runes := make([]rune, 1000)
+	runes = make([]rune, 1000)
 	for i := range runes {
 		runes[i] = 'a'
 	}
@@ -153,15 +157,18 @@ func BenchmarkNSMAfterBracketSparse(b *testing.B) {
 		runes[i+3] = '\u0331'
 	}
 
-	b.ResetTimer()
-	for range b.N {
-		th := bidi.Instance{
-			ParagraphDirection: bidi.LeftToRight,
-		}
-		th.Process(runes)
-	}
+	for _, dir := range dirs {
+		b.Run(fmt.Sprintf("text=nsm-sparse/dir=%s", dir), func(b *testing.B) {
+			for range b.N {
+				th := bidi.Instance{
+					ParagraphDirection: bidi.Direction(dir),
+				}
+				th.Process(runes)
+			}
 
-	b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
+			b.ReportMetric(float64(len(runes)*b.N)/b.Elapsed().Seconds(), "runes/s")
+		})
+	}
 }
 
 func TestBidi(t *testing.T) {
