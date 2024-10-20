@@ -606,15 +606,15 @@ func (th *Instance) Process(text []rune) Paragraph {
 	// X9
 	if th.RetainFormattingCharacters {
 		for i, c := range runeClasses {
-			// This turns RLE, LRE, RLO, LRO, and PDF into BN
-			if c >= LRO && c <= PDF {
+			switch c {
+			case RLE, LRE, RLO, LRO, PDF:
 				runeClasses[i] = BN
 			}
 		}
 	} else {
 		for i, c := range runeClasses {
-			// This marks RLE, LRE, RLO, LRO, and PDF as deleted.
-			if (c >= LRO && c <= PDF) || c == BN {
+			switch c {
+			case RLE, LRE, RLO, LRO, PDF, BN:
 				embeddingLevels[i] = -1
 			}
 		}
@@ -1279,22 +1279,22 @@ func (th *Instance) Process(text []rune) Paragraph {
 					//
 					// TODO(dh): we should be able to use an expression switch
 					// and let the compiler find the ranges to check
-					switch c := runeClasses[j]; {
-					case c == BN:
+					switch runeClasses[j] {
+					case BN:
 						// BNs adjoining neutrals are treated like those neutrals
 						if afterNeutral {
 							runeClasses[j] = seqDirection
 						} else {
 							indices = append(indices, j)
 						}
-					case c >= B && c <= ON:
+					case B, S, WS, ON:
 						afterNeutral = true
 						for _, k := range indices {
 							runeClasses[k] = seqDirection
 						}
 						indices = indices[:0]
 						fallthrough
-					case c >= LRI && c <= PDI: // NI
+					case LRI, RLI, FSI, PDI: // NI
 						// TODO the spec says to change the BNs that adjoin "neutrals",
 						// but it's not clear if neutrals refers to all of NI or only B,
 						// S, WS, and ON
