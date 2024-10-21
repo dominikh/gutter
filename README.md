@@ -10,6 +10,10 @@ Flutter, but aims to present an idiomatic Go API. That is, it is not a clone.
 
 The project is currently in the prototyping stage.
 
+## Features
+
+- Support for the [Unicode Line Breaking Algorithm (UAX #14)](https://unicode.org/reports/tr14/)
+
 ## Design choices
 
 ### Desktop-only
@@ -31,3 +35,34 @@ between CPU and GPU rendering, we do not offer a CPU fallback renderer.
 
 Gutter requires a GPU that supports at least Vulkan 1.2, D3D12, or Metal. This
 should be covered by GPUs of the last 10 years.
+
+### Inspired by, but not a clone of, Flutter
+
+Gutter is heavily inspired by Flutter, which in the author's opinion is a solid implementation of the
+declarative UI pattern. To arrive at a usable prototype faster, large parts of Gutter's initial design were
+copied directly from Flutter, with adjustments to make its API more suited to Go's type system. However, it is
+not the goal to provide a faithful Flutter clone. In fact, as the project progresses, it will likely move
+further away from Flutter's API, as Gutter is made more Go-like, and as abstractions that are deemed
+unnecessary are removed.
+
+### Modern font handling
+
+- TODO
+- Not restricted to the WWS or R/B/I/BI models, instead embracing variable fonts and unrestricted font models. we try
+  our best to map old-fashioned fonts to our flexible API.
+- not relying on fontconfig
+- not supporting old encodings like the Macintosh code pages, Big5, etc. Unicode or go home.
+
+### Pixel-aligned UI elements
+
+TODO
+
+## Known shortcomings that may be fixed by contributors
+
+- No support for correct line breaking of Thai
+
+## Known shortcomings that are intentional
+
+- No support for touch gestures
+- No support for mobile devices
+- No support for text directions other than left-to-right and right-to-left
