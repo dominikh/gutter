@@ -66,8 +66,7 @@ type directionalStatus struct {
 	index                     int
 	embeddingLevel            int8
 	directionalOverrideStatus directionalOverride
-	// TODO rename to isIsolate
-	directionalIsolateStatus bool
+	directionalIsolateStatus  bool
 }
 
 type embeddingStack struct {
@@ -1276,9 +1275,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 				for j := range seq.indices(0, embeddingLevels) {
 					// We tried using a jump table for this switch, but it didn't
 					// have a measurable effect.
-					//
-					// TODO(dh): we should be able to use an expression switch
-					// and let the compiler find the ranges to check
 					switch runeClasses[j] {
 					case BN:
 						// BNs adjoining neutrals are treated like those neutrals
@@ -1295,9 +1291,6 @@ func (th *Instance) Process(text []rune) Paragraph {
 						indices = indices[:0]
 						fallthrough
 					case LRI, RLI, FSI, PDI: // NI
-						// TODO the spec says to change the BNs that adjoin "neutrals",
-						// but it's not clear if neutrals refers to all of NI or only B,
-						// S, WS, and ON
 						runeClasses[j] = seqDirection
 					default:
 						indices = indices[:0]
