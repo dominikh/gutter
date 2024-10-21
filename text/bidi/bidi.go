@@ -1351,10 +1351,17 @@ func (th *Instance) Process(text []rune) Paragraph {
 }
 
 type Run struct {
-	Level    int8
-	Reversed bool
-	Start    int
-	End      int
+	Level int8
+	Start int
+	End   int
+}
+
+func (r *Run) Direction() Direction {
+	if r.Level%2 == 0 {
+		return LeftToRight
+	} else {
+		return RightToLeft
+	}
 }
 
 func (p *Paragraph) Order(start, end int) []Run {
@@ -1444,18 +1451,12 @@ func (p *Paragraph) Order(start, end int) []Run {
 						startIndex = j
 					}
 				} else if startIndex != -1 {
-					for i := startIndex; i < j; i++ {
-						runs[i].Reversed = !runs[i].Reversed
-					}
 					slices.Reverse(runs[startIndex:j])
 					startIndex = -1
 				}
 			}
 
 			if startIndex != -1 {
-				for i := startIndex; i < len(runs); i++ {
-					runs[i].Reversed = !runs[i].Reversed
-				}
 				slices.Reverse(runs[startIndex:])
 			}
 		}

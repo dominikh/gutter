@@ -329,14 +329,16 @@ func checkRes(t *testing.T, res bidi.Paragraph, runes []rune, wantLevels []int8,
 	runs := res.Order(0, len(runes))
 	var indices []int
 	for _, run := range runs {
-		if run.Reversed {
+		switch run.Direction() {
+		case bidi.RightToLeft:
 			for j := run.End - 1; j >= run.Start; j-- {
 				if res.Levels[j] == -1 {
 					continue
 				}
 				indices = append(indices, j)
 			}
-		} else {
+
+		case bidi.LeftToRight:
 			for j := run.Start; j < run.End; j++ {
 				if res.Levels[j] == -1 {
 					continue
