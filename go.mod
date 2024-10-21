@@ -9,7 +9,6 @@ toolchain go1.23.0
 
 require (
 	github.com/go-json-experiment/json v0.0.0-20240815175050-ebd3a8989ca1
-	github.com/go-text/typesetting v0.1.1-0.20240302235149-abd78ec895b8
 	github.com/google/go-cmp v0.6.0
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
 	golang.org/x/sys v0.21.0
@@ -19,10 +18,10 @@ require (
 	honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219
 	honnef.co/go/libwayland v0.0.0-20240816012442-83394039f572
 	honnef.co/go/wgpu v0.0.0-20250117201447-10450807225c
+	honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2
 )
 
 require (
-	honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2 // indirect
 	honnef.co/go/wgpu-darwin-amd64 v0.1904.1 // indirect
 	honnef.co/go/wgpu-darwin-arm64 v0.1904.1 // indirect
 	honnef.co/go/wgpu-linux-amd64 v0.1904.1 // indirect
