@@ -18,3 +18,9 @@ path = [
 ]
 SPDX-FileCopyrightText = "1991-2025 Unicode, Inc."
 SPDX-License-Identifier = "Unicode-3.0"
+
+[[annotations]]
+path = ["internal/language/**", "internal/tag/**"]
+# Most files come with a copyright notice. Generated files do not.
+SPDX-FileCopyrightText = "2013 The Go Authors."
+SPDX-License-Identifier = "BSD-3-Clause"
