@@ -1,0 +1,52 @@
+- [X] BASE
+- [ ] CBDT
+- [ ] CBLC
+- [ ] CFF
+- [ ] CFF2
+- [ ] COLR
+- [ ] CPAL
+- [X] DSIG
+- [ ] EBDT
+- [-] EBLC
+- [ ] EBSC
+- [X] FFTM
+- [X] GDEF
+- [ ] GPOS
+- [X] GSUB
+- [ ] HVAR
+- [ ] JSTF
+- [ ] LTSH
+- [ ] MATH
+- [X] MERG
+- [ ] MVAR
+- [X] OS/2
+- [X] PCLT
+- [X] STAT
+- [X] SVG
+- [ ] VDMX
+- [ ] VORG
+- [ ] VVAR
+- [ ] avar
+- [X] cmap
+- [ ] cvar
+- [X] cvt
+- [X] fpgm
+- [-] fvar
+- [ ] gasp
+- [X] glyf
+- [ ] gvar
+- [ ] hdmx
+- [X] head
+- [ ] hhea
+- [ ] hmtx
+- [X] kern
+- [X] loca
+- [X] maxp
+- [X] meta
+- [X] name
+- [ ] post
+  PostScript table that is annoying. Version 2 has more fields than version 1 and 3.
+- [X] prep
+- [X] sbix
+- [X] vhea
+- [ ] vmtx
