@@ -1370,11 +1370,12 @@ func (p *Paragraph) Order(start, end int) []Run {
 
 	eol := true
 	beforeSeparator := false
-	for i := len(p.Text) - 1; i >= 0; i-- {
+	text := p.Text[start:end]
+	for i := len(text) - 1; i >= 0; i-- {
 		if levels[i] == -1 {
 			continue
 		}
-		switch class, _ := Class(p.Text[i]); class {
+		switch class, _ := Class(text[i]); class {
 		case B, S:
 			levels[i] = p.Level
 			beforeSeparator = true
