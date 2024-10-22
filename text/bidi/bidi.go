@@ -1364,6 +1364,62 @@ func (r *Run) Direction() Direction {
 	}
 }
 
+// Runs returns the paragraph's runs in logical order. This is simply a grouping
+// by embedding level.
+func (p *Paragraph) Runs() []Run {
+	runs, _ := p.runs(p.Levels, 0)
+	return runs
+}
+
+func (p *Paragraph) runs(levels []int8, start int) (runs []Run, minOdd int8) {
+	minOdd = int8(math.MaxInt8)
+	prevLevel := levels[0]
+	if prevLevel%2 != 0 {
+		minOdd = prevLevel
+	}
+	var runStart int
+	levels64 := safeish.SliceCast[[]uint64](levels)
+	const neg1 = 0xFFFFFFFFFFFFFFFF
+	prevLevel64 := uint64(prevLevel) * 0x0101010101010101
+	do := func(start2, end2 int) {
+		for i := start2; i < end2; i++ {
+			lvl := levels[i]
+			if lvl == -1 {
+				continue
+			}
+			if lvl < minOdd && lvl%2 != 0 {
+				minOdd = lvl
+			}
+			if lvl != prevLevel {
+				runs = append(runs, Run{
+					Level: levels[runStart],
+					Start: runStart + start,
+					End:   i + start,
+				})
+				runStart = i
+				prevLevel = lvl
+			}
+		}
+	}
+	for j, lvl64 := range levels64 {
+		if lvl64 == neg1 || lvl64 == prevLevel64 {
+			continue
+		}
+		do(j*8, j*8+8)
+		prevLevel64 = uint64(prevLevel) * 0x101010101010101
+	}
+	do(len(levels64)*8, len(levels))
+
+	runs = append(runs, Run{
+		Level: levels[runStart],
+		Start: runStart,
+		End:   len(levels),
+	})
+
+	return runs, minOdd
+}
+
+// Order returns runs for the text from start to end, in visual order.
 func (p *Paragraph) Order(start, end int) []Run {
 	levels := make([]int8, end-start)
 	copy(levels, p.Levels[start:end])
@@ -1396,52 +1452,7 @@ func (p *Paragraph) Order(start, end int) []Run {
 		}
 	}
 
-	var runs []Run
-	minOdd := int8(math.MaxInt8)
-	{
-		prevLevel := levels[0]
-		if prevLevel%2 != 0 {
-			minOdd = prevLevel
-		}
-		var runStart int
-		levels64 := safeish.SliceCast[[]uint64](levels)
-		const neg1 = 0xFFFFFFFFFFFFFFFF
-		prevLevel64 := uint64(prevLevel) * 0x0101010101010101
-		do := func(start2, end2 int) {
-			for i := start2; i < end2; i++ {
-				lvl := levels[i]
-				if lvl == -1 {
-					continue
-				}
-				if lvl < minOdd && lvl%2 != 0 {
-					minOdd = lvl
-				}
-				if lvl != prevLevel {
-					runs = append(runs, Run{
-						Level: levels[runStart],
-						Start: runStart + start,
-						End:   i + start,
-					})
-					runStart = i
-					prevLevel = lvl
-				}
-			}
-		}
-		for j, lvl64 := range levels64 {
-			if lvl64 == neg1 || lvl64 == prevLevel64 {
-				continue
-			}
-			do(j*8, j*8+8)
-			prevLevel64 = uint64(prevLevel) * 0x101010101010101
-		}
-		do(len(levels64)*8, len(levels))
-
-		runs = append(runs, Run{
-			Level: levels[runStart],
-			Start: runStart,
-			End:   len(levels),
-		})
-	}
+	runs, minOdd := p.runs(levels, 0)
 
 	if minOdd < math.MaxInt8 {
 		for i := p.highestLevel; i >= minOdd; i-- {
