@@ -1373,6 +1373,9 @@ func (p *Paragraph) Runs() []Run {
 
 func (p *Paragraph) runs(levels []int8, start int) (runs []Run, minOdd int8) {
 	minOdd = int8(math.MaxInt8)
+	if len(levels) == 0 {
+		return nil, minOdd
+	}
 	prevLevel := levels[0]
 	if prevLevel%2 != 0 {
 		minOdd = prevLevel
