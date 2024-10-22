@@ -28,7 +28,8 @@ func FuzzBidi(f *testing.F) {
 					RetainFormattingCharacters: retain,
 					ParagraphDirection:         dir,
 				}
-				th.Process(runes)
+				p := th.Process(runes)
+				p.Order(0, len(runes))
 			}
 		}
 	})
