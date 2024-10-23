@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+// Package bidi implements the Unicode Bidirectional Algorithm (UAX #9).
+//
+// It currently implements revision 50 of the algorithm, for Unicode 16.0.0.
 package bidi
 
 // XXX consider bracket mirroring
