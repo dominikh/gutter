@@ -149,6 +149,10 @@ func (ins *Instance) Process(text []rune) []bool {
 		}
 		return runeClasses[i]
 	}
+	isAKASCircle := func(i int) bool {
+		cls := class(i)
+		return cls == AK || cls == AS || (i < len(runeClasses) && text[indices[i]] == '◌')
+	}
 	neverBreakBefore := func(i int, rule uint16) {
 		i = indices[i]
 		if rule < appliedRules[i] {
@@ -457,13 +461,24 @@ func (ins *Instance) Process(text []rune) []bool {
 			// LB21 - × [BA HY NS], BB ×
 			neverBreakBefore(i, 210)
 
-			// LB25
-			// NU [SY IS]* [CL CP]? × [PO PR]
-			// NU [SY IS]* × NU
-			// [PO PR] × (OP IS?)? NU
-			// [HY IS] × NU
-			if class(i+1) == NU {
+			switch class(i + 1) {
+			case NU:
+				// LB25
+				// NU [SY IS]* [CL CP]? × [PO PR]
+				// NU [SY IS]* × NU
+				// [PO PR] × (OP IS?)? NU
+				// [HY IS] × NU
 				neverBreakAfter(i, 250)
+			case AL:
+				// LB20a - [sot BK CR LF NL SP ZW CB GL] [HY \u2010] × AL
+				if i != 0 {
+					switch runeClasses[i-1] {
+					case BK, CR, LF, NL, SP, ZW, CB, GL:
+						neverBreakAfter(i, 201)
+					}
+				} else {
+					neverBreakAfter(i, 201)
+				}
 			}
 
 		case BA, NS:
@@ -559,7 +574,14 @@ func (ins *Instance) Process(text []rune) []bool {
 				neverBreakAfter(i, 250)
 			}
 
-		case ID, EB, EM:
+		case EB:
+			// LB30b - EB × EM, [\p{Extended_Pictographic}&\p{Cn}] × EM
+			if class(i+1) == EM {
+				neverBreakAfter(i, 302)
+			}
+			// LB23a - PR × [ID EB EM], [ID EB EM] × PO
+			fallthrough
+		case ID, EM:
 			// LB23a - PR × [ID EB EM], [ID EB EM] × PO
 			if class(i+1) == PO {
 				neverBreakAfter(i, 231)
@@ -642,11 +664,70 @@ func (ins *Instance) Process(text []rune) []bool {
 				// 8, Customization."
 				neverBreakAfter(i, 270)
 			}
+
+		case AP:
+			// LB28a
+			// AP × [AK ◌ AS]
+			// [AK ◌ AS] × [VF VI]
+			// [AK ◌ AS] VI × [AK ◌]
+			// [AK ◌ AS] × [AK ◌ AS] VF
+			if isAKASCircle(i + 1) {
+				neverBreakAfter(i, 281)
+			}
+
+		case AK, AS:
+			// LB28a
+			// AP × [AK ◌ AS]
+			// [AK ◌ AS] × [VF VI]
+			// [AK ◌ AS] VI × [AK ◌]
+			// [AK ◌ AS] × [AK ◌ AS] VF
+			switch class(i + 1) {
+			case VI:
+				if class(i+2) == AK || (i+2 < len(runeClasses) && text[indices[i+2]] == '◌') {
+					neverBreakAfter(i+1, 281)
+				}
+				fallthrough
+			case VF:
+				neverBreakAfter(i, 281)
+			case AK, AS:
+				if class(i+2) == VF {
+					neverBreakAfter(i, 281)
+				}
+			default:
+				if i+1 < len(runeClasses) && text[indices[i+1]] == '◌' && class(i+2) == VF {
+					neverBreakAfter(i, 281)
+				}
+			}
 		}
 
-		{
+		r := text[indices[i]]
+		switch r {
+		case '◌':
+			// LB28a
+			// AP × [AK ◌ AS]
+			// [AK ◌ AS] × [VF VI]
+			// [AK ◌ AS] VI × [AK ◌]
+			// [AK ◌ AS] × [AK ◌ AS] VF
+			switch class(i + 1) {
+			case VI:
+				if class(i+2) == AK || (i+2 < len(runeClasses) && text[indices[i+2]] == '◌') {
+					neverBreakAfter(i+1, 281)
+				}
+				fallthrough
+			case VF:
+				neverBreakAfter(i, 281)
+			case AK, AS:
+				if class(i+2) == VF {
+					neverBreakAfter(i, 281)
+				}
+			default:
+				if i+1 < len(runeClasses) && text[indices[i+1]] == '◌' && class(i+2) == VF {
+					neverBreakAfter(i, 281)
+				}
+			}
+		case 0x2010:
 			// LB20a - [sot BK CR LF NL SP ZW CB GL] [HY \u2010] × AL
-			if (cls == HY || text[indices[i]] == 0x2010) && class(i+1) == AL {
+			if class(i+1) == AL {
 				if i != 0 {
 					switch runeClasses[i-1] {
 					case BK, CR, LF, NL, SP, ZW, CB, GL:
@@ -658,59 +739,22 @@ func (ins *Instance) Process(text []rune) []bool {
 			}
 		}
 
-		{
-			// LB28a
-			// AP × [AK ◌ AS]
-			// [AK ◌ AS] × [VF VI]
-			// [AK ◌ AS] VI × [AK ◌]
-			// [AK ◌ AS] × [AK ◌ AS] VF
-			isAKASCircle := func(i int) bool {
-				if i >= len(runeClasses) {
-					return false
-				}
-				cls := class(i)
-				return cls == AK || cls == AS || text[indices[i]] == '◌'
-			}
-			if cls == AP {
-				if isAKASCircle(i + 1) {
-					neverBreakAfter(i, 281)
-				}
-			} else if isAKASCircle(i) {
-				if class(i+1) == VI {
-					neverBreakAfter(i, 281)
-					if class(i+2) == AK || (i+2 < len(runeClasses) && text[indices[i+2]] == '◌') {
-						neverBreakAfter(i+1, 281)
-					}
-				} else if class(i+1) == VF {
-					neverBreakAfter(i, 281)
-				} else if isAKASCircle(i + 1) {
-					if class(i+2) == VF {
-						neverBreakAfter(i, 281)
-					}
-				}
-			}
-		}
-
-		{
-			// LB30b - EB × EM, [\p{Extended_Pictographic}&\p{Cn}] × EM
-			if class(i+1) == EM {
-				if cls == EB {
+		// LB30b - EB × EM, [\p{Extended_Pictographic}&\p{Cn}] × EM
+		if class(i+1) == EM {
+			if r := text[indices[i]]; unicode.Is(extendedPictographic, text[indices[i]]) {
+				// OPT hopefully we don't get here often, because that check won't
+				// be very fast.
+				if !unicode.In(
+					r,
+					unicode.C,
+					unicode.L,
+					unicode.M,
+					unicode.N,
+					unicode.P,
+					unicode.S,
+					unicode.Z,
+				) {
 					neverBreakAfter(i, 302)
-				} else if r := text[indices[i]]; unicode.Is(extendedPictographic, text[indices[i]]) {
-					// OPT hopefully we don't get here often, because that check won't
-					// be very fast.
-					if !unicode.In(
-						r,
-						unicode.C,
-						unicode.L,
-						unicode.M,
-						unicode.N,
-						unicode.P,
-						unicode.S,
-						unicode.Z,
-					) {
-						neverBreakAfter(i, 302)
-					}
 				}
 			}
 		}
