@@ -375,7 +375,7 @@ func (ins *Instance) Process(text []rune) []bool {
 					neverBreakAfter(findEndOfSPChain(i), lb15a)
 				}
 			} else {
-				// LB19 - × [QU - \p{Pi}], [QU - \p{Pf}] ×
+				// LB19 - × [QU - \p{Pi}]
 				neverBreakBefore(i, lb19)
 			}
 
@@ -390,11 +390,15 @@ func (ins *Instance) Process(text []rune) []bool {
 					neverBreakBefore(i, lb15b)
 				}
 			} else {
-				// LB19 - × [QU - \p{Pi}], [QU - \p{Pf}] ×
+				// LB19 - [QU - \p{Pf}] ×
 				neverBreakAfter(i, lb19)
 			}
 
 			// LB19a
+			// [^$EastAsian] × QU
+			// × QU ( [^$EastAsian] | eot )
+			// QU × [^$EastAsian]
+			// ( sot | [^$EastAsian] ) QU ×
 			if i > 0 {
 				if !unicode.Is(eastAsian, text[indices[i-1]]) {
 					neverBreakBefore(i, lb19a)
@@ -413,16 +417,12 @@ func (ins *Instance) Process(text []rune) []bool {
 			// LB15d - × IS
 			neverBreakBefore(i, lb15d)
 
-			// LB29 - IS × [AL HL]
 			switch class(i + 1) {
 			case AL, HL:
+				// LB29 - IS × [AL HL]
 				neverBreakAfter(i, lb29)
 			case NU:
-				// LB25
-				// NU [SY IS]* [CL CP]? × [PO PR]
-				// NU [SY IS]* × NU
-				// [PO PR] × (OP IS?)? NU
-				// [HY IS] × NU
+				// LB25 - [HY IS] × NU
 				neverBreakAfter(i, lb29)
 			}
 		case B2:
@@ -448,17 +448,17 @@ func (ins *Instance) Process(text []rune) []bool {
 
 			switch class(i + 1) {
 			case NU:
-				// LB23 - [AL HL] × NU, NU × [AL HL]
+				// LB23 - [AL HL] × NU
 				neverBreakAfter(i, lb23)
 			case PR, PO:
-				// LB24 - [PR PO] × [AL HL], [AL HL] × [PR PO]
+				// LB24 - [AL HL] × [PR PO]
 				neverBreakAfter(i, lb24)
 			case AL, HL:
 				// LB28 - [AL HL] × [AL HL]
 				neverBreakAfter(i, lb28)
 			case OP:
 				if !unicode.Is(eastAsian, text[indices[i+1]]) {
-					// LB30 [AL HL NU] × [OP-$EastAsian], [CP-$EastAsian] × [AL HL NU]
+					// LB30 - [AL HL NU] × [OP-$EastAsian]
 					neverBreakAfter(i, lb30)
 				}
 			}
@@ -493,7 +493,7 @@ func (ins *Instance) Process(text []rune) []bool {
 				neverBreakAfter(i, lb16)
 			}
 
-			// LB30 [AL HL NU] × [OP-$EastAsian], [CP-$EastAsian] × [AL HL NU]
+			// LB30 - [CP-$EastAsian] × [AL HL NU]
 			if !unicode.Is(eastAsian, text[indices[i]]) {
 				switch class(i + 1) {
 				case AL, HL, NU:
@@ -510,11 +510,7 @@ func (ins *Instance) Process(text []rune) []bool {
 
 			switch class(i + 1) {
 			case NU:
-				// LB25
-				// NU [SY IS]* [CL CP]? × [PO PR]
-				// NU [SY IS]* × NU
-				// [PO PR] × (OP IS?)? NU
-				// [HY IS] × NU
+				// LB25 - [HY IS] × NU
 				neverBreakAfter(i, lb25)
 			case AL:
 				// LB20a - [sot BK CR LF NL SP ZW CB GL] [HY \u2010] × AL
@@ -538,17 +534,17 @@ func (ins *Instance) Process(text []rune) []bool {
 		case AL:
 			switch class(i + 1) {
 			case NU:
-				// LB23 - [AL HL] × NU, NU × [AL HL]
+				// LB23 - [AL HL] × NU
 				neverBreakAfter(i, lb23)
 			case PR, PO:
-				// LB24 - [PR PO] × [AL HL], [AL HL] × [PR PO]
+				// LB24 - [AL HL] × [PR PO]
 				neverBreakAfter(i, lb24)
 			case AL, HL:
 				// LB28 - [AL HL] × [AL HL]
 				neverBreakAfter(i, lb28)
 			case OP:
 				if !unicode.Is(eastAsian, text[indices[i+1]]) {
-					// LB30 [AL HL NU] × [OP-$EastAsian], [CP-$EastAsian] × [AL HL NU]
+					// LB30 - [AL HL NU] × [OP-$EastAsian]
 					neverBreakAfter(i, lb30)
 				}
 			}
@@ -556,11 +552,11 @@ func (ins *Instance) Process(text []rune) []bool {
 		case NU:
 			switch class(i + 1) {
 			case AL, HL:
-				// LB23 - [AL HL] × NU, NU × [AL HL]
+				// LB23 - NU × [AL HL]
 				neverBreakAfter(i, lb23)
 			case OP:
 				if !unicode.Is(eastAsian, text[indices[i+1]]) {
-					// LB30 [AL HL NU] × [OP-$EastAsian], [CP-$EastAsian] × [AL HL NU]
+					// LB30 - [AL HL NU] × [OP-$EastAsian]
 					neverBreakAfter(i, lb30)
 				}
 			}
@@ -568,8 +564,6 @@ func (ins *Instance) Process(text []rune) []bool {
 			// LB25
 			// NU [SY IS]* [CL CP]? × [PO PR]
 			// NU [SY IS]* × NU
-			// [PO PR] × (OP IS?)? NU
-			// [HY IS] × NU
 			j := i
 			for j++; j < len(runeClasses) && (runeClasses[j] == SY || runeClasses[j] == IS); j++ {
 			}
@@ -589,47 +583,37 @@ func (ins *Instance) Process(text []rune) []bool {
 		case PR:
 			switch class(i + 1) {
 			case ID, EB, EM:
-				// LB23a - PR × [ID EB EM], [ID EB EM] × PO
+				// LB23a - PR × [ID EB EM]
 				neverBreakAfter(i, lb23a)
 			case AL, HL:
-				// LB24 - [PR PO] × [AL HL], [AL HL] × [PR PO]
+				// LB24 - [PR PO] × [AL HL]
 				neverBreakAfter(i, lb24)
 			case JL, JV, JT, H2, H3:
-				// LB27
-				// [JL JV JT H2 H3] × PO
-				// PR × [JL JV JT H2 H3]
+				// LB27 - PR × [JL JV JT H2 H3]
 				//
 				// TODO "When Korean uses SPACE for line breaking, the classes in rule LB26,
 				// as well as characters of class ID, are often tailored to AL; see Section
 				// 8, Customization."
 				neverBreakAfter(i, lb27)
 			case OP:
-				// LB25
-				// NU [SY IS]* [CL CP]? × [PO PR]
-				// NU [SY IS]* × NU
-				// [PO PR] × (OP IS?)? NU
-				// [HY IS] × NU
+				// LB25 - [PO PR] × (OP IS?)? NU
 				if class(i+2) == NU || (class(i+2) == IS && class(i+3) == NU) {
 					neverBreakAfter(i, lb25)
 				}
 			case NU:
-				// LB25
-				// NU [SY IS]* [CL CP]? × [PO PR]
-				// NU [SY IS]* × NU
-				// [PO PR] × (OP IS?)? NU
-				// [HY IS] × NU
+				// LB25 - [PO PR] × (OP IS?)? NU
 				neverBreakAfter(i, lb25)
 			}
 
 		case EB:
-			// LB30b - EB × EM, [\p{Extended_Pictographic}&\p{Cn}] × EM
+			// LB30b - EB × EM
 			if class(i+1) == EM {
 				neverBreakAfter(i, lb30b)
 			}
-			// LB23a - PR × [ID EB EM], [ID EB EM] × PO
+			// LB23a - [ID EB EM] × PO
 			fallthrough
 		case ID, EM:
-			// LB23a - PR × [ID EB EM], [ID EB EM] × PO
+			// LB23a - [ID EB EM] × PO
 			if class(i+1) == PO {
 				neverBreakAfter(i, lb23a)
 			}
@@ -637,38 +621,25 @@ func (ins *Instance) Process(text []rune) []bool {
 		case PO:
 			switch class(i + 1) {
 			case AL, HL:
-				// LB24 - [PR PO] × [AL HL], [AL HL] × [PR PO]
+				// LB24 - [PR PO] × [AL HL]
 				neverBreakAfter(i, lb24)
 			case OP:
-				// LB25
-				// NU [SY IS]* [CL CP]? × [PO PR]
-				// NU [SY IS]* × NU
-				// [PO PR] × (OP IS?)? NU
-				// [HY IS] × NU
+				// LB25 - [PO PR] × (OP IS?)? NU
 				if class(i+2) == NU || (class(i+2) == IS && class(i+3) == NU) {
 					neverBreakAfter(i, lb25)
 				}
 			case NU:
-				// LB25
-				// NU [SY IS]* [CL CP]? × [PO PR]
-				// NU [SY IS]* × NU
-				// [PO PR] × (OP IS?)? NU
-				// [HY IS] × NU
+				// LB25 - [PO PR] × (OP IS?)? NU
 				neverBreakAfter(i, lb25)
 			}
 
 		case JL:
 			switch class(i + 1) {
 			case JL, JV, H2, H3:
-				// LB26
-				// JL × [JL JV H2 H3]
-				// [JV H2] × [JV JT]
-				// [JT H3] × JT
+				// LB26 - JL × [JL JV H2 H3]
 				neverBreakAfter(i, lb26)
 			case PO:
-				// LB27
-				// [JL JV JT H2 H3] × PO
-				// PR × [JL JV JT H2 H3]
+				// LB27 - [JL JV JT H2 H3] × PO
 				//
 				// TODO "When Korean uses SPACE for line breaking, the classes in rule LB26,
 				// as well as characters of class ID, are often tailored to AL; see Section
@@ -678,15 +649,10 @@ func (ins *Instance) Process(text []rune) []bool {
 		case JV, H2:
 			switch class(i + 1) {
 			case JV, JT:
-				// LB26
-				// JL × [JL JV H2 H3]
-				// [JV H2] × [JV JT]
-				// [JT H3] × JT
+				// LB26 - [JV H2] × [JV JT]
 				neverBreakAfter(i, lb26)
 			case PO:
-				// LB27
-				// [JL JV JT H2 H3] × PO
-				// PR × [JL JV JT H2 H3]
+				// LB27 - [JL JV JT H2 H3] × PO
 				//
 				// TODO "When Korean uses SPACE for line breaking, the classes in rule LB26,
 				// as well as characters of class ID, are often tailored to AL; see Section
@@ -696,16 +662,10 @@ func (ins *Instance) Process(text []rune) []bool {
 		case JT, H3:
 			switch class(i + 1) {
 			case JT:
-				// LB26
-				// JL × [JL JV H2 H3]
-				// [JV H2] × [JV JT]
-				// [JT H3] × JT
+				// LB26 - [JT H3] × JT
 				neverBreakAfter(i, lb26)
 			case PO:
-				// LB27
-				// [JL JV JT H2 H3] × PO
-				// PR × [JL JV JT H2 H3]
-				//
+				// LB27 - [JL JV JT H2 H3] × PO
 				// TODO "When Korean uses SPACE for line breaking, the classes in rule LB26,
 				// as well as characters of class ID, are often tailored to AL; see Section
 				// 8, Customization."
@@ -713,18 +673,13 @@ func (ins *Instance) Process(text []rune) []bool {
 			}
 
 		case AP:
-			// LB28a
-			// AP × [AK ◌ AS]
-			// [AK ◌ AS] × [VF VI]
-			// [AK ◌ AS] VI × [AK ◌]
-			// [AK ◌ AS] × [AK ◌ AS] VF
+			// LB28a - AP × [AK ◌ AS]
 			if isAKASCircle(i + 1) {
 				neverBreakAfter(i, lb28a)
 			}
 
 		case AK, AS:
 			// LB28a
-			// AP × [AK ◌ AS]
 			// [AK ◌ AS] × [VF VI]
 			// [AK ◌ AS] VI × [AK ◌]
 			// [AK ◌ AS] × [AK ◌ AS] VF
@@ -751,7 +706,6 @@ func (ins *Instance) Process(text []rune) []bool {
 		switch r {
 		case '◌':
 			// LB28a
-			// AP × [AK ◌ AS]
 			// [AK ◌ AS] × [VF VI]
 			// [AK ◌ AS] VI × [AK ◌]
 			// [AK ◌ AS] × [AK ◌ AS] VF
@@ -786,7 +740,7 @@ func (ins *Instance) Process(text []rune) []bool {
 			}
 		}
 
-		// LB30b - EB × EM, [\p{Extended_Pictographic}&\p{Cn}] × EM
+		// LB30b - [\p{Extended_Pictographic}&\p{Cn}] × EM
 		if class(i+1) == EM {
 			if r := text[indices[i]]; unicode.Is(extendedPictographic, text[indices[i]]) {
 				// OPT hopefully we don't get here often, because that check won't
