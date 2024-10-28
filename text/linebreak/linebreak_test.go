@@ -74,7 +74,7 @@ func TestWikipedia(t *testing.T) {
 
 		ins := linebreak.Instance{}
 		ret := ins.Process(runes)
-		sum := sha256.Sum256(safeish.SliceCast[[]byte](ret))
+		sum := sha256.Sum256(safeish.SliceCast[[]byte](ret.Breaks))
 		got := fmt.Sprintf("%x", sum)
 		want := hashes[filepath.Base(f)]
 		if got != want {
@@ -126,7 +126,7 @@ func TestUCD(t *testing.T) {
 		t.Run(fmt.Sprintf("line-%d", i), func(t *testing.T) {
 			ins := linebreak.Instance{}
 			ret := ins.Process(runes)
-			if !slices.Equal(ret, breaks) {
+			if !slices.Equal(ret.Breaks, breaks) {
 				t.Fatalf("%v != %v", ret, breaks)
 			}
 		})

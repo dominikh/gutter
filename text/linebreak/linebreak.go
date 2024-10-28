@@ -157,9 +157,17 @@ func (bs uint2s) set(idx int, v uint8) {
 	*word = (*word & ^(mask << shift)) | (uint64(v) << shift)
 }
 
-func (ins *Instance) Process(text []rune) []bool {
+type Result struct {
+	// Indices of runes before which breaking is mandatory.
+	MandatoryBreaks []int
+	// One bool per rune in the text, with true indicating that we may break
+	// before it.
+	Breaks []bool
+}
+
+func (ins *Instance) Process(text []rune) Result {
 	if len(text) == 0 {
-		return nil
+		return Result{}
 	}
 
 	before := newUint2s(len(text) + 1)
@@ -761,14 +769,19 @@ func (ins *Instance) Process(text []rune) []bool {
 		}
 	}
 
-	var out []bool
+	res := Result{
+		Breaks: make([]bool, 0, len(text)),
+	}
 	for j, word := range before {
 		for i := range 32 {
 			switch uint8(word >> (2 * i) & 0b11) {
 			case neverBreak:
-				out = append(out, false)
-			case alwaysBreak, mayBreak:
-				out = append(out, true)
+				res.Breaks = append(res.Breaks, false)
+			case alwaysBreak:
+				res.MandatoryBreaks = append(res.MandatoryBreaks, j*64+i)
+				res.Breaks = append(res.Breaks, true)
+			case mayBreak:
+				res.Breaks = append(res.Breaks, true)
 			case unprocessedBreak:
 				if j*32+i < len(text) {
 					panic("unreachable")
@@ -776,15 +789,17 @@ func (ins *Instance) Process(text []rune) []bool {
 			}
 		}
 	}
-	if len(out) < len(text) {
-		panic(fmt.Sprintf("internal error: produced %d values for %d runes", len(out), len(text)))
+	if len(res.Breaks) < len(text) {
+		panic(fmt.Sprintf("internal error: produced %d values for %d runes", len(res.Breaks), len(text)))
 	}
-	if len(out) == len(text) {
-		out = append(out, true)
+	if len(res.Breaks) == len(text) {
+		res.Breaks = append(res.Breaks, true)
 	} else {
-		out[len(text)] = true
+		res.Breaks[len(text)] = true
 	}
-	return out[:len(text)+1]
+
+	res.Breaks = res.Breaks[:len(text)+1]
+	return res
 }
 
 func runeClass(r rune) breakClass {
