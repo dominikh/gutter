@@ -57,6 +57,28 @@ unnecessary are removed.
 
 TODO
 
+### Native, but not _native_
+
+Go compiles to machine code and Gutter talks directly to the operating system.
+This makes Gutter--compared to browser-based UI frameworks like
+Electron--native.
+
+We do not, however, use the "native" GUI toolkits of the operating systems.
+Using native toolkits is portrayed as being desirable to achieve a uniform look
+& feel. However, out of Linux, Windows, and macOS, only macOS truly has a native
+toolkit. Linux at a minimum has GTK and Qt (and every major version of these
+feels decidely different from previous versions and is backwards incompatible),
+but also less-used options such as Motif. Windows has the Win32 API, WinForms,
+WPF, UWP, WinUI 3, and DirectUI. A modern Windows installation will have
+applications using all of these frameworks. It is therefore inherently
+impossible to achieve a uniform experience on Linux or Windows.
+
+We could have chosen one "native" toolkit per platform and tried to hide their
+differences (à la wxWidgets), or used GTK or Qt to feel "native" on at
+least one platform. However, Gutter is ultimately an experimental project that
+tries to improve upon current GUIs by innovating, not by being limited to the
+lowest commen denominator.
+
 ## Known shortcomings that may be fixed by contributors
 
 - No support for correct line breaking of Thai
