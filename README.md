@@ -53,6 +53,109 @@ unnecessary are removed.
 - not relying on fontconfig
 - not supporting old encodings like the Macintosh code pages, Big5, etc. Unicode or go home.
 
+#### Font fallback
+
+In DTP and related typesetting tasks, users will generally explicitly select
+desirable fonts that cover all of the text they need to display, and embed these
+fonts in the document.
+
+GUIs, like websites, do not have this affordance, if they have to display
+externally controlled text (e.g. user-generated content). It is not feasible to
+have an opinion on fonts to use for every single script and language, and even
+if it were, it is not feasible to bundle all of the fonts due to size
+constraints. At best, we can specify a limited set of fonts for the scripts we
+care about the most. For the rest, we have to rely on automatic fallback to
+whatever fonts the user has available. For example, a Persian user will have
+adequate fonts covering the Arabic script installed on their system, even if we
+didn't choose a specific font for them.
+
+Different fonts can, however, have vastly different appearances due to style and
+metrics. Ideally, when selecting fallback fonts, we'd select fonts that match
+our overall style.
+
+It is also important to differentiate between scripts and languages, as multiple
+languages use the same script, but with different visual appearances. For
+example, Russian and Ukrainian Cyrillic have differently looking glyphs, but
+they use the same Unicode code points. See also [Han
+unification](https://en.wikipedia.org/wiki/Han_unification). Often we won't know
+the language of some text, but when we do, it'd be highly desirable to select
+the right font, and we should probably fall back to the user's locale to break
+ties in any case.
+
+Ideally, the operating system would provide us with the necessary APIs for
+selecting fonts based on style, metrics, script, language, and Unicode coverage
+(as fonts may support subsets of a script only).
+
+- TODO font metadata (it's hella inconsistent)
+- TODO fontforge configuration (it's hella lacking)
+- TODO fontforge API (doesn't use BCP 47 tags, making selecting by script harder)
+
+We _could_ depend on Noto fonts and forego font fallback altogether, requiring
+users to install the appropriate Noto fonts if they want to be able to see some
+script. But we can't make that a hard requirement, as all fonts combined are
+hundreds of MB large. Additionally, a lot of users have strong opinions on fonts
+and want to use their preferred font, not the default. Furthermore, programs
+might use custom fonts with custom symbols or emoji.
+
+- TODO mixed script text, and what do we do about Latin embedded in CKJ text?
+  use our default Latin font, or use the Latins from the CKJ font?
+
+##### Font metadata
+
+The OS/2 table has 127 bits for describing blocks of Unicode that are
+"functional". It is not defined what that means, whether all code points in a
+block have to be supported or if not then how many, etc. Different font creation
+tools interpret it differently. Also, as it operates on Unicode blocks, it
+cannot make any statements on _language_ support (and blocks aren't a perfect
+stand-in for scripts, either). Also, as of Unicode 16, there are 338 blocks,
+which is more than 127. Thus, when we actually care about Unicode coverage, we
+have to scan cmap tables and can't rely on the bits.
+
+The OS/2 table has the `sFamilyClass` field (the IBM Font Family
+Classification), which classifies a font based on its style and substyle. This
+field is very Western-specific, with 6 styles dedicated to different kinds of
+serifs (each with their own substyles!), 1 for sans serif, 1 for ornamentals, 1
+for scripts (i.e. handwriting) and 1 for symbolic fonts. The field cannot
+accurately classify fonts for Asian, Arabic, Indian, or other scripts. A lot of
+fonts populate this field, but a lot of fonts don't. Even within one family of
+fonts, use of the field can be spotty: all variants of IBM Plex Sans specify it,
+with the exception of IBM Plex Sans Condensed. What's special about the
+condensed font? I don't know.
+
+The OS/2 table has the `panose` field which is the PANOSE classification number.
+This is similar so `sFamilyClass` but provides more fine-grained information
+about a font's visual appearance. As specified, it only covers Latin fonts. It
+is not clear whether use of PANOSE requires a license from Hewlett-Packard.
+Surprisingly, the majority of fonts we checked provide this information. It is
+not clear, however, whether they provide _accurate_ information. Discussions on
+the internet (e.g.
+https://typedrawers.com/discussion/1299/automating-panose-data) suggest that
+nobody actually cares about PANOSE and a lot of values are cargo culted or
+guesstimated. Apparently there is
+https://github.com/googlefonts/panose-devanagari from 2014 for extending PANOSE
+to cover Devanagari. Not even Google's Noto fonts use it.
+https://lists.freedesktop.org/archives/fontconfig/2019-June/006528.html says:
+"On my system out of 7099 fonts only 975 contain Panose information."
+
+Neither sFamilyClass nor panose seem to be covered by any tables for variable
+fonts.
+
+OpenType 1.8 (2016) added the `meta` table and the `dlng` and `slng` tags. These
+specify the languages or scripts a font has been designed for, and the languages
+or scripts that a font supports, using BCP 47 tags. For example, a Japanese font
+will have been designed for Japanese, but probably also have basic support for
+Latin.
+
+The meta table isn't commonly used. Out of all Noto fonts, only one has it. Web
+core fonts (such as Arial) don't have it because they predate it and don't get
+updated anymore. The same is true for a lot of established open source fonts, as
+they're older than OpenType 1.8 and are considered "done". IBM Plex fonts do
+have meta tables.
+
+- TODO other contexts where we want rich metadata: applications that let users
+  select fonts. we want a font selector that can filter by styles and language
+  support and whatnot.
+
 ### Pixel-aligned UI elements
 
 TODO
