@@ -1425,6 +1425,45 @@ func (p *Paragraph) runs(levels []int8, start int) (runs []Run, minOdd int8) {
 	return runs, minOdd
 }
 
+// ReorderRuns takes a slice of runs and reorders them in visual order. The
+// order is stored in the indices slice, which must have the same length as the
+// runs slice.
+func (p *Paragraph) ReorderRuns(runs []Run, indices []int) {
+	// FIXME provide some way to take L1 into consideration
+	if len(indices) != len(runs) {
+		panic("indices must be at least as long as runs")
+	}
+	minOdd := int8(math.MaxInt8)
+	for _, r := range runs {
+		if r.Level%2 != 0 && r.Level < minOdd {
+			minOdd = r.Level
+		}
+	}
+	for i := range runs {
+		indices[i] = i
+	}
+	if minOdd < math.MaxInt8 {
+		for i := p.highestLevel; i >= minOdd; i-- {
+			startIndex := -1
+			for j := range indices {
+				run := runs[j]
+				if run.Level >= i {
+					if startIndex == -1 {
+						startIndex = j
+					}
+				} else if startIndex != -1 {
+					slices.Reverse(indices[startIndex:j])
+					startIndex = -1
+				}
+			}
+
+			if startIndex != -1 {
+				slices.Reverse(indices[startIndex:])
+			}
+		}
+	}
+}
+
 // Order returns runs for the text from start to end, in visual order.
 func (p *Paragraph) Order(start, end int) []Run {
 	levels := make([]int8, end-start)
