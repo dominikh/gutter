@@ -13,6 +13,55 @@ import (
 	"honnef.co/go/gutter/maybe"
 )
 
+// TODO Document how
+// - https://github.com/w3c/csswg-drafts/issues/4397
+// - https://github.com/w3c/i18n-discuss/wiki/Generic-font-families
+// affected our choices for FontGenre.
+
+type FontGenre int
+
+const (
+	NoGenre FontGenre = iota
+	// UI defaults to the most appropriate or common genre for displaying UI in a given
+	// script and language. Most of the time, that is Sans.
+	UI
+	Sans
+	Serif
+	Cursive
+	Monospace
+	Emoji // XXX figure out fate of this
+	Kufic // XXX figure out fate of this
+	Rashi // XXX figure out fate of this
+	// Kai is a calligraphic style for Chinese.
+	Kai
+	// Fang Song is an intermediate form between Song and Kai.
+	FangSong
+	Nastaliq
+	// Math selects a combination of latin, greek, math, and symbol fonts suitable for
+	// displaying math.
+	Math
+
+	// Hei is the Chinese equivalent to Sans.
+	Hei = Sans
+	// Gothic is the Japanese equivalent to Sans.
+	Gothic = Sans
+	// Gulim is the Korean equivalent to Sans.
+	Gulim = Sans
+	// The Arabic Kufi style roughly maps to Sans.
+	Kufi = Sans
+
+	// Song is the Chinese equivalent to Serif.
+	Song = Serif
+	// Ming is a synonym for Song.
+	Ming = Song
+	// Mincho is the Japanese synonym for Song.
+	Mincho = Song
+	// Batang is the Korean equivalent to Serif.
+	Batang = Serif
+	// The Arabic Naskh style roughly maps to Serif.
+	Naskh = Serif
+)
+
 func Tag(s string) xlanguage.Tag {
 	return xlanguage.MustParse(s)
 }
