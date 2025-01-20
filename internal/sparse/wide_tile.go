@@ -15,20 +15,19 @@ type wideTile struct {
 	cmds []cmd
 }
 
-// OPT don't use an interface
-type cmd any
+type cmdType uint8
 
-type cmdFill struct {
-	x     uint32
-	width uint32
-	color [4]float32
-}
+const (
+	cmdFill cmdType = iota
+	cmdStrip
+)
 
-type cmdStrip struct {
+type cmd struct {
+	alphaIdx int
 	x        uint32
 	width    uint32
-	alphaIdx int
 	color    [4]float32
+	typ      cmdType
 }
 
 func (wt *wideTile) fill(x, width uint32, c [4]float32) {
@@ -36,7 +35,7 @@ func (wt *wideTile) fill(x, width uint32, c [4]float32) {
 		wt.cmds = wt.cmds[:0]
 		wt.bg = c
 	} else {
-		wt.cmds = append(wt.cmds, cmdFill{x, width, c})
+		wt.cmds = append(wt.cmds, cmd{typ: cmdFill, x: x, width: width, color: c})
 	}
 }
 

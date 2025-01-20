@@ -66,7 +66,7 @@ func (f *fine) pack(x, y int) {
 }
 
 func (f *fine) run_cmd(cmd cmd, alphas []uint32) {
-	switch cmd := cmd.(type) {
+	switch cmd.typ {
 	case cmdFill:
 		f.fill(int(cmd.x), int(cmd.width), cmd.color)
 	case cmdStrip:

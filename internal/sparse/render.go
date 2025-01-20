@@ -8,6 +8,7 @@ package sparse
 import (
 	"image"
 	"slices"
+	"time"
 
 	"honnef.co/go/curve"
 )
@@ -68,6 +69,8 @@ func (ctx *CsRenderCtx) Reset() {
 		clear(tile.cmds)
 		tile.cmds = tile.cmds[:0]
 	}
+
+	ctx.alphas = ctx.alphas[:0]
 }
 
 func (ctx *CsRenderCtx) RenderToPixmap(pixmap *image.RGBA) {
@@ -96,14 +99,18 @@ func (ctx *CsRenderCtx) render_path(color [4]float32) {
 
 	// TODO: need to make sure tiles contained in viewport - we'll likely
 	// panic otherwise.
+	t1 := time.Now()
 	makeTiles(ctx.line_buf, &ctx.tile_buf)
+	t2 := time.Now()
 	slices.SortFunc(ctx.tile_buf, tile.cmp)
 	// for i, t := range ctx.tile_buf {
 	// 	if t == (tile{70, 24, 4294967295, 429490176}) {
 	// 		ctx.tile_buf[i] = tile{70, 24, 1, 429490176}
 	// 	}
 	// }
+	t3 := time.Now()
 	renderStripsScalar(ctx.tile_buf, &ctx.strip_buf, &ctx.alphas)
+	t4 := time.Now()
 	width_tiles := (ctx.width + WIDE_TILE_WIDTH - 1) / WIDE_TILE_WIDTH
 	// XXX can this be a range over ctx.strip_buf or does its length change during the loop?
 	for i := range len(ctx.strip_buf) - 1 {
@@ -127,7 +134,8 @@ func (ctx *CsRenderCtx) render_path(color [4]float32) {
 		for xtile := xtile0; xtile < xtile1; xtile++ {
 			x_tile_rel := x % WIDE_TILE_WIDTH
 			width := min(x1, uint32((xtile+1)*WIDE_TILE_WIDTH)) - x
-			cmd := cmdStrip{
+			cmd := cmd{
+				typ:      cmdStrip,
 				x:        x_tile_rel,
 				width:    width,
 				alphaIdx: int(col),
@@ -150,6 +158,15 @@ func (ctx *CsRenderCtx) render_path(color [4]float32) {
 			}
 		}
 	}
+	t5 := time.Now()
+
+	_ = t1
+	_ = t2
+	_ = t3
+	_ = t4
+	_ = t5
+
+	// log.Printf("make tiles: %s (%d); sort: %s; render strips: %s; make wide tiles: %s", t2.Sub(t1), len(ctx.tile_buf), t3.Sub(t2), t4.Sub(t3), t5.Sub(t4))
 }
 
 // impl CsRenderCtx {
@@ -179,7 +196,7 @@ func (ctx *CsRenderCtx) render_path(color [4]float32) {
 //     }
 // }
 
-func (ctx *CsRenderCtx) setAffine(aff curve.Affine) {
+func (ctx *CsRenderCtx) SetAffine(aff curve.Affine) {
 	ctx.transform = aff
 }
 

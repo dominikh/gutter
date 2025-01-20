@@ -9,8 +9,7 @@ import (
 )
 
 func satConv[D constraints.Unsigned, S ~float32 | ~float64](x S) D {
-	var max D
-	max--
+	max := ^D(0)
 	if x != x || x < 0 {
 		return 0
 	} else if x > S(max) {

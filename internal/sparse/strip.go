@@ -90,14 +90,21 @@ func (t tile) cmp(b tile) int {
 }
 
 func clamp[T float32 | int32](v, low, high T) T {
-	return min(max(v, low), high)
+	// The if/elses are cheaper than min(max(v, low), high) because min/max are
+	// stricter about NaNs.
+	if v < low {
+		return low
+	} else if v > high {
+		return high
+	} else {
+		return v
+	}
 }
 
 func renderStripsScalar(tiles []tile, strip_buf *[]strip, alpha_buf *[]uint32) {
 	*strip_buf = (*strip_buf)[:0]
 
 	strip_start := true
-	// XXX why do we keep accumulating alphas across calls to this function?
 	cols := uint32(len(*alpha_buf))
 	prev_tile := &tiles[0]
 	fp := prev_tile.footprint()
@@ -115,18 +122,22 @@ func renderStripsScalar(tiles []tile, strip_buf *[]strip, alpha_buf *[]uint32) {
 			}
 			x0 := uint32(bits.TrailingZeros32(fp))
 			x1 := uint32(32 - bits.LeadingZeros32(fp))
-			areas := [4][4]float32{}
-			for m := range 4 {
-				for n := range 4 {
-					areas[m][n] = float32(start_delta)
-				}
+			area := [4]float32{
+				float32(start_delta),
+				float32(start_delta),
+				float32(start_delta),
+				float32(start_delta),
 			}
+			areas := [4][4]float32{area, area, area, area}
+
 			for j := seg_start; j < i; j++ {
 				tile := &tiles[j]
 				delta += tile.delta()
 				p0 := unpackVec2(tile.p0)
 				p1 := unpackVec2(tile.p1)
 				slope := (p1.x - p0.x) / (p1.y - p0.y)
+				_ = areas[x0]
+				_ = areas[x1-1]
 				for x := x0; x < x1; x++ {
 					startx := p0.x - float32(x)
 					for y := range 4 {
