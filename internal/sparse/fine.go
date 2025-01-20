@@ -53,14 +53,10 @@ func (f *fine) pack(x, y int) {
 			}
 
 			target_ix := line_ix + i*4
-			// OPT we don't need any of these intermediaries
-			var rgba_f32 [4]float32
-			copy(rgba_f32[:], f.scratch[(i*STRIP_HEIGHT+j)*4:])
-			var rgba_u8 [4]uint8
-			for k, x := range rgba_f32 {
-				rgba_u8[k] = uint8((x * 255) + 0.5)
+			out := f.out_buf[target_ix:][:4]
+			for k, x := range f.scratch[(i*STRIP_HEIGHT+j)*4:][:4] {
+				out[k] = uint8((x * 255) + 0.5)
 			}
-			copy(f.out_buf[target_ix:], rgba_u8[:])
 		}
 	}
 }
