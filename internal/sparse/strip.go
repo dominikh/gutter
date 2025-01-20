@@ -159,7 +159,7 @@ func renderStripsScalar(tiles []tile, strip_buf *[]strip, alpha_buf *[]uint32) {
 				for y := range 4 {
 					area := areas[x][y]
 					// nonzero winding number rule
-					area_u8 := uint32(math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
+					area_u8 := satConv[uint32](math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
 					alphas += area_u8 << (y * 8)
 				}
 				*alpha_buf = append(*alpha_buf, alphas)

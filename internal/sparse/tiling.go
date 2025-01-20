@@ -39,22 +39,14 @@ const FRAC_TILE_SCALE = TILE_SCALE * 4
 
 func scaleUp(z float32) uint32 {
 	v := math.Round(float64(z * FRAC_TILE_SCALE))
-	// The original Rust code uses 'as' to convert from float to int, which is a
-	// saturating cast.
-	if v < 0 {
-		return 0
-	} else if v > math.MaxUint32 {
-		return math.MaxUint32
-	} else {
-		return uint32(v)
-	}
+	return satConv[uint32](v)
 }
 
 // Note: this assumes values in range.
 func (v vec2) pack() uint32 {
 	// TODO: scale should depend on tile size
-	x := uint32(math.Round(float64(v.x * TILE_SCALE)))
-	y := uint32(math.Round(float64(v.y * TILE_SCALE)))
+	x := satConv[uint32](math.Round(float64(v.x * TILE_SCALE)))
+	y := satConv[uint32](math.Round(float64(v.y * TILE_SCALE)))
 	return (y << 16) + x
 }
 
@@ -80,7 +72,7 @@ func (v vec2) mul(f float32) vec2 {
 }
 
 func span(a, b float32) uint32 {
-	return uint32(max(ceil32(max(a, b))-floor32(min(a, b)), 1))
+	return satConv[uint32](max(ceil32(max(a, b))-floor32(min(a, b)), 1))
 }
 
 func floor32(f float32) float32 {
@@ -141,8 +133,8 @@ func makeTiles(lines []flatLine, tile_buf *[]tile) {
 				packed1 := (yfrac1 << 16) + xfrac1
 				// 1x1 tile
 				*tile_buf = append(*tile_buf, tile{
-					x:  uint16(x),
-					y:  uint16(y),
+					x:  satConv[uint16](x),
+					y:  satConv[uint16](y),
 					p0: packed0,
 					p1: packed1,
 				})
@@ -162,20 +154,20 @@ func makeTiles(lines []flatLine, tile_buf *[]tile) {
 					xfrac := max(scaleUp(xclip), 1)
 					packed := (yclip << 16) + xfrac
 					*tile_buf = append(*tile_buf, tile{
-						x:  uint16(x),
-						y:  uint16(y + float32(i)*sign),
+						x:  satConv[uint16](x),
+						y:  satConv[uint16](y + float32(i)*sign),
 						p0: last_packed,
 						p1: packed,
 					})
 					// flip y between top and bottom of tile
-					last_packed = packed ^ ((uint32(FRAC_TILE_SCALE)) << 16)
+					last_packed = packed ^ (FRAC_TILE_SCALE << 16)
 				}
 				yfrac1 := scaleUp(s1.y - (y + float32(count_y-1)*sign))
 				packed1 := (yfrac1 << 16) + xfrac1
 
 				*tile_buf = append(*tile_buf, tile{
-					x:  uint16(x),
-					y:  uint16(y + float32(count_y-1)*sign),
+					x:  satConv[uint16](x),
+					y:  satConv[uint16](y + float32(count_y-1)*sign),
 					p0: last_packed,
 					p1: packed1,
 				})
@@ -196,21 +188,21 @@ func makeTiles(lines []flatLine, tile_buf *[]tile) {
 				yfrac := max(scaleUp(yclip), 1)
 				packed := (yfrac << 16) + xclip
 				*tile_buf = append(*tile_buf, tile{
-					x:  uint16(x + float32(i)*sign),
-					y:  uint16(y),
+					x:  satConv[uint16](x + float32(i)*sign),
+					y:  satConv[uint16](y),
 					p0: last_packed,
 					p1: packed,
 				})
 				// flip x between left and right of tile
-				last_packed = packed ^ (uint32(FRAC_TILE_SCALE))
+				last_packed = packed ^ FRAC_TILE_SCALE
 			}
 			xfrac1 := scaleUp(s1.x - (x + float32(count_x-1)*sign))
 			yfrac1 := scaleUp(s1.y - y)
 			packed1 := (yfrac1 << 16) + xfrac1
 
 			*tile_buf = append(*tile_buf, tile{
-				x:  uint16(x + float32(count_x-1)*sign),
-				y:  uint16(y),
+				x:  satConv[uint16](x + float32(count_x-1)*sign),
+				y:  satConv[uint16](y),
 				p0: last_packed,
 				p1: packed1,
 			})
@@ -249,28 +241,28 @@ func makeTiles(lines []flatLine, tile_buf *[]tile) {
 					xfrac := max(scaleUp(x_intersect), 1) // maybe should clamp?
 					packed := (yclip << 16) + xfrac
 					*tile_buf = append(*tile_buf, tile{
-						x:  uint16(xi),
-						y:  uint16(yi),
+						x:  satConv[uint16](xi),
+						y:  satConv[uint16](yi),
 						p0: last_packed,
 						p1: packed,
 					})
 					t_clipy += abs32(recip_dy)
 					yi += signy
-					last_packed = packed ^ ((uint32(FRAC_TILE_SCALE)) << 16)
+					last_packed = packed ^ (FRAC_TILE_SCALE << 16)
 				} else {
 					// intersected with vertical grid line
 					y_intersect := s0.y + (s1.y-s0.y)*t_clipx - yi
 					yfrac := max(scaleUp(y_intersect), 1) // maybe should clamp?
 					packed := (yfrac << 16) + xclip
 					*tile_buf = append(*tile_buf, tile{
-						x:  uint16(xi),
-						y:  uint16(yi),
+						x:  satConv[uint16](xi),
+						y:  satConv[uint16](yi),
 						p0: last_packed,
 						p1: packed,
 					})
 					t_clipx += abs32(recip_dx)
 					xi += signx
-					last_packed = packed ^ (uint32(FRAC_TILE_SCALE))
+					last_packed = packed ^ FRAC_TILE_SCALE
 				}
 			}
 			xfrac1 := scaleUp(s1.x - xi)
@@ -278,8 +270,8 @@ func makeTiles(lines []flatLine, tile_buf *[]tile) {
 			packed1 := (yfrac1 << 16) + xfrac1
 
 			*tile_buf = append(*tile_buf, tile{
-				x:  uint16(xi),
-				y:  uint16(yi),
+				x:  satConv[uint16](xi),
+				y:  satConv[uint16](yi),
 				p0: last_packed,
 				p1: packed1,
 			})
