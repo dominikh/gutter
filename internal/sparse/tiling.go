@@ -18,9 +18,8 @@ const TILE_SCALE_Y = 1.0 / TILE_HEIGHT
 
 // / This is just Line but f32
 type flatLine struct {
-	// should these be vec2?
-	p0 [2]float32
-	p1 [2]float32
+	p0 vec2
+	p1 vec2
 }
 
 type vec2 struct {
@@ -100,16 +99,8 @@ func sign32(f float32) float32 {
 func makeTiles(lines iter.Seq[flatLine], tile_buf *[]tile) {
 	*tile_buf = (*tile_buf)[:0]
 	for line := range lines {
-		p0 := vec2{
-			x: line.p0[0],
-			y: line.p0[1],
-		}
-		p1 := vec2{
-			x: line.p1[0],
-			y: line.p1[1],
-		}
-		s0 := p0.mul(TILE_SCALE_X)
-		s1 := p1.mul(TILE_SCALE_Y)
+		s0 := line.p0.mul(TILE_SCALE_X)
+		s1 := line.p1.mul(TILE_SCALE_Y)
 		count_x := span(s0.x, s1.x)
 		count_y := span(s0.y, s1.y)
 		x := floor32(s0.x)

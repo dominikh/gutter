@@ -39,15 +39,15 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLi
 				p0 = el.P0
 			case curve.LineToKind:
 				p := el.P0
-				pt0 := [2]float32{float32(p0.X), float32(p0.Y)}
-				pt1 := [2]float32{float32(p.X), float32(p.Y)}
+				pt0 := vec2{float32(p0.X), float32(p0.Y)}
+				pt1 := vec2{float32(p.X), float32(p.Y)}
 				if !yield(flatLine{pt0, pt1}) {
 					return
 				}
 				p0 = p
 			case curve.ClosePathKind:
-				pt0 := [2]float32{float32(p0.X), float32(p0.Y)}
-				pt1 := [2]float32{float32(start.X), float32(start.Y)}
+				pt0 := vec2{float32(p0.X), float32(p0.Y)}
+				pt1 := vec2{float32(start.X), float32(start.Y)}
 				if pt0 != pt1 {
 					if !yield(flatLine{pt0, pt1}) {
 						return
