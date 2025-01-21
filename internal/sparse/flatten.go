@@ -7,6 +7,8 @@ package sparse
 
 import (
 	"fmt"
+	"iter"
+	"slices"
 
 	"honnef.co/go/curve"
 )
@@ -20,47 +22,52 @@ import (
 // / The flattening tolerance
 const TOL = 0.25
 
-func fill(path curve.BezPath, affine curve.Affine, line_buf *[]flatLine) {
-	*line_buf = (*line_buf)[:0]
-	var start, p0 curve.Point
-	iter := func(yield func(el curve.PathElement) bool) {
-		for _, el := range path {
-			if !yield(el.Transform(affine)) {
-				return
+func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLine] {
+	return func(yield func(flatLine) bool) {
+		var start, p0 curve.Point
+		iter := func(yield func(el curve.PathElement) bool) {
+			for el := range path {
+				if !yield(el.Transform(affine)) {
+					return
+				}
 			}
 		}
-	}
-	for el := range curve.Flatten(iter, TOL) {
-		switch el.Kind {
-		case curve.MoveToKind:
-			start = el.P0
-			p0 = el.P0
-		case curve.LineToKind:
-			p := el.P0
-			pt0 := [2]float32{float32(p0.X), float32(p0.Y)}
-			pt1 := [2]float32{float32(p.X), float32(p.Y)}
-			*line_buf = append(*line_buf, flatLine{pt0, pt1})
-			p0 = p
-		case curve.ClosePathKind:
-			pt0 := [2]float32{float32(p0.X), float32(p0.Y)}
-			pt1 := [2]float32{float32(start.X), float32(start.Y)}
-			if pt0 != pt1 {
-				*line_buf = append(*line_buf, flatLine{pt0, pt1})
+		for el := range curve.Flatten(iter, TOL) {
+			switch el.Kind {
+			case curve.MoveToKind:
+				start = el.P0
+				p0 = el.P0
+			case curve.LineToKind:
+				p := el.P0
+				pt0 := [2]float32{float32(p0.X), float32(p0.Y)}
+				pt1 := [2]float32{float32(p.X), float32(p.Y)}
+				if !yield(flatLine{pt0, pt1}) {
+					return
+				}
+				p0 = p
+			case curve.ClosePathKind:
+				pt0 := [2]float32{float32(p0.X), float32(p0.Y)}
+				pt1 := [2]float32{float32(start.X), float32(start.Y)}
+				if pt0 != pt1 {
+					if !yield(flatLine{pt0, pt1}) {
+						return
+					}
+				}
+			default:
+				panic(fmt.Sprintf("unreachable: %v", el.Kind))
 			}
-		default:
-			panic(fmt.Sprintf("unreachable: %v", el.Kind))
 		}
 	}
 }
 
-func stroke(path curve.BezPath, style curve.Stroke, affine curve.Affine, line_buf *[]flatLine) {
+func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.Affine) iter.Seq[flatLine] {
 	iter := func(yield func(el curve.PathElement) bool) {
-		for _, el := range path {
+		for el := range path {
 			if !yield(el.Transform(affine)) {
 				return
 			}
 		}
 	}
-	path = curve.StrokePath(iter, style, curve.StrokeOpts{}, TOL)
-	fill(path, curve.Identity, line_buf)
+	stroked := curve.StrokePath(iter, style, curve.StrokeOpts{}, TOL)
+	return fill(slices.Values(stroked), curve.Identity)
 }

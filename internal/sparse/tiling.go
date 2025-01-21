@@ -6,6 +6,7 @@
 package sparse
 
 import (
+	"iter"
 	"math"
 )
 
@@ -96,9 +97,9 @@ func sign32(f float32) float32 {
 	}
 }
 
-func makeTiles(lines []flatLine, tile_buf *[]tile) {
+func makeTiles(lines iter.Seq[flatLine], tile_buf *[]tile) {
 	*tile_buf = (*tile_buf)[:0]
-	for _, line := range lines {
+	for line := range lines {
 		p0 := vec2{
 			x: line.p0[0],
 			y: line.p0[1],

@@ -7,6 +7,7 @@ package sparse
 
 import (
 	"image"
+	"iter"
 	"log"
 	"slices"
 	"time"
@@ -42,7 +43,6 @@ type CsRenderCtx struct {
 
 	/// These are all scratch buffers, to be used for path rendering. They're here solely
 	/// so the allocations can be reused.
-	line_buf  []flatLine
 	tile_buf  []tile
 	strip_buf []strip
 
@@ -96,13 +96,13 @@ func (ctx *CsRenderCtx) RenderToPixmap(pixmap *image.RGBA) {
 	}
 }
 
-func (ctx *CsRenderCtx) render_path(color [4]float32) {
+func (ctx *CsRenderCtx) render_path(path iter.Seq[flatLine], color [4]float32) {
 	// XXX support a brush
 
 	// TODO: need to make sure tiles contained in viewport - we'll likely
 	// panic otherwise.
 	t1 := time.Now()
-	makeTiles(ctx.line_buf, &ctx.tile_buf)
+	makeTiles(path, &ctx.tile_buf)
 	t2 := time.Now()
 	slices.SortFunc(ctx.tile_buf, tile.cmp)
 	// for i, t := range ctx.tile_buf {
@@ -202,18 +202,18 @@ func (ctx *CsRenderCtx) getAffine() curve.Affine {
 	return ctx.transform
 }
 
-func (ctx *CsRenderCtx) Fill(path curve.BezPath, color [4]float32) {
+func (ctx *CsRenderCtx) Fill(path iter.Seq[curve.PathElement], color [4]float32) {
 	// XXX support brushes
 	affine := ctx.getAffine()
-	fill(path, affine, &ctx.line_buf)
-	ctx.render_path(color)
+	it := fill(path, affine)
+	ctx.render_path(it, color)
 }
 
-func (ctx *CsRenderCtx) Stroke(path curve.BezPath, stroke_ curve.Stroke, color [4]float32) {
+func (ctx *CsRenderCtx) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color [4]float32) {
 	// XXX support brushes
 	affine := ctx.getAffine()
-	stroke(path, stroke_, affine, &ctx.line_buf)
-	ctx.render_path(color)
+	it := stroke(path, stroke_, affine)
+	ctx.render_path(it, color)
 }
 
 // impl RenderCtx for CsRenderCtx {
