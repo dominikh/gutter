@@ -7,10 +7,12 @@ package sparse
 
 import (
 	"image"
+	"log"
 	"slices"
 	"time"
 
 	"honnef.co/go/curve"
+	"honnef.co/go/safeish"
 )
 
 // use std::collections::BTreeMap;
@@ -77,7 +79,7 @@ func (ctx *CsRenderCtx) RenderToPixmap(pixmap *image.RGBA) {
 	fine := fine{
 		width:   pixmap.Bounds().Dx(),
 		height:  pixmap.Bounds().Dy(),
-		out_buf: pixmap.Pix,
+		out_buf: safeish.SliceCast[[][4]byte](pixmap.Pix),
 	}
 	width_tiles := (ctx.width + WIDE_TILE_WIDTH - 1) / WIDE_TILE_WIDTH
 	height_tiles := (ctx.height + STRIP_HEIGHT - 1) / STRIP_HEIGHT
@@ -160,13 +162,9 @@ func (ctx *CsRenderCtx) render_path(color [4]float32) {
 	}
 	t5 := time.Now()
 
-	_ = t1
-	_ = t2
-	_ = t3
-	_ = t4
-	_ = t5
-
-	// log.Printf("make tiles: %s (%d); sort: %s; render strips: %s; make wide tiles: %s", t2.Sub(t1), len(ctx.tile_buf), t3.Sub(t2), t4.Sub(t3), t5.Sub(t4))
+	if false {
+		log.Printf("make tiles: %s (%d); sort: %s; render strips: %s; make wide tiles: %s", t2.Sub(t1), len(ctx.tile_buf), t3.Sub(t2), t4.Sub(t3), t5.Sub(t4))
+	}
 }
 
 // impl CsRenderCtx {
