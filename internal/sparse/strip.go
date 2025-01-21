@@ -12,6 +12,8 @@ import (
 	"structs"
 )
 
+const stripHeight = 4
+
 type loc struct {
 	x, y uint16
 }
@@ -40,11 +42,11 @@ func (l loc) sameRow(other loc) bool {
 }
 
 func newTile(l loc, fp footprint, delta int32) tile {
-	p0 := uint32(bits.TrailingZeros32(fp) * TILE_SCALE)
+	p0 := uint32(bits.TrailingZeros32(fp) * tileScale)
 	if delta == -1 {
 		p0 += 65536
 	}
-	p1 := uint32((32 - bits.LeadingZeros32(fp)) * TILE_SCALE)
+	p1 := uint32((32 - bits.LeadingZeros32(fp)) * tileScale)
 	if delta == 1 {
 		p1 += 65536
 	}
@@ -64,11 +66,11 @@ func (t tile) loc() loc {
 }
 
 func (t tile) footprint() footprint {
-	x0 := float64(t.p0&0xffff) * (1.0 / TILE_SCALE)
-	x1 := float64(t.p1&0xffff) * (1.0 / TILE_SCALE)
+	x0 := float64(t.p0&0xffff) * (1.0 / tileScale)
+	x1 := float64(t.p1&0xffff) * (1.0 / tileScale)
 	// TODO: On CPU, might be better to do this as fixed point
 	xmin := uint32(math.Floor(min(x0, x1)))
-	xmax := min(max(xmin+1, uint32(math.Ceil(max(x0, x1)))), TILE_WIDTH)
+	xmax := min(max(xmin+1, uint32(math.Ceil(max(x0, x1)))), tileWidth)
 	return (1 << xmax) - (1 << xmin)
 }
 
@@ -101,36 +103,36 @@ func clamp[T float32 | int32](v, low, high T) T {
 	}
 }
 
-func renderStripsScalar(tiles []tile, strip_buf []strip, alpha_buf []uint32) ([]strip, []uint32) {
-	strip_buf = strip_buf[:0]
+func renderStripsScalar(tiles []tile, stripBuf []strip, alphaBuf []uint32) ([]strip, []uint32) {
+	stripBuf = stripBuf[:0]
 
-	strip_start := true
-	cols := uint32(len(alpha_buf))
-	prev_tile := &tiles[0]
-	fp := prev_tile.footprint()
-	seg_start := 0
+	stripStart := true
+	cols := uint32(len(alphaBuf))
+	prevTile := &tiles[0]
+	fp := prevTile.footprint()
+	segStart := 0
 	delta := 0
 	// Note: the input should contain a sentinel tile, to avoid having
 	// logic here to process the final strip.
 	for i := 1; i < len(tiles); i++ {
 		tile := &tiles[i]
-		if prev_tile.loc() != tile.loc() {
-			start_delta := delta
-			same_strip := prev_tile.loc().sameStrip(tile.loc())
-			if same_strip {
+		if prevTile.loc() != tile.loc() {
+			startDelta := delta
+			sameStrip := prevTile.loc().sameStrip(tile.loc())
+			if sameStrip {
 				fp |= 8
 			}
 			x0 := uint32(bits.TrailingZeros32(fp))
 			x1 := uint32(32 - bits.LeadingZeros32(fp))
 			area := [4]float32{
-				float32(start_delta),
-				float32(start_delta),
-				float32(start_delta),
-				float32(start_delta),
+				float32(startDelta),
+				float32(startDelta),
+				float32(startDelta),
+				float32(startDelta),
 			}
 			areas := [4][4]float32{area, area, area, area}
 
-			for j := seg_start; j < i; j++ {
+			for j := segStart; j < i; j++ {
 				tile := &tiles[j]
 				delta += tile.delta()
 				p0 := unpackVec2(tile.p0)
@@ -170,38 +172,38 @@ func renderStripsScalar(tiles []tile, strip_buf []strip, alpha_buf []uint32) ([]
 				for y := range 4 {
 					area := areas[x][y]
 					// nonzero winding number rule
-					area_u8 := satConv[uint32](math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
-					alphas += area_u8 << (y * 8)
+					areaU8 := satConv[uint32](math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
+					alphas += areaU8 << (y * 8)
 				}
-				alpha_buf = append(alpha_buf, alphas)
+				alphaBuf = append(alphaBuf, alphas)
 			}
 
-			if strip_start {
-				xy := (1<<18)*uint32(prev_tile.y) + 4*uint32(prev_tile.x) + x0
+			if stripStart {
+				xy := (1<<18)*uint32(prevTile.y) + 4*uint32(prevTile.x) + x0
 				strip := strip{
 					xy:      xy,
 					col:     cols,
-					winding: int32(start_delta),
+					winding: int32(startDelta),
 				}
-				strip_buf = append(strip_buf, strip)
+				stripBuf = append(stripBuf, strip)
 			}
 			cols += x1 - x0
-			if same_strip {
+			if sameStrip {
 				fp = 1
 			} else {
 				fp = 0
 			}
-			strip_start = !same_strip
-			seg_start = i
-			if !prev_tile.loc().sameRow(tile.loc()) {
+			stripStart = !sameStrip
+			segStart = i
+			if !prevTile.loc().sameRow(tile.loc()) {
 				delta = 0
 			}
 		}
 		fp |= tile.footprint()
-		prev_tile = tile
+		prevTile = tile
 	}
 
-	return strip_buf, alpha_buf
+	return stripBuf, alphaBuf
 }
 
 func (s *strip) x() uint32 {
@@ -212,6 +214,6 @@ func (s *strip) y() uint32 {
 	return s.xy / (1 << 16)
 }
 
-func (s *strip) strip_y() uint32 {
-	return s.xy / ((1 << 16) * STRIP_HEIGHT)
+func (s *strip) stripY() uint32 {
+	return s.xy / ((1 << 16) * stripHeight)
 }

@@ -5,10 +5,7 @@
 
 package sparse
 
-// use piet_next::peniko::color::{AlphaColor, Srgb};
-
-const WIDE_TILE_WIDTH = 256
-const STRIP_HEIGHT = 4
+const wideTileWidth = 256
 
 type wideTile struct {
 	bg   [4]float32
@@ -31,7 +28,7 @@ type cmd struct {
 }
 
 func (wt *wideTile) fill(x, width uint32, c [4]float32) {
-	if x == 0 && width == WIDE_TILE_WIDTH && c[3] == 1.0 {
+	if x == 0 && width == wideTileWidth && c[3] == 1.0 {
 		wt.cmds = wt.cmds[:0]
 		wt.bg = c
 	} else {

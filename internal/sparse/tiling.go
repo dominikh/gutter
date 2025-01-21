@@ -10,13 +10,17 @@ import (
 	"math"
 )
 
-const TILE_WIDTH = 4
-const TILE_HEIGHT = 4
+const (
+	tileWidth  = 4
+	tileHeight = 4
+	tileScaleX = 1.0 / tileWidth
+	tileScaleY = 1.0 / tileHeight
+	tileScale  = 8192
 
-const TILE_SCALE_X = 1.0 / TILE_WIDTH
-const TILE_SCALE_Y = 1.0 / TILE_HEIGHT
+	// scale factor relative to unit square in tile
+	fracTileScale = tileScale * 4
+)
 
-// / This is just Line but f32
 type flatLine struct {
 	p0 vec2
 	p1 vec2
@@ -26,27 +30,22 @@ type vec2 struct {
 	x, y float32
 }
 
-const TILE_SCALE = 8192
-
 func unpackVec2(packed uint32) vec2 {
-	x := float32(packed&0xFFFF) * (1.0 / TILE_SCALE)
-	y := float32(packed>>16) * (1.0 / TILE_SCALE)
+	x := float32(packed&0xFFFF) * (1.0 / tileScale)
+	y := float32(packed>>16) * (1.0 / tileScale)
 	return vec2{x, y}
 }
 
-// scale factor relative to unit square in tile
-const FRAC_TILE_SCALE = TILE_SCALE * 4
-
 func scaleUp(z float32) uint32 {
-	v := math.Round(float64(z * FRAC_TILE_SCALE))
+	v := math.Round(float64(z * fracTileScale))
 	return satConv[uint32](v)
 }
 
 // Note: this assumes values in range.
 func (v vec2) pack() uint32 {
 	// TODO: scale should depend on tile size
-	x := satConv[uint32](math.Round(float64(v.x * TILE_SCALE)))
-	y := satConv[uint32](math.Round(float64(v.y * TILE_SCALE)))
+	x := satConv[uint32](math.Round(float64(v.x * tileScale)))
+	y := satConv[uint32](math.Round(float64(v.y * tileScale)))
 	return (y << 16) + x
 }
 
@@ -96,13 +95,13 @@ func sign32(f float32) float32 {
 	}
 }
 
-func makeTiles(lines iter.Seq[flatLine], tile_buf []tile) []tile {
-	tile_buf = tile_buf[:0]
+func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
+	tileBuf = tileBuf[:0]
 	for line := range lines {
-		s0 := line.p0.mul(TILE_SCALE_X)
-		s1 := line.p1.mul(TILE_SCALE_Y)
-		count_x := span(s0.x, s1.x)
-		count_y := span(s0.y, s1.y)
+		s0 := line.p0.mul(tileScaleX)
+		s1 := line.p1.mul(tileScaleY)
+		countX := span(s0.x, s1.x)
+		countY := span(s0.y, s1.y)
 		x := floor32(s0.x)
 		if s0.x == x && s1.x < x {
 			// s0.x is on right side of first tile
@@ -118,13 +117,13 @@ func makeTiles(lines iter.Seq[flatLine], tile_buf []tile) []tile {
 		packed0 := (yfrac0 << 16) + xfrac0
 
 		// These could be replaced with <2 and the max(1.0) in span removed
-		if count_x == 1 {
+		if countX == 1 {
 			xfrac1 := scaleUp(s1.x - x)
-			if count_y == 1 {
+			if countY == 1 {
 				yfrac1 := scaleUp(s1.y - y)
 				packed1 := (yfrac1 << 16) + xfrac1
 				// 1x1 tile
-				tile_buf = append(tile_buf, tile{
+				tileBuf = append(tileBuf, tile{
 					x:  satConv[uint16](x),
 					y:  satConv[uint16](y),
 					p0: packed0,
@@ -140,31 +139,31 @@ func makeTiles(lines iter.Seq[flatLine], tile_buf []tile) []tile {
 					xclip0 += slope
 					yclip = scaleUp(1.0)
 				}
-				last_packed := packed0
-				for i := range count_y - 1 {
+				lastPacked := packed0
+				for i := range countY - 1 {
 					xclip := xclip0 + float32(i)*sign*slope
 					xfrac := max(scaleUp(xclip), 1)
 					packed := (yclip << 16) + xfrac
-					tile_buf = append(tile_buf, tile{
+					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](x),
 						y:  satConv[uint16](y + float32(i)*sign),
-						p0: last_packed,
+						p0: lastPacked,
 						p1: packed,
 					})
 					// flip y between top and bottom of tile
-					last_packed = packed ^ (FRAC_TILE_SCALE << 16)
+					lastPacked = packed ^ (fracTileScale << 16)
 				}
-				yfrac1 := scaleUp(s1.y - (y + float32(count_y-1)*sign))
+				yfrac1 := scaleUp(s1.y - (y + float32(countY-1)*sign))
 				packed1 := (yfrac1 << 16) + xfrac1
 
-				tile_buf = append(tile_buf, tile{
+				tileBuf = append(tileBuf, tile{
 					x:  satConv[uint16](x),
-					y:  satConv[uint16](y + float32(count_y-1)*sign),
-					p0: last_packed,
+					y:  satConv[uint16](y + float32(countY-1)*sign),
+					p0: lastPacked,
 					p1: packed1,
 				})
 			}
-		} else if count_y == 1 {
+		} else if countY == 1 {
 			// horizontal row
 			slope := (s1.y - s0.y) / (s1.x - s0.x)
 			sign := sign32(s1.x - s0.x)
@@ -174,113 +173,113 @@ func makeTiles(lines iter.Seq[flatLine], tile_buf []tile) []tile {
 				yclip0 += slope
 				xclip = scaleUp(1.0)
 			}
-			last_packed := packed0
-			for i := range count_x - 1 {
+			lastPacked := packed0
+			for i := range countX - 1 {
 				yclip := yclip0 + float32(i)*sign*slope
 				yfrac := max(scaleUp(yclip), 1)
 				packed := (yfrac << 16) + xclip
-				tile_buf = append(tile_buf, tile{
+				tileBuf = append(tileBuf, tile{
 					x:  satConv[uint16](x + float32(i)*sign),
 					y:  satConv[uint16](y),
-					p0: last_packed,
+					p0: lastPacked,
 					p1: packed,
 				})
 				// flip x between left and right of tile
-				last_packed = packed ^ FRAC_TILE_SCALE
+				lastPacked = packed ^ fracTileScale
 			}
-			xfrac1 := scaleUp(s1.x - (x + float32(count_x-1)*sign))
+			xfrac1 := scaleUp(s1.x - (x + float32(countX-1)*sign))
 			yfrac1 := scaleUp(s1.y - y)
 			packed1 := (yfrac1 << 16) + xfrac1
 
-			tile_buf = append(tile_buf, tile{
-				x:  satConv[uint16](x + float32(count_x-1)*sign),
+			tileBuf = append(tileBuf, tile{
+				x:  satConv[uint16](x + float32(countX-1)*sign),
 				y:  satConv[uint16](y),
-				p0: last_packed,
+				p0: lastPacked,
 				p1: packed1,
 			})
 		} else {
 			// general case
-			recip_dx := 1.0 / (s1.x - s0.x)
+			recipDx := 1.0 / (s1.x - s0.x)
 			signx := sign32(s1.x - s0.x)
-			recip_dy := 1.0 / (s1.y - s0.y)
+			recipDy := 1.0 / (s1.y - s0.y)
 			signy := sign32(s1.y - s0.y)
 			// t parameter for next intersection with a vertical grid line
-			t_clipx := (x - s0.x) * recip_dx
+			tClipX := (x - s0.x) * recipDx
 			var xclip uint32
 			if signx > 0.0 {
-				t_clipx += recip_dx
+				tClipX += recipDx
 				xclip = scaleUp(1.0)
 			}
 			// t parameter for next intersection with a horizontal grid line
-			t_clipy := (y - s0.y) * recip_dy
+			tClipY := (y - s0.y) * recipDy
 			var yclip uint32
 			if signy > 0.0 {
-				t_clipy += recip_dy
+				tClipY += recipDy
 				yclip = scaleUp(1.0)
 			}
-			x1 := x + float32(count_x-1)*signx
-			y1 := y + float32(count_y-1)*signy
+			x1 := x + float32(countX-1)*signx
+			y1 := y + float32(countY-1)*signy
 			xi := x
 			yi := y
-			last_packed := packed0
+			lastPacked := packed0
 			count := 0
 			for xi != x1 || yi != y1 {
 				count++
 
-				if t_clipy < t_clipx {
+				if tClipY < tClipX {
 					// intersected with horizontal grid line
-					x_intersect := s0.x + (s1.x-s0.x)*t_clipy - xi
-					xfrac := max(scaleUp(x_intersect), 1) // maybe should clamp?
+					xIntersect := s0.x + (s1.x-s0.x)*tClipY - xi
+					xfrac := max(scaleUp(xIntersect), 1) // maybe should clamp?
 					packed := (yclip << 16) + xfrac
-					tile_buf = append(tile_buf, tile{
+					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](xi),
 						y:  satConv[uint16](yi),
-						p0: last_packed,
+						p0: lastPacked,
 						p1: packed,
 					})
-					t_clipy += abs32(recip_dy)
+					tClipY += abs32(recipDy)
 					yi += signy
-					last_packed = packed ^ (FRAC_TILE_SCALE << 16)
+					lastPacked = packed ^ (fracTileScale << 16)
 				} else {
 					// intersected with vertical grid line
-					y_intersect := s0.y + (s1.y-s0.y)*t_clipx - yi
-					yfrac := max(scaleUp(y_intersect), 1) // maybe should clamp?
+					yIntersect := s0.y + (s1.y-s0.y)*tClipX - yi
+					yfrac := max(scaleUp(yIntersect), 1) // maybe should clamp?
 					packed := (yfrac << 16) + xclip
-					tile_buf = append(tile_buf, tile{
+					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](xi),
 						y:  satConv[uint16](yi),
-						p0: last_packed,
+						p0: lastPacked,
 						p1: packed,
 					})
-					t_clipx += abs32(recip_dx)
+					tClipX += abs32(recipDx)
 					xi += signx
-					last_packed = packed ^ FRAC_TILE_SCALE
+					lastPacked = packed ^ fracTileScale
 				}
 			}
 			xfrac1 := scaleUp(s1.x - xi)
 			yfrac1 := scaleUp(s1.y - yi)
 			packed1 := (yfrac1 << 16) + xfrac1
 
-			tile_buf = append(tile_buf, tile{
+			tileBuf = append(tileBuf, tile{
 				x:  satConv[uint16](xi),
 				y:  satConv[uint16](yi),
-				p0: last_packed,
+				p0: lastPacked,
 				p1: packed1,
 			})
 		}
 	}
 	// This particular choice of sentinel tiles generates a sentinel strip.
-	tile_buf = append(tile_buf, tile{
+	tileBuf = append(tileBuf, tile{
 		x:  0x3ffd,
 		y:  0x3fff,
 		p0: 0,
 		p1: 0,
 	})
-	tile_buf = append(tile_buf, tile{
+	tileBuf = append(tileBuf, tile{
 		x:  0x3fff,
 		y:  0x3fff,
 		p0: 0,
 		p1: 0,
 	})
-	return tile_buf
+	return tileBuf
 }

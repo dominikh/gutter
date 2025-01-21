@@ -13,14 +13,7 @@ import (
 	"honnef.co/go/curve"
 )
 
-// //! Utilities for flattening
-// use flatten::stroke::LoweredPath;
-// use piet_next::peniko::kurbo::{self, Affine, BezPath, Line, Point, Stroke};
-
-// use crate::tiling::FlatLine;
-
-// / The flattening tolerance
-const TOL = 0.25
+const flattenTolerance = 0.25
 
 func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLine] {
 	return func(yield func(flatLine) bool) {
@@ -32,7 +25,7 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLi
 				}
 			}
 		}
-		for el := range curve.Flatten(iter, TOL) {
+		for el := range curve.Flatten(iter, flattenTolerance) {
 			switch el.Kind {
 			case curve.MoveToKind:
 				start = el.P0
@@ -68,6 +61,6 @@ func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.A
 			}
 		}
 	}
-	stroked := curve.StrokePath(iter, style, curve.StrokeOpts{}, TOL)
+	stroked := curve.StrokePath(iter, style, curve.StrokeOpts{}, flattenTolerance)
 	return fill(slices.Values(stroked), curve.Identity)
 }
