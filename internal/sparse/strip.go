@@ -101,11 +101,11 @@ func clamp[T float32 | int32](v, low, high T) T {
 	}
 }
 
-func renderStripsScalar(tiles []tile, strip_buf *[]strip, alpha_buf *[]uint32) {
-	*strip_buf = (*strip_buf)[:0]
+func renderStripsScalar(tiles []tile, strip_buf []strip, alpha_buf []uint32) ([]strip, []uint32) {
+	strip_buf = strip_buf[:0]
 
 	strip_start := true
-	cols := uint32(len(*alpha_buf))
+	cols := uint32(len(alpha_buf))
 	prev_tile := &tiles[0]
 	fp := prev_tile.footprint()
 	seg_start := 0
@@ -173,7 +173,7 @@ func renderStripsScalar(tiles []tile, strip_buf *[]strip, alpha_buf *[]uint32) {
 					area_u8 := satConv[uint32](math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
 					alphas += area_u8 << (y * 8)
 				}
-				*alpha_buf = append(*alpha_buf, alphas)
+				alpha_buf = append(alpha_buf, alphas)
 			}
 
 			if strip_start {
@@ -183,7 +183,7 @@ func renderStripsScalar(tiles []tile, strip_buf *[]strip, alpha_buf *[]uint32) {
 					col:     cols,
 					winding: int32(start_delta),
 				}
-				*strip_buf = append(*strip_buf, strip)
+				strip_buf = append(strip_buf, strip)
 			}
 			cols += x1 - x0
 			if same_strip {
@@ -200,6 +200,8 @@ func renderStripsScalar(tiles []tile, strip_buf *[]strip, alpha_buf *[]uint32) {
 		fp |= tile.footprint()
 		prev_tile = tile
 	}
+
+	return strip_buf, alpha_buf
 }
 
 func (s *strip) x() uint32 {

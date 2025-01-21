@@ -102,7 +102,7 @@ func (ctx *CsRenderCtx) render_path(path iter.Seq[flatLine], color [4]float32) {
 	// TODO: need to make sure tiles contained in viewport - we'll likely
 	// panic otherwise.
 	t1 := time.Now()
-	makeTiles(path, &ctx.tile_buf)
+	ctx.tile_buf = makeTiles(path, ctx.tile_buf)
 	t2 := time.Now()
 	slices.SortFunc(ctx.tile_buf, tile.cmp)
 	// for i, t := range ctx.tile_buf {
@@ -111,7 +111,7 @@ func (ctx *CsRenderCtx) render_path(path iter.Seq[flatLine], color [4]float32) {
 	// 	}
 	// }
 	t3 := time.Now()
-	renderStripsScalar(ctx.tile_buf, &ctx.strip_buf, &ctx.alphas)
+	ctx.strip_buf, ctx.alphas = renderStripsScalar(ctx.tile_buf, ctx.strip_buf, ctx.alphas)
 	t4 := time.Now()
 	width_tiles := (ctx.width + WIDE_TILE_WIDTH - 1) / WIDE_TILE_WIDTH
 	// XXX can this be a range over ctx.strip_buf or does its length change during the loop?
