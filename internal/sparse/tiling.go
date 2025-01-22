@@ -6,6 +6,7 @@
 package sparse
 
 import (
+	"fmt"
 	"iter"
 	"math"
 )
@@ -30,23 +31,13 @@ type vec2 struct {
 	x, y float32
 }
 
-func unpackVec2(packed uint32) vec2 {
-	x := float32(packed&0xFFFF) * (1.0 / tileScale)
-	y := float32(packed>>16) * (1.0 / tileScale)
-	return vec2{x, y}
+func (v vec2) String() string {
+	return fmt.Sprintf("(%g, %g)", v.x, v.y)
 }
 
-func scaleUp(z float32) uint32 {
+func scaleUp(z float32) uint16 {
 	v := math.Round(float64(z * fracTileScale))
-	return satConv[uint32](v)
-}
-
-// Note: this assumes values in range.
-func (v vec2) pack() uint32 {
-	// TODO: scale should depend on tile size
-	x := satConv[uint32](math.Round(float64(v.x * tileScale)))
-	y := satConv[uint32](math.Round(float64(v.y * tileScale)))
-	return (y << 16) + x
+	return satConv[uint16](v)
 }
 
 func (v vec2) add(o vec2) vec2 {
@@ -114,14 +105,14 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 		}
 		xfrac0 := scaleUp(s0.x - x)
 		yfrac0 := scaleUp(s0.y - y)
-		packed0 := (yfrac0 << 16) + xfrac0
+		packed0 := vec16{xfrac0, yfrac0}
 
 		// These could be replaced with <2 and the max(1.0) in span removed
 		if countX == 1 {
 			xfrac1 := scaleUp(s1.x - x)
 			if countY == 1 {
 				yfrac1 := scaleUp(s1.y - y)
-				packed1 := (yfrac1 << 16) + xfrac1
+				packed1 := vec16{xfrac1, yfrac1}
 				// 1x1 tile
 				tileBuf = append(tileBuf, tile{
 					x:  satConv[uint16](x),
@@ -134,7 +125,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				slope := (s1.x - s0.x) / (s1.y - s0.y)
 				sign := sign32(s1.y - s0.y)
 				xclip0 := (s0.x - x) + (y-s0.y)*slope
-				var yclip uint32
+				var yclip uint16
 				if sign > 0.0 {
 					xclip0 += slope
 					yclip = scaleUp(1.0)
@@ -143,7 +134,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				for i := range countY - 1 {
 					xclip := xclip0 + float32(i)*sign*slope
 					xfrac := max(scaleUp(xclip), 1)
-					packed := (yclip << 16) + xfrac
+					packed := vec16{xfrac, yclip}
 					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](x),
 						y:  satConv[uint16](y + float32(i)*sign),
@@ -151,10 +142,11 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 						p1: packed,
 					})
 					// flip y between top and bottom of tile
-					lastPacked = packed ^ (fracTileScale << 16)
+					lastPacked = packed
+					lastPacked.y ^= fracTileScale
 				}
 				yfrac1 := scaleUp(s1.y - (y + float32(countY-1)*sign))
-				packed1 := (yfrac1 << 16) + xfrac1
+				packed1 := vec16{xfrac1, yfrac1}
 
 				tileBuf = append(tileBuf, tile{
 					x:  satConv[uint16](x),
@@ -168,7 +160,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			slope := (s1.y - s0.y) / (s1.x - s0.x)
 			sign := sign32(s1.x - s0.x)
 			yclip0 := (s0.y - y) + (x-s0.x)*slope
-			var xclip uint32
+			var xclip uint16
 			if sign > 0.0 {
 				yclip0 += slope
 				xclip = scaleUp(1.0)
@@ -177,7 +169,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			for i := range countX - 1 {
 				yclip := yclip0 + float32(i)*sign*slope
 				yfrac := max(scaleUp(yclip), 1)
-				packed := (yfrac << 16) + xclip
+				packed := vec16{xclip, yfrac}
 				tileBuf = append(tileBuf, tile{
 					x:  satConv[uint16](x + float32(i)*sign),
 					y:  satConv[uint16](y),
@@ -185,11 +177,12 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					p1: packed,
 				})
 				// flip x between left and right of tile
-				lastPacked = packed ^ fracTileScale
+				lastPacked = packed
+				lastPacked.x ^= fracTileScale
 			}
 			xfrac1 := scaleUp(s1.x - (x + float32(countX-1)*sign))
 			yfrac1 := scaleUp(s1.y - y)
-			packed1 := (yfrac1 << 16) + xfrac1
+			packed1 := vec16{xfrac1, yfrac1}
 
 			tileBuf = append(tileBuf, tile{
 				x:  satConv[uint16](x + float32(countX-1)*sign),
@@ -205,14 +198,14 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			signy := sign32(s1.y - s0.y)
 			// t parameter for next intersection with a vertical grid line
 			tClipX := (x - s0.x) * recipDx
-			var xclip uint32
+			var xclip uint16
 			if signx > 0.0 {
 				tClipX += recipDx
 				xclip = scaleUp(1.0)
 			}
 			// t parameter for next intersection with a horizontal grid line
 			tClipY := (y - s0.y) * recipDy
-			var yclip uint32
+			var yclip uint16
 			if signy > 0.0 {
 				tClipY += recipDy
 				yclip = scaleUp(1.0)
@@ -230,7 +223,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					// intersected with horizontal grid line
 					xIntersect := s0.x + (s1.x-s0.x)*tClipY - xi
 					xfrac := max(scaleUp(xIntersect), 1) // maybe should clamp?
-					packed := (yclip << 16) + xfrac
+					packed := vec16{xfrac, yclip}
 					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](xi),
 						y:  satConv[uint16](yi),
@@ -239,12 +232,13 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					})
 					tClipY += abs32(recipDy)
 					yi += signy
-					lastPacked = packed ^ (fracTileScale << 16)
+					lastPacked = packed
+					lastPacked.y ^= fracTileScale
 				} else {
 					// intersected with vertical grid line
 					yIntersect := s0.y + (s1.y-s0.y)*tClipX - yi
 					yfrac := max(scaleUp(yIntersect), 1) // maybe should clamp?
-					packed := (yfrac << 16) + xclip
+					packed := vec16{xclip, yfrac}
 					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](xi),
 						y:  satConv[uint16](yi),
@@ -253,12 +247,13 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					})
 					tClipX += abs32(recipDx)
 					xi += signx
-					lastPacked = packed ^ fracTileScale
+					lastPacked = packed
+					lastPacked.x ^= fracTileScale
 				}
 			}
 			xfrac1 := scaleUp(s1.x - xi)
 			yfrac1 := scaleUp(s1.y - yi)
-			packed1 := (yfrac1 << 16) + xfrac1
+			packed1 := vec16{xfrac1, yfrac1}
 
 			tileBuf = append(tileBuf, tile{
 				x:  satConv[uint16](xi),
@@ -270,16 +265,12 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 	}
 	// This particular choice of sentinel tiles generates a sentinel strip.
 	tileBuf = append(tileBuf, tile{
-		x:  0x3ffd,
-		y:  0x3fff,
-		p0: 0,
-		p1: 0,
+		x: 0x3ffd,
+		y: 0x3fff,
 	})
 	tileBuf = append(tileBuf, tile{
-		x:  0x3fff,
-		y:  0x3fff,
-		p0: 0,
-		p1: 0,
+		x: 0x3fff,
+		y: 0x3fff,
 	})
 	return tileBuf
 }

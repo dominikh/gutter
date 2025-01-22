@@ -7,6 +7,7 @@ package sparse
 
 import (
 	"cmp"
+	"fmt"
 	"math"
 	"math/bits"
 	"structs"
@@ -22,7 +23,25 @@ type footprint = uint32
 
 type tile struct {
 	x, y   uint16
-	p0, p1 uint32
+	p0, p1 vec16
+}
+
+type vec16 struct {
+	x, y uint16
+}
+
+func (v vec16) float32() vec2 {
+	x := float32(v.x) * (1.0 / tileScale)
+	y := float32(v.y) * (1.0 / tileScale)
+	return vec2{x, y}
+}
+
+func (v vec16) String() string {
+	return v.float32().String()
+}
+
+func (t tile) String() string {
+	return fmt.Sprintf("(%d, %d) = %s--%s", t.x, t.y, t.p0, t.p1)
 }
 
 type strip struct {
@@ -41,23 +60,6 @@ func (l loc) sameRow(other loc) bool {
 	return l.y == other.y
 }
 
-func newTile(l loc, fp footprint, delta int32) tile {
-	p0 := uint32(bits.TrailingZeros32(fp) * tileScale)
-	if delta == -1 {
-		p0 += 65536
-	}
-	p1 := uint32((32 - bits.LeadingZeros32(fp)) * tileScale)
-	if delta == 1 {
-		p1 += 65536
-	}
-	return tile{
-		x:  l.x,
-		y:  l.y,
-		p0: p0,
-		p1: p1,
-	}
-}
-
 func (t tile) loc() loc {
 	return loc{
 		x: t.x,
@@ -66,8 +68,8 @@ func (t tile) loc() loc {
 }
 
 func (t tile) footprint() footprint {
-	x0 := float64(t.p0&0xffff) * (1.0 / tileScale)
-	x1 := float64(t.p1&0xffff) * (1.0 / tileScale)
+	x0 := float64(t.p0.x) * (1.0 / tileScale)
+	x1 := float64(t.p1.x) * (1.0 / tileScale)
 	// TODO: On CPU, might be better to do this as fixed point
 	xmin := uint32(math.Floor(min(x0, x1)))
 	xmax := min(max(xmin+1, uint32(math.Ceil(max(x0, x1)))), tileWidth)
@@ -76,10 +78,10 @@ func (t tile) footprint() footprint {
 
 func (t tile) delta() int {
 	var a, b int
-	if t.p1>>16 == 0 {
+	if t.p1.y == 0 {
 		a = 1
 	}
-	if t.p0>>16 == 0 {
+	if t.p0.y == 0 {
 		b = 1
 	}
 	return a - b
@@ -135,8 +137,8 @@ func renderStripsScalar(tiles []tile, stripBuf []strip, alphaBuf []uint32) ([]st
 			for j := segStart; j < i; j++ {
 				tile := &tiles[j]
 				delta += tile.delta()
-				p0 := unpackVec2(tile.p0)
-				p1 := unpackVec2(tile.p1)
+				p0 := tile.p0.float32()
+				p1 := tile.p1.float32()
 				slope := (p1.x - p0.x) / (p1.y - p0.y)
 				_ = areas[x0]
 				_ = areas[x1-1]
