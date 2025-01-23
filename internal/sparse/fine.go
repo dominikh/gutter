@@ -11,7 +11,7 @@ import (
 
 type fine struct {
 	width, height int
-	outBuf        [][4]uint8
+	outBuf        [][4]float32
 	scratch       [wideTileWidth * stripHeight][4]float32
 }
 
@@ -22,11 +22,9 @@ func (f *fine) clear(c [4]float32) {
 }
 
 func (f *fine) pack(x, y int) {
-	if (x+1)*wideTileWidth > f.width {
-		panic("unreachable")
-	}
-	if (y+1)*stripHeight > f.height {
-		panic("unreachable")
+	if px, py := x*wideTileWidth, y*stripHeight; px > f.width || py > f.height {
+		panic(fmt.Sprintf("tile (%d, %d) starts at pixel (%d, %d), which is out of bounds for size (%d, %d)",
+			x, y, px, py, f.width, f.height))
 	}
 	baseIdx := (y*stripHeight*f.width + x*wideTileWidth)
 	for j := range stripHeight {
@@ -43,15 +41,7 @@ func (f *fine) pack(x, y int) {
 				break
 			}
 
-			targetIdx := lineIdx + i
-			out := &f.outBuf[targetIdx]
-			src := f.scratch[(i*stripHeight + j)]
-			*out = [4]uint8{
-				uint8((src[0] * 255) + 0.5),
-				uint8((src[1] * 255) + 0.5),
-				uint8((src[2] * 255) + 0.5),
-				uint8((src[3] * 255) + 0.5),
-			}
+			f.outBuf[lineIdx+i] = f.scratch[(i*stripHeight + j)]
 		}
 	}
 }

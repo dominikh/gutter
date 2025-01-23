@@ -6,14 +6,12 @@
 package sparse
 
 import (
-	"image"
 	"iter"
 	"log"
 	"slices"
 	"time"
 
 	"honnef.co/go/curve"
-	"honnef.co/go/safeish"
 )
 
 type CsRenderCtx struct {
@@ -52,11 +50,11 @@ func (ctx *CsRenderCtx) Reset() {
 	ctx.alphas = ctx.alphas[:0]
 }
 
-func (ctx *CsRenderCtx) RenderToPixmap(pixmap *image.RGBA) {
+func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap [][4]float32) {
 	fine := fine{
-		width:  pixmap.Bounds().Dx(),
-		height: pixmap.Bounds().Dy(),
-		outBuf: safeish.SliceCast[[][4]byte](pixmap.Pix),
+		width:  width,
+		height: height,
+		outBuf: pixmap,
 	}
 	widthTiles := (ctx.width + wideTileWidth - 1) / wideTileWidth
 	heightTiles := (ctx.height + stripHeight - 1) / stripHeight
@@ -80,13 +78,15 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], color [4]float32) {
 	// panic otherwise.
 	t1 := time.Now()
 	ctx.tileBuf = makeTiles(path, ctx.tileBuf)
+
 	t2 := time.Now()
 	slices.SortFunc(ctx.tileBuf, tile.cmp)
+
 	t3 := time.Now()
 	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, ctx.stripBuf, ctx.alphas)
+
 	t4 := time.Now()
 	widthTiles := (ctx.width + wideTileWidth - 1) / wideTileWidth
-	// XXX can this be a range over ctx.stripBuf or does its length change during the loop?
 	for i := range ctx.stripBuf {
 		strip := &ctx.stripBuf[i]
 
