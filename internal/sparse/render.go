@@ -87,7 +87,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], color [4]float32) {
 
 	t4 := time.Now()
 	widthTiles := (ctx.width + wideTileWidth - 1) / wideTileWidth
-	for i := range ctx.stripBuf {
+	for i := range len(ctx.stripBuf) - 1 {
 		strip := &ctx.stripBuf[i]
 
 		// Don't render strips that are outside the viewport vertically.
