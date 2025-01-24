@@ -19,6 +19,10 @@ type loc struct {
 	x, y uint16
 }
 
+// footprint is a bitset representing the pixels covered by a set of tiles. Any
+// individual tile will cover a contiguous range of pixels, as each tile
+// contains exactly one line segment. However, when multiple tiles are processed
+// together, footprints can be ORed together, which may result in gaps.
 type footprint = uint32
 
 type tile struct {
