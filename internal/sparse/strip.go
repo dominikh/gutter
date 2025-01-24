@@ -140,6 +140,9 @@ func renderStripsScalar(tiles []tile, stripBuf []strip, alphaBuf []uint32) ([]st
 				p0 := tile.p0.float32()
 				p1 := tile.p1.float32()
 				slope := (p1.x - p0.x) / (p1.y - p0.y)
+				if x0 >= x1 {
+					continue
+				}
 				_ = areas[x0]
 				_ = areas[x1-1]
 				for x := x0; x < x1; x++ {

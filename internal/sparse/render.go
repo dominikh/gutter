@@ -6,6 +6,7 @@
 package sparse
 
 import (
+	"fmt"
 	"iter"
 	"log"
 	"slices"
@@ -107,7 +108,11 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], color [4]float32) {
 		col := strip.col
 		for xtile := xtile0; xtile < xtile1; xtile++ {
 			xTileRel := x % wideTileWidth
-			width := min(x1, uint32((xtile+1)*wideTileWidth)) - x
+			lhs := min(x1, uint32((xtile+1)*wideTileWidth))
+			if lhs < x {
+				panic(fmt.Sprintf("internal error: %v < %v", lhs, x))
+			}
+			width := lhs - x
 			cmd := cmd{
 				typ:      cmdStrip,
 				x:        xTileRel,
