@@ -52,6 +52,11 @@ type strip struct {
 	winding int32
 }
 
+func (s strip) String() string {
+	return fmt.Sprintf("strip(x=%v, y=%v, col=%v, winding=%v)",
+		s.x(), s.y(), s.col, s.winding)
+}
+
 func (l loc) sameStrip(other loc) bool {
 	return l.sameRow(other) && (other.x-l.x)/2 == 0
 }
