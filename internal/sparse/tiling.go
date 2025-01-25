@@ -87,6 +87,17 @@ func sign32(f float32) float32 {
 }
 
 func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
+	// Lines that vertical cross tile boundaries need special treatment during
+	// anti aliasing. This case is detected via tile-relative x == 0. However,
+	// lines can naturally start or end at a multiple of the 4x4 grid, too, but
+	// these don't constitute crossings. We nudge these points ever so slightly,
+	// by ensuring that xfrac0 and xfrac1 are always at least 1, which
+	// corresponds to 1/8192 of a pixel.
+	//
+	// Note that we cannot check if line.p0.x or s0.x modulo 4 equal 0 because
+	// those values operate at higher precision than xfrac values. For example,
+	// the coordinate 4.00001 % 4 != 0, but after scaleUp, xfrac == 0.
+
 	tileBuf = tileBuf[:0]
 	for line := range lines {
 		s0 := line.p0.mul(tileScaleX)
@@ -103,13 +114,13 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			// s0.y is on bottom of first tile
 			y -= 1.0
 		}
-		xfrac0 := scaleUp(s0.x - x)
+		xfrac0 := max(scaleUp(s0.x-x), 1)
 		yfrac0 := scaleUp(s0.y - y)
 		packed0 := vec16{xfrac0, yfrac0}
 
 		// These could be replaced with <2 and the max(1.0) in span removed
 		if countX == 1 {
-			xfrac1 := scaleUp(s1.x - x)
+			xfrac1 := max(scaleUp(s1.x-x), 1)
 			if countY == 1 {
 				yfrac1 := scaleUp(s1.y - y)
 				packed1 := vec16{xfrac1, yfrac1}
@@ -180,7 +191,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				lastPacked = packed
 				lastPacked.x ^= fracTileScale
 			}
-			xfrac1 := scaleUp(s1.x - (x + float32(countX-1)*sign))
+			xfrac1 := max(scaleUp(s1.x-(x+float32(countX-1)*sign)), 1)
 			yfrac1 := scaleUp(s1.y - y)
 			packed1 := vec16{xfrac1, yfrac1}
 
@@ -251,7 +262,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					lastPacked.x ^= fracTileScale
 				}
 			}
-			xfrac1 := scaleUp(s1.x - xi)
+			xfrac1 := max(scaleUp(s1.x-xi), 1)
 			yfrac1 := scaleUp(s1.y - yi)
 			packed1 := vec16{xfrac1, yfrac1}
 
