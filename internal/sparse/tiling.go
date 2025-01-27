@@ -170,7 +170,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				lastPacked := packed0
 				for i := range countY - 1 {
 					xclip := xclip0 + float32(i)*sign*slope
-					xfrac := min(max(scaleUp(xclip), 1), 32767)
+					xfrac := max(scaleUp(xclip), 1)
 					packed := vec16{xfrac, yclip}
 					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](x),
@@ -205,7 +205,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			lastPacked := packed0
 			for i := range countX - 1 {
 				yclip := yclip0 + float32(i)*sign*slope
-				yfrac := min(max(scaleUp(yclip), 1), 32767)
+				yfrac := max(scaleUp(yclip), 1)
 				packed := vec16{xclip, yfrac}
 				tileBuf = append(tileBuf, tile{
 					x:  satConv[uint16](x + float32(i)*sign),
@@ -259,7 +259,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				if tClipY < tClipX {
 					// intersected with horizontal grid line
 					xIntersect := s0.x + (s1.x-s0.x)*tClipY - xi
-					xfrac := min(max(scaleUp(xIntersect), 1), 32767)
+					xfrac := max(scaleUp(xIntersect), 1)
 					packed := vec16{xfrac, yclip}
 					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](xi),
@@ -274,7 +274,7 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				} else {
 					// intersected with vertical grid line
 					yIntersect := s0.y + (s1.y-s0.y)*tClipX - yi
-					yfrac := min(max(scaleUp(yIntersect), 1), 32767)
+					yfrac := max(scaleUp(yIntersect), 1)
 					packed := vec16{xclip, yfrac}
 					tileBuf = append(tileBuf, tile{
 						x:  satConv[uint16](xi),
