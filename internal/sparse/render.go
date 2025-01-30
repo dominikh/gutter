@@ -98,7 +98,10 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 	for i := range len(ctx.stripBuf) - 1 {
 		strip := &ctx.stripBuf[i]
 
-		// Don't render strips that are outside the viewport vertically.
+		// Don't render strips that are outside the viewport.
+		if int(strip.x()) >= ctx.width {
+			continue
+		}
 		if int(strip.y()) >= ctx.height {
 			break
 		}
