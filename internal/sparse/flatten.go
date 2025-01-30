@@ -25,9 +25,25 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLi
 				}
 			}
 		}
+		yieldClosePath := func(start, p0 curve.Point) bool {
+			pt0 := vec2{float32(p0.X), float32(p0.Y)}
+			pt1 := vec2{float32(start.X), float32(start.Y)}
+			if pt0 != pt1 {
+				return yield(flatLine{pt0, pt1})
+			}
+			return true
+		}
+
+		closed := true
 		for el := range curve.Flatten(iter, flattenTolerance) {
 			switch el.Kind {
 			case curve.MoveToKind:
+				if !closed && p0 != start {
+					if !yieldClosePath(start, p0) {
+						return
+					}
+				}
+				closed = false
 				start = el.P0
 				p0 = el.P0
 			case curve.LineToKind:
@@ -39,15 +55,19 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLi
 				}
 				p0 = p
 			case curve.ClosePathKind:
-				pt0 := vec2{float32(p0.X), float32(p0.Y)}
-				pt1 := vec2{float32(start.X), float32(start.Y)}
-				if pt0 != pt1 {
-					if !yield(flatLine{pt0, pt1}) {
-						return
-					}
+				closed = true
+				if !yieldClosePath(start, p0) {
+					return
 				}
+
 			default:
 				panic(fmt.Sprintf("unreachable: %v", el.Kind))
+			}
+		}
+
+		if !closed {
+			if !yieldClosePath(start, p0) {
+				return
 			}
 		}
 	}
