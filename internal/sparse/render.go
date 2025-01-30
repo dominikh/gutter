@@ -15,6 +15,13 @@ import (
 	"honnef.co/go/curve"
 )
 
+type FillRule int
+
+const (
+	NonZero FillRule = iota
+	EvenOdd
+)
+
 type CsRenderCtx struct {
 	width     int
 	height    int
@@ -72,7 +79,7 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap [][4]float32) {
 	}
 }
 
-func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], color [4]float32) {
+func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, color [4]float32) {
 	// XXX support a brush
 
 	// TODO: need to make sure tiles contained in viewport - we'll likely
@@ -84,7 +91,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], color [4]float32) {
 	slices.SortFunc(ctx.tileBuf, tile.cmp)
 
 	t3 := time.Now()
-	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, ctx.stripBuf, ctx.alphas)
+	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.stripBuf, ctx.alphas)
 
 	t4 := time.Now()
 	widthTiles := (ctx.width + wideTileWidth - 1) / wideTileWidth
@@ -153,16 +160,16 @@ func (ctx *CsRenderCtx) getAffine() curve.Affine {
 	return ctx.transform
 }
 
-func (ctx *CsRenderCtx) Fill(path iter.Seq[curve.PathElement], color [4]float32) {
+func (ctx *CsRenderCtx) Fill(path iter.Seq[curve.PathElement], fillRule FillRule, color [4]float32) {
 	// XXX support brushes
 	affine := ctx.getAffine()
 	it := fill(path, affine)
-	ctx.renderPath(it, color)
+	ctx.renderPath(it, fillRule, color)
 }
 
 func (ctx *CsRenderCtx) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color [4]float32) {
 	// XXX support brushes
 	affine := ctx.getAffine()
 	it := stroke(path, stroke_, affine)
-	ctx.renderPath(it, color)
+	ctx.renderPath(it, NonZero, color)
 }
