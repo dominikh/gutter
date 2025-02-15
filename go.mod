@@ -3,9 +3,7 @@
 
 module honnef.co/go/gutter
 
-go 1.23
-
-toolchain go1.23.0
+go 1.24
 
 require (
 	github.com/go-json-experiment/json v0.0.0-20240815175050-ebd3a8989ca1
@@ -24,6 +22,7 @@ require (
 )
 
 require (
+	github.com/mmcloughlin/avo v0.6.0 // indirect
 	golang.org/x/image v0.3.0 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
@@ -34,3 +33,5 @@ require (
 	honnef.co/go/wgpu-windows-386 v0.1904.1 // indirect
 	honnef.co/go/wgpu-windows-amd64 v0.1904.1 // indirect
 )
+
+tool github.com/mmcloughlin/avo

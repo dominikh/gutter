@@ -7,12 +7,26 @@ package sparse
 
 import (
 	"fmt"
+	"unsafe"
 )
 
 type fine struct {
 	width, height int
 	outBuf        [][4]float32
-	scratch       [wideTileWidth * stripHeight][4]float32
+	scratch       *[wideTileWidth * stripHeight][4]float32
+}
+
+func newFine(width, height int, out [][4]float32) *fine {
+	// Align scratch memory to this many bytes. This should match the largest
+	// vector width that we use in assembly. Currently that is 32 for AVX.
+	const align = 32
+
+	var f fine
+	scratch := make([]byte, unsafe.Sizeof(*f.scratch)+align)
+	ptr := unsafe.Pointer(&scratch[0])
+	alignedPtr := unsafe.Pointer(((uintptr(ptr) + align - 1) / align) * align)
+	scratch2 := (*[wideTileWidth * stripHeight][4]float32)(alignedPtr)
+	return &fine{width, height, out, scratch2}
 }
 
 func (f *fine) clear(c [4]float32) {
@@ -58,20 +72,29 @@ func (f *fine) runCmd(cmd cmd, alphas []uint32) {
 	}
 }
 
+var fillFp = fineFillNative
+
 func (f *fine) fill(x, width int, color [4]float32) {
+	f.fillWithFp(x, width, color, fillFp)
+}
+
+func (f *fine) fillWithFp(x, width int, color [4]float32, fillFp func([][4]float32, [4]float32)) {
+	buf := f.scratch[x*stripHeight:][:stripHeight*width]
+	fillFp(buf, color)
+}
+
+func fineFillNative(buf [][4]float32, color [4]float32) {
 	if color[3] == 1.0 {
-		dst := f.scratch[x*stripHeight:][:stripHeight*width]
-		for j := range dst {
-			dst[j] = color
+		for j := range buf {
+			buf[j] = color
 		}
 	} else {
 		oneMinusAlpha := 1.0 - color[3]
-		dst := f.scratch[x*stripHeight:][:stripHeight*width]
-		for j := range dst {
-			dst[j][0] = color[0] + oneMinusAlpha*dst[j][0]
-			dst[j][1] = color[1] + oneMinusAlpha*dst[j][1]
-			dst[j][2] = color[2] + oneMinusAlpha*dst[j][2]
-			dst[j][3] = color[3] + oneMinusAlpha*dst[j][3]
+		for j := range buf {
+			buf[j][0] = color[0] + oneMinusAlpha*buf[j][0]
+			buf[j][1] = color[1] + oneMinusAlpha*buf[j][1]
+			buf[j][2] = color[2] + oneMinusAlpha*buf[j][2]
+			buf[j][3] = color[3] + oneMinusAlpha*buf[j][3]
 		}
 	}
 }
@@ -87,11 +110,11 @@ func (f *fine) strip(x, width int, alphas []uint32, color [4]float32) {
 	color[3] *= (1.0 / 255.0)
 	dst := f.scratch[x*stripHeight:][:stripHeight*width]
 	n := 0
-	for k := 0; k+4 <= len(dst); k += 4 {
-		z := dst[k:][:4]
+	for k := 0; k+stripHeight <= len(dst); k += stripHeight {
+		z := dst[k:][:stripHeight]
 		a := alphas[n]
 		n++
-		for j := range 4 {
+		for j := range stripHeight {
 			maskAlpha := float32((a >> (j * 8)) & 0xFF)
 			oneMinusAlpha := 1.0 - maskAlpha*color[3]
 			z[j][0] = z[j][0]*oneMinusAlpha + maskAlpha*color[0]

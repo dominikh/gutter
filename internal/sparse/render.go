@@ -59,11 +59,7 @@ func (ctx *CsRenderCtx) Reset() {
 }
 
 func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap [][4]float32) {
-	fine := fine{
-		width:  width,
-		height: height,
-		outBuf: pixmap,
-	}
+	fine := newFine(width, height, pixmap)
 	widthTiles := (ctx.width + wideTileWidth - 1) / wideTileWidth
 	heightTiles := (ctx.height + stripHeight - 1) / stripHeight
 	for y := range heightTiles {

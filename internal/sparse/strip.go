@@ -13,6 +13,9 @@ import (
 	"structs"
 )
 
+// The height of a strip.
+// Requirement: stripHeight * 16 % 32 == 0
+// Requirement: stripHeight >= widest vectorized load we use
 const stripHeight = 4
 
 type loc struct {
@@ -244,9 +247,9 @@ func (s *strip) x() uint32 {
 }
 
 func (s *strip) y() uint32 {
-	return s.xy / (1 << 16)
+	return s.xy >> 16
 }
 
 func (s *strip) stripY() uint32 {
-	return s.xy / ((1 << 16) * stripHeight)
+	return s.y() / stripHeight
 }
