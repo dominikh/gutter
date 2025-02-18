@@ -87,8 +87,8 @@ selecting fonts based on style, metrics, script, language, and Unicode coverage
 (as fonts may support subsets of a script only).
 
 - TODO font metadata (it's hella inconsistent)
-- TODO fontforge configuration (it's hella lacking)
-- TODO fontforge API (doesn't use BCP 47 tags, making selecting by script harder)
+- TODO fontconfig configuration (it's hella lacking)
+- TODO fontconfig API (doesn't use BCP 47 tags, making selecting by script harder)
 
 We _could_ depend on Noto fonts and forego font fallback altogether, requiring
 users to install the appropriate Noto fonts if they want to be able to see some
@@ -123,7 +123,7 @@ with the exception of IBM Plex Sans Condensed. What's special about the
 condensed font? I don't know.
 
 The OS/2 table has the `panose` field which is the PANOSE classification number.
-This is similar so `sFamilyClass` but provides more fine-grained information
+This is similar to `sFamilyClass` but provides more fine-grained information
 about a font's visual appearance. As specified, it only covers Latin fonts. It
 is not clear whether use of PANOSE requires a license from Hewlett-Packard.
 Surprisingly, the majority of fonts we checked provide this information. It is
