@@ -5,7 +5,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"math/rand/v2"
 	"os"
@@ -30,7 +29,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer app.Dispose()
+	// XXX
+	// defer app.Dispose()
 
 	theCh := make(chan float64)
 	go func() {
@@ -55,7 +55,8 @@ func main() {
 		// Ignore that we need this argument, ideally widget.NewChannelListener
 		// would have a magic way to get the event emitter, while not depending
 		// on the 'application' package.
-		app.EmitEvent(nil, ev)
+		// XXX
+		// app.EmitEvent(nil, ev)
 	})
 	defer l.Dispose()
 
@@ -91,5 +92,9 @@ func main() {
 	// 	Reverse:     false,
 	// }
 
-	app.Run(context.Background(), root)
+	// XXX
+	// app.Run(context.Background(), root)
+
+	_ = app
+	_ = root
 }

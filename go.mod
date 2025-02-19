@@ -18,7 +18,6 @@ require (
 	honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219
 	honnef.co/go/libwayland v0.0.0-20240816012442-83394039f572
 	honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2
-	honnef.co/go/wgpu v0.0.0-20250117201447-10450807225c
 )
 
 require (
@@ -26,12 +25,6 @@ require (
 	golang.org/x/image v0.3.0 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
-	honnef.co/go/wgpu-darwin-amd64 v0.1904.1 // indirect
-	honnef.co/go/wgpu-darwin-arm64 v0.1904.1 // indirect
-	honnef.co/go/wgpu-linux-amd64 v0.1904.1 // indirect
-	honnef.co/go/wgpu-linux-arm64 v0.1904.1 // indirect
-	honnef.co/go/wgpu-windows-386 v0.1904.1 // indirect
-	honnef.co/go/wgpu-windows-amd64 v0.1904.1 // indirect
 )
 
 tool github.com/mmcloughlin/avo
