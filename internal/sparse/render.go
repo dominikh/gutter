@@ -78,8 +78,6 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap [][4]float32) {
 func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, color [4]float32) {
 	// XXX support a brush
 
-	// TODO: need to make sure tiles contained in viewport - we'll likely
-	// panic otherwise.
 	t1 := time.Now()
 	ctx.tileBuf = makeTiles(path, ctx.tileBuf)
 
@@ -109,7 +107,10 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		stripWidth := nextStrip.col - strip.col
 		x1 := x0 + stripWidth
 		xtile0 := int(x0) / wideTileWidth
-		xtile1 := (int(x1) + wideTileWidth - 1) / wideTileWidth
+		// TODO: we are limiting xtile1 to widthTiles because strips aren't
+		// being clipped to the viewport yet. Evaluate removing this once we
+		// clip higher up the stack.
+		xtile1 := min((int(x1)+wideTileWidth-1)/wideTileWidth, widthTiles)
 		x := x0
 		col := strip.col
 		for xtile := xtile0; xtile < xtile1; xtile++ {
@@ -134,7 +135,10 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 			x = x1
 			x2 := nextStrip.x()
 			fxt0 := x1 / wideTileWidth
-			fxt1 := (x2 + wideTileWidth - 1) / wideTileWidth
+			// TODO: we are limiting fxt1 to widthTiles because strips aren't
+			// being clipped to the viewport yet. Evaluate removing this once we
+			// clip higher up the stack.
+			fxt1 := min((x2+wideTileWidth-1)/wideTileWidth, uint32(widthTiles))
 			for xtile := fxt0; xtile < fxt1; xtile++ {
 				xTileRel := x % wideTileWidth
 				width := min(x2, ((xtile+1)*wideTileWidth)) - x
