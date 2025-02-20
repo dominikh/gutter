@@ -60,7 +60,7 @@ func (f *fine) pack(x, y int) {
 	}
 }
 
-func (f *fine) runCmd(cmd cmd, alphas []uint32) {
+func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 	switch cmd.typ {
 	case cmdFill:
 		f.fill(int(cmd.x), int(cmd.width), cmd.color)
@@ -99,7 +99,7 @@ func fineFillNative(buf [][4]float32, color [4]float32) {
 	}
 }
 
-func (f *fine) strip(x, width int, alphas []uint32, color [4]float32) {
+func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color [4]float32) {
 	if len(alphas) < width {
 		panic(fmt.Sprintf("internal error: got %d alphas for a width of %d",
 			len(alphas), width))
@@ -115,7 +115,7 @@ func (f *fine) strip(x, width int, alphas []uint32, color [4]float32) {
 		a := alphas[n]
 		n++
 		for j := range stripHeight {
-			maskAlpha := float32((a >> (j * 8)) & 0xFF)
+			maskAlpha := float32(a[j])
 			oneMinusAlpha := 1.0 - maskAlpha*color[3]
 			z[j][0] = z[j][0]*oneMinusAlpha + maskAlpha*color[0]
 			z[j][1] = z[j][1]*oneMinusAlpha + maskAlpha*color[1]

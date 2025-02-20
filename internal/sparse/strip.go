@@ -121,8 +121,8 @@ func renderStripsScalar(
 	tiles []tile,
 	fillRule FillRule,
 	stripBuf []strip,
-	alphaBuf []uint32,
-) ([]strip, []uint32) {
+	alphaBuf [][stripHeight]uint8,
+) ([]strip, [][stripHeight]uint8) {
 	stripBuf = stripBuf[:0]
 
 	stripStart := true
@@ -190,13 +190,13 @@ func renderStripsScalar(
 				}
 			}
 			for x := x0; x < x1; x++ {
-				alphas := uint32(0)
-				for y := range 4 {
+				var alphas [stripHeight]uint8
+				for y := range stripHeight {
 					area := areas[x][y]
-					var areaU8 uint32
+					var areaU8 uint8
 					switch fillRule {
 					case NonZero:
-						areaU8 = satConv[uint32](math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
+						areaU8 = satConv[uint8](math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
 					case EvenOdd:
 						even := int32(area) % 2
 						// If we have for example 2.68, then opacity is 68%, while for
@@ -205,11 +205,11 @@ func renderStripsScalar(
 						// 1 for even, -1 for odd
 						sign := float32(-2*even + 1)
 						_, areaFrac := math.Modf(float64(area))
-						areaU8 = satConv[uint32]((addVal+sign*float32(areaFrac))*255.0 + 0.5)
+						areaU8 = satConv[uint8]((addVal+sign*float32(areaFrac))*255.0 + 0.5)
 					default:
 						panic(fmt.Sprintf("invalid fill rule %v", fillRule))
 					}
-					alphas += areaU8 << (y * 8)
+					alphas[y] = areaU8
 				}
 				alphaBuf = append(alphaBuf, alphas)
 			}

@@ -26,7 +26,7 @@ type CsRenderCtx struct {
 	width     int
 	height    int
 	tiles     []wideTile
-	alphas    []uint32
+	alphas    [][stripHeight]uint8
 	transform curve.Affine
 
 	// Scratch buffers
