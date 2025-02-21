@@ -13,7 +13,8 @@ import (
 type fine struct {
 	width, height int
 	outBuf        [][4]float32
-	scratch       *[wideTileWidth * stripHeight][4]float32
+	// [x][y][4]float32
+	scratch *[wideTileWidth][stripHeight][4]float32
 }
 
 func newFine(width, height int, out [][4]float32) *fine {
@@ -25,13 +26,16 @@ func newFine(width, height int, out [][4]float32) *fine {
 	scratch := make([]byte, unsafe.Sizeof(*f.scratch)+align)
 	ptr := unsafe.Pointer(&scratch[0])
 	alignedPtr := unsafe.Pointer(((uintptr(ptr) + align - 1) / align) * align)
-	scratch2 := (*[wideTileWidth * stripHeight][4]float32)(alignedPtr)
+	scratch2 := (*[wideTileWidth][stripHeight][4]float32)(alignedPtr)
 	return &fine{width, height, out, scratch2}
 }
 
 func (f *fine) clear(c [4]float32) {
-	for i := range f.scratch {
-		f.scratch[i] = c
+	for y := range f.scratch {
+		row := &f.scratch[y]
+		for x := range row {
+			row[x] = c
+		}
 	}
 }
 
@@ -55,7 +59,7 @@ func (f *fine) pack(x, y int) {
 				break
 			}
 
-			f.outBuf[lineIdx+i] = f.scratch[(i*stripHeight + j)]
+			f.outBuf[lineIdx+i] = f.scratch[i][j]
 		}
 	}
 }
@@ -78,23 +82,29 @@ func (f *fine) fill(x, width int, color [4]float32) {
 	f.fillWithFp(x, width, color, fillFp)
 }
 
-func (f *fine) fillWithFp(x, width int, color [4]float32, fillFp func([][4]float32, [4]float32)) {
-	buf := f.scratch[x*stripHeight:][:stripHeight*width]
+func (f *fine) fillWithFp(x, width int, color [4]float32, fillFp func([][stripHeight][4]float32, [4]float32)) {
+	buf := f.scratch[x : x+width]
 	fillFp(buf, color)
 }
 
-func fineFillNative(buf [][4]float32, color [4]float32) {
+func fineFillNative(buf [][stripHeight][4]float32, color [4]float32) {
 	if color[3] == 1.0 {
-		for j := range buf {
-			buf[j] = color
+		for x := range buf {
+			col := &buf[x]
+			for y := range col {
+				col[y] = color
+			}
 		}
 	} else {
 		oneMinusAlpha := 1.0 - color[3]
-		for j := range buf {
-			buf[j][0] = color[0] + oneMinusAlpha*buf[j][0]
-			buf[j][1] = color[1] + oneMinusAlpha*buf[j][1]
-			buf[j][2] = color[2] + oneMinusAlpha*buf[j][2]
-			buf[j][3] = color[3] + oneMinusAlpha*buf[j][3]
+		for x := range buf {
+			col := &buf[x]
+			for y := range col {
+				col[y][0] = color[0] + oneMinusAlpha*col[y][0]
+				col[y][1] = color[1] + oneMinusAlpha*col[y][1]
+				col[y][2] = color[2] + oneMinusAlpha*col[y][2]
+				col[y][3] = color[3] + oneMinusAlpha*col[y][3]
+			}
 		}
 	}
 }
@@ -108,19 +118,18 @@ func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color [4]float32
 	color[1] *= (1.0 / 255.0)
 	color[2] *= (1.0 / 255.0)
 	color[3] *= (1.0 / 255.0)
-	dst := f.scratch[x*stripHeight:][:stripHeight*width]
-	n := 0
-	for k := 0; k+stripHeight <= len(dst); k += stripHeight {
-		z := dst[k:][:stripHeight]
-		a := alphas[n]
-		n++
-		for j := range stripHeight {
-			maskAlpha := float32(a[j])
+
+	dst := f.scratch[x : x+width]
+	for x := range dst {
+		col := &dst[x]
+		a := &alphas[x]
+		for y := range col {
+			maskAlpha := float32(a[y])
 			oneMinusAlpha := 1.0 - maskAlpha*color[3]
-			z[j][0] = z[j][0]*oneMinusAlpha + maskAlpha*color[0]
-			z[j][1] = z[j][1]*oneMinusAlpha + maskAlpha*color[1]
-			z[j][2] = z[j][2]*oneMinusAlpha + maskAlpha*color[2]
-			z[j][3] = z[j][3]*oneMinusAlpha + maskAlpha*color[3]
+			col[y][0] = col[y][0]*oneMinusAlpha + maskAlpha*color[0]
+			col[y][1] = col[y][1]*oneMinusAlpha + maskAlpha*color[1]
+			col[y][2] = col[y][2]*oneMinusAlpha + maskAlpha*color[2]
+			col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*color[3]
 		}
 	}
 }

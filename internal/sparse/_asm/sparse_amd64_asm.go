@@ -32,6 +32,8 @@ func PCALIGN(im Op) {
 func fillAVX() {
 	Implement("fineFillAVX")
 	outLen := Load(Param("out").Len(), GP64())
+	// multiply by strip height
+	SHLQ(Imm(2), outLen)
 	TESTQ(outLen, outLen)
 	JZ(LabelRef("exit"))
 
@@ -102,6 +104,8 @@ func fillAVX() {
 func fillSSE() {
 	Implement("fineFillSSE")
 	outLen := Load(Param("out").Len(), GP64())
+	// multiply by strip height
+	SHLQ(Imm(2), outLen)
 	TESTQ(outLen, outLen)
 	JZ(LabelRef("exit"))
 

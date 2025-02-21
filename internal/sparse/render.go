@@ -23,9 +23,11 @@ const (
 )
 
 type CsRenderCtx struct {
-	width     int
-	height    int
-	tiles     []wideTile
+	width  int
+	height int
+	// [y][x]wideTile
+	tiles [][]wideTile
+	// [sparse column][y]uint8
 	alphas    [][stripHeight]uint8
 	transform curve.Affine
 
@@ -37,7 +39,10 @@ type CsRenderCtx struct {
 func NewCsRenderCtx(width, height int) *CsRenderCtx {
 	widthTiles := (width + wideTileWidth - 1) / wideTileWidth
 	heightTiles := (height + stripHeight - 1) / stripHeight
-	tiles := make([]wideTile, widthTiles*heightTiles)
+	tiles := make([][]wideTile, heightTiles)
+	for i := range tiles {
+		tiles[i] = make([]wideTile, widthTiles)
+	}
 
 	return &CsRenderCtx{
 		width:     width,
@@ -48,11 +53,13 @@ func NewCsRenderCtx(width, height int) *CsRenderCtx {
 }
 
 func (ctx *CsRenderCtx) Reset() {
-	for i := range ctx.tiles {
-		tile := &ctx.tiles[i]
-		tile.bg = [4]float32{}
-		clear(tile.cmds)
-		tile.cmds = tile.cmds[:0]
+	for _, row := range ctx.tiles {
+		for x := range row {
+			tile := &row[x]
+			tile.bg = [4]float32{}
+			clear(tile.cmds)
+			tile.cmds = tile.cmds[:0]
+		}
 	}
 
 	ctx.alphas = ctx.alphas[:0]
@@ -60,11 +67,9 @@ func (ctx *CsRenderCtx) Reset() {
 
 func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap [][4]float32) {
 	fine := newFine(width, height, pixmap)
-	widthTiles := (ctx.width + wideTileWidth - 1) / wideTileWidth
-	heightTiles := (ctx.height + stripHeight - 1) / stripHeight
-	for y := range heightTiles {
-		for x := range widthTiles {
-			tile := &ctx.tiles[y*widthTiles+x]
+	for y, row := range ctx.tiles {
+		for x := range row {
+			tile := &row[x]
 			fine.clear(tile.bg)
 			for i := range tile.cmds {
 				cmd := tile.cmds[i]
@@ -103,7 +108,6 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		nextStrip := &ctx.stripBuf[i+1]
 		x0 := strip.x()
 		y := strip.stripY()
-		rowStart := int(y) * widthTiles
 		stripWidth := nextStrip.col - strip.col
 		x1 := x0 + stripWidth
 		xtile0 := int(x0) / wideTileWidth
@@ -129,7 +133,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 			}
 			x += width
 			col += width
-			ctx.tiles[rowStart+xtile].push(cmd)
+			ctx.tiles[y][xtile].push(cmd)
 		}
 		if nextStrip.winding != 0 && y == nextStrip.stripY() {
 			x = x1
@@ -143,7 +147,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 				xTileRel := x % wideTileWidth
 				width := min(x2, ((xtile+1)*wideTileWidth)) - x
 				x += width
-				ctx.tiles[rowStart+int(xtile)].fill(xTileRel, width, color)
+				ctx.tiles[y][xtile].fill(xTileRel, width, color)
 			}
 		}
 	}

@@ -7,10 +7,11 @@
 DATA one<>+0(SB)/4, $(1.0)
 GLOBL one<>(SB), RODATA|NOPTR, $4
 
-// func fineFillAVX(out [][4]float32, color [4]float32)
+// func fineFillAVX(out [][4][4]float32, color [4]float32)
 // Requires: AVX
 TEXT ·fineFillAVX(SB), $0-40
 	MOVQ           out_len+8(FP), AX
+	SHLQ           $0x02, AX
 	TESTQ          AX, AX
 	JZ             exit
 	VMOVSS         one<>+0(SB), X0
@@ -54,10 +55,11 @@ exit:
 	VZEROUPPER
 	RET
 
-// func fineFillSSE(out [][4]float32, color [4]float32)
+// func fineFillSSE(out [][4][4]float32, color [4]float32)
 // Requires: SSE
 TEXT ·fineFillSSE(SB), $0-40
 	MOVQ    out_len+8(FP), AX
+	SHLQ    $0x02, AX
 	TESTQ   AX, AX
 	JZ      exit
 	MOVSS   one<>+0(SB), X0
