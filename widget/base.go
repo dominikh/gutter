@@ -263,7 +263,34 @@ func DependOnWidgetOfExactType[W Widget](bc BuildContext) W {
 type BuildContext interface {
 }
 
+// A Widget is a declarative, immutable description of part of a UI. Widgets
+// form a directed, acyclic graph.
+//
+// Gutter uses widgets to build and maintain an [Element] tree, which is a
+// concrete instantiation of the UI, linking the declarative, immutable
+// description to mutable state.
+//
+// Gutter knows several specialized kinds of widgets:
+//   - [StatelessWidget]
+//   - [StatefulWidget]
+//   - [RenderObjectWidget]
+//   - [KeyedWidget]
+//   - [ParentDataWidget]
 type Widget interface {
+	// CreateElement returns a new Element that represents this widget in the
+	// element tree.
+	//
+	// You should use one of the following functions to implement CreateElement:
+	//
+	//   - [NewInteriorElement] for most [StatelessWidget]s and [StatefulWidget]s
+	//   - [NewRenderObjectElement] for any [RenderObjectWidget].
+	//   - [NewProxyElement] for widgets that wrap other widgets only to provide
+	//     additional data, but otherwise act transparently. [Flexible] and
+	//     [KeyedWidget] are two examples.
+	//   - [NewInheritedElement]
+	//
+	// See the documentation on [Element] for more information about the element
+	// tree.
 	CreateElement() Element
 }
 
@@ -275,7 +302,6 @@ type KeyedWidget interface {
 
 type StatelessWidget interface {
 	Widget
-	// XXX StatelessWidget and WidgetBuilder disagree about the signature.
 	Build(ctx BuildContext) Widget
 }
 
@@ -291,15 +317,38 @@ type ParentDataWidget interface {
 
 // State is state.
 type State[W Widget] interface {
-	WidgetBuilder
+	// Build builds a widget subtree that represents this widget. High-level
+	// widgets are composed of lower-level widgets. This process happens
+	// recursively until we're left with basic widgets, usually
+	// [RenderObjectWidget]s.
+	Build(ctx BuildContext) Widget
 
+	// GetStateHandle returns the state's handle, which is metadata about the
+	// state that is maintained by the Gutter runtime.
+	//
+	// To implement this method, embed StateHandle[W].
 	GetStateHandle() *StateHandle[W]
+
+	// Transition notifies the state of a state transition as a result of the
+	// widget tree changing. See the documentation of [StateTransitionKind] for
+	// a description of the possible transitions.
 	Transition(t StateTransition[W])
 }
 
+// A RenderObjectWidget is a widget that maps to a [render.Object]. Widgets of
+// this kind are responsible for putting actual pixels on the screen and form
+// the leaf nodes of the widget tree.
 type RenderObjectWidget interface {
 	Widget
+
+	// CreateRenderObject creates a new render object, configured as described
+	// by the widget. All calls must return the same concrete type of render
+	// object.
 	CreateRenderObject(ctx BuildContext) render.Object
+
+	// UpdateRenderObject updates an existing render object to match the widget.
+	// The concrete type of obj will always be the same as that returned by
+	// CreateRenderObject.
 	UpdateRenderObject(ctx BuildContext, obj render.Object)
 }
 
