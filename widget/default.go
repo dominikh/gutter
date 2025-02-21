@@ -9,81 +9,81 @@ import (
 	"honnef.co/go/gutter/render"
 )
 
-func RenderObjectElementAfterUpdate(el RenderObjectElement, oldWidget Widget) {
+func renderObjectElementAfterUpdate(el renderObjectElement, oldWidget Widget) {
 	forceRebuild(el)
 
 	// OPT(dh): optimize for the case where we had <2 children before and <2 children now. that doesn't need
 	// to allocate slices or go through list reconciliation.
-	widget := el.Handle().widget.(RenderObjectWidget)
-	el.SetChildren(UpdateChildren(el, WidgetChildren(widget)))
+	widget := el.handle().widget.(RenderObjectWidget)
+	el.setChildren(updateChildren(el, widgetChildren(widget)))
 }
-func RenderObjectElementAfterMount(el RenderObjectElement, parent Element, newSlot int) {
-	h := el.RenderHandle()
+func renderObjectElementAfterMount(el renderObjectElement, parent Element, newSlot int) {
+	h := el.renderHandle()
 	h.RenderObject = h.widget.(RenderObjectWidget).CreateRenderObject(el)
-	AttachRenderObject(el, newSlot)
-	el.Handle().dirty = false
+	attachRenderObject(el, newSlot)
+	el.handle().dirty = false
 
 	// OPT(dh): optimize for the single child case, which doesn't need iterators and slices.
-	w := el.Handle().widget
+	w := el.handle().widget
 	var children []Element
-	for i, childWidget := range WidgetChildrenIter(w) {
-		children = append(children, InflateWidget(el, childWidget, i))
+	for i, childWidget := range widgetChildrenIter(w) {
+		children = append(children, inflateWidget(el, childWidget, i))
 	}
-	el.SetChildren(children)
+	el.setChildren(children)
 }
-func RenderObjectElementAfterUnmount(el RenderObjectElement) {
-	h := el.RenderHandle()
+func renderObjectElementAfterUnmount(el renderObjectElement) {
+	h := el.renderHandle()
 	oldWidget := h.widget.(RenderObjectWidget)
-	if n, ok := oldWidget.(RenderObjectUnmountNotifyee); ok {
+	if n, ok := oldWidget.(renderObjectUnmountNotifyee); ok {
 		n.DidUnmountRenderObject(h.RenderObject)
 	}
 	render.Dispose(h.RenderObject)
 	h.RenderObject = nil
 }
-func RenderObjectElementAttachRenderObject(el RenderObjectElement, slot int) {
-	h := el.RenderHandle()
+func renderObjectElementAttachRenderObject(el renderObjectElement, slot int) {
+	h := el.renderHandle()
 	h.slot = slot
 	h.ancestorRenderObjectElement = findAncestorRenderObjectElement(el)
 	if h.ancestorRenderObjectElement != nil {
-		h.ancestorRenderObjectElement.InsertRenderObjectChild(h.RenderObject, slot)
+		h.ancestorRenderObjectElement.insertRenderObjectChild(h.RenderObject, slot)
 	}
-	renderObject := el.RenderHandle().RenderObject
+	renderObject := el.renderHandle().RenderObject
 	ancestorParentDataElements(el)(func(pd ParentDataWidget) bool {
 		pd.ApplyParentData(renderObject)
 		return true
 	})
 }
-func RenderObjectElementPerformRebuild(el RenderObjectElement) {
-	h := el.RenderHandle()
+func renderObjectElementPerformRebuild(el renderObjectElement) {
+	h := el.renderHandle()
 	h.widget.(RenderObjectWidget).UpdateRenderObject(el, h.RenderObject)
-	el.Handle().dirty = false
+	el.handle().dirty = false
 }
-func RenderObjectElementInsertRenderObjectChild(el RenderObjectElement, child render.Object, slot int) {
+func renderObjectElementInsertRenderObjectChild(el renderObjectElement, child render.Object, slot int) {
 	if slot >= 0 {
 		slot--
 	}
-	render.InsertChild(el.RenderHandle().RenderObject.(render.ObjectWithChildren), child, slot)
+	render.InsertChild(el.renderHandle().RenderObject.(render.ObjectWithChildren), child, slot)
 }
-func RenderObjectElementMoveRenderObjectChild(el RenderObjectElement, child render.Object, newSlot int) {
+func renderObjectElementMoveRenderObjectChild(el renderObjectElement, child render.Object, newSlot int) {
 	if newSlot >= 0 {
 		newSlot--
 	}
-	render.MoveChild(el.RenderHandle().RenderObject.(render.ObjectWithChildren), child, newSlot)
+	render.MoveChild(el.renderHandle().RenderObject.(render.ObjectWithChildren), child, newSlot)
 }
-func RenderObjectElementRemoveRenderObjectChild(el RenderObjectElement, child render.Object, slot int) {
-	render.RemoveChild(el.RenderHandle().RenderObject.(render.ChildRemover), child)
+func renderObjectElementRemoveRenderObjectChild(el renderObjectElement, child render.Object, slot int) {
+	render.RemoveChild(el.renderHandle().RenderObject.(render.ChildRemover), child)
 }
 
-func ancestorParentDataElements(el RenderObjectElement) func(yield func(pd ParentDataWidget) bool) {
+func ancestorParentDataElements(el renderObjectElement) func(yield func(pd ParentDataWidget) bool) {
 	return func(yield func(pd ParentDataWidget) bool) {
-		ancestor := el.Handle().parent
-		for ancestor != nil && !isType[RenderObjectElement](ancestor) {
-			if w, ok := ancestor.Handle().widget.(ParentDataWidget); ok {
+		ancestor := el.handle().parent
+		for ancestor != nil && !isType[renderObjectElement](ancestor) {
+			if w, ok := ancestor.handle().widget.(ParentDataWidget); ok {
 				if !yield(w) {
 					break
 				}
 			}
-			ancestor = ancestor.Handle().parent
+			ancestor = ancestor.handle().parent
 		}
 	}
 }

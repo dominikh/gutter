@@ -10,18 +10,18 @@ import (
 	"strings"
 )
 
-func FormatElementTree(root Element) string {
+func formatElementTree(root Element) string {
 	var sb strings.Builder
 	sb.WriteString("strict digraph{\n")
 	sb.WriteString("rankdir=TB;\n")
 	var visit func(parent Element, el Element)
 	visit = func(parent Element, el Element) {
-		w := el.Handle().widget
+		w := el.handle().widget
 		sb.WriteString("{\nrank=same;\n")
 		fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T\", fillcolor=lightgreen, style=filled];\n", w)
-		fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T (%s)\", fillcolor=magenta, style=filled];\n", el, el.Handle().lifecycleState)
-		if el, ok := el.(RenderObjectElement); ok {
-			obj := el.RenderHandle().RenderObject
+		fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T (%s)\", fillcolor=magenta, style=filled];\n", el, el.handle().lifecycleState)
+		if el, ok := el.(renderObjectElement); ok {
+			obj := el.renderHandle().RenderObject
 			if obj != nil {
 				fmt.Fprintf(&sb, "n%[1]p [label=\"%[1]T\", fillcolor=cyan, style=filled];\n", obj)
 			}
@@ -40,12 +40,12 @@ func FormatElementTree(root Element) string {
 		fmt.Fprintf(&sb, "n%p -> n%p [color=lightgreen];\n", w, el)
 
 		if parent != nil {
-			parentW := parent.Handle().widget
+			parentW := parent.handle().widget
 			fmt.Fprintf(&sb, "n%p -> n%p;\n", parentW, w)
 		}
 
-		if el, ok := el.(RenderObjectElement); ok {
-			obj := el.RenderHandle().RenderObject
+		if el, ok := el.(renderObjectElement); ok {
+			obj := el.renderHandle().RenderObject
 			if obj == nil {
 				fmt.Fprintf(&sb, "n%p -> NIL_RENDER_OBJECT [color=magenta];\n", el)
 			} else {
@@ -56,8 +56,8 @@ func FormatElementTree(root Element) string {
 				}
 			}
 		}
-		if el, ok := el.(ElementWithChildren); ok {
-			for child := range el.Children() {
+		if el, ok := el.(elementWithChildren); ok {
+			for child := range el.children() {
 				visit(el, child)
 				fmt.Fprintf(&sb, "n%p -> n%p;\n", el, child)
 			}

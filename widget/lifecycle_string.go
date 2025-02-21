@@ -8,18 +8,18 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[ElementLifecycleIdle-0]
-	_ = x[ElementLifecycleActive-1]
-	_ = x[ElementLifecycleInactive-2]
-	_ = x[ElementLifecycleDefunct-3]
+	_ = x[elementLifecycleIdle-0]
+	_ = x[elementLifecycleActive-1]
+	_ = x[elementLifecycleInactive-2]
+	_ = x[elementLifecycleDefunct-3]
 }
 
 const _Lifecycle_name = "IdleActiveInactiveDefunct"
 
 var _Lifecycle_index = [...]uint8{0, 4, 10, 18, 25}
 
-func (i Lifecycle) String() string {
-	if i >= Lifecycle(len(_Lifecycle_index)-1) {
+func (i lifecycle) String() string {
+	if i >= lifecycle(len(_Lifecycle_index)-1) {
 		return "Lifecycle(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _Lifecycle_name[_Lifecycle_index[i]:_Lifecycle_index[i+1]]

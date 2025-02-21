@@ -44,7 +44,7 @@ func (is *AnimatedStateHelper[W, S]) updateTweens(s S) {
 func (is *AnimatedStateHelper[W, S]) Transition(s S, t widget.StateTransition[W]) (updatedTweens bool) {
 	switch t.Kind {
 	case widget.StateInitializing:
-		is.controller = animation.NewController(s.GetStateHandle().Element.Handle().BuildOwner)
+		is.controller = animation.NewController(s.GetStateHandle().BuildOwner())
 		widget := s.GetStateHandle().Widget
 		if f := reflect.ValueOf(widget).Elem().FieldByName("Curve"); f.IsValid() {
 			ease, _ := f.Interface().(animation.Curve)

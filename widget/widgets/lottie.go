@@ -72,7 +72,7 @@ func (l *lottieState) Transition(t widget.StateTransition[*Lottie]) {
 	switch t.Kind {
 	case widget.StateInitializing:
 		// XXX guard against malformed frame numbers and frame rates
-		l.autoAnimation = animation.NewController(l.GetStateHandle().Element.Handle().BuildOwner)
+		l.autoAnimation = animation.NewController(l.GetStateHandle().BuildOwner())
 		l.autoAnimation.Duration = l.Widget.Composition.Duration()
 		l.autoAnimation.LowerBound = l.Widget.Composition.FirstFrame
 		l.autoAnimation.UpperBound = l.Widget.Composition.LastFrame

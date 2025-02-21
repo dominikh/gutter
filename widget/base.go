@@ -23,15 +23,15 @@ import (
 	"honnef.co/go/gutter/wsi"
 )
 
-type ElementTransitionKind uint8
+type elementTransitionKind uint8
 
 const (
-	ElementMounted ElementTransitionKind = iota
-	ElementChangedDependencies
-	ElementUpdated
-	ElementDeactivating
-	ElementActivated
-	ElementUnmounted
+	elementMounted elementTransitionKind = iota
+	elementChangedDependencies
+	elementUpdated
+	elementDeactivating
+	elementActivated
+	elementUnmounted
 )
 
 //go:generate stringer -type=StateTransitionKind
@@ -46,27 +46,27 @@ const (
 	StateDisposing
 )
 
-type RenderObjectElement interface {
-	ParentElement
+type renderObjectElement interface {
+	parentElement
 
-	RenderHandle() *RenderObjectElementHandle
+	renderHandle() *renderObjectElementHandle
 
-	InsertRenderObjectChild(child render.Object, slot int)
-	RemoveRenderObjectChild(child render.Object, slot int)
-	MoveRenderObjectChild(child render.Object, newSlot int)
+	insertRenderObjectChild(child render.Object, slot int)
+	removeRenderObjectChild(child render.Object, slot int)
+	moveRenderObjectChild(child render.Object, newSlot int)
 
-	AttachRenderObject(slot int)
+	attachRenderObject(slot int)
 }
 
-type ElementTransition struct {
-	Kind ElementTransitionKind
+type elementTransition struct {
+	kind elementTransitionKind
 
 	// The old widget for Kind == ElementUpdated
-	OldWidget Widget
+	oldWidget Widget
 
 	// The parent and slot for Kind == ElementMounted
-	Parent  Element
-	NewSlot int
+	parent  Element
+	newSlot int
 }
 
 type StateTransition[W Widget] struct {
@@ -78,90 +78,90 @@ type StateTransition[W Widget] struct {
 
 // TODO support "Notification"
 
-func NewProxyElement[W Widget](w W) InteriorElement {
-	el := &ProxyElement{}
+func NewProxyElement[W Widget](w W) Element {
+	el := &proxyElement{}
 	el.widget = w
 	return el
 }
 
-type ProxyElement struct {
-	ElementHandle
-	SingleChildElement
+type proxyElement struct {
+	elementHandle
+	singleChildElement
 }
 
-// Build implements InteriorElement.
-func (el *ProxyElement) Build() Widget {
-	w := GetWidgetChild(el.widget)
+// build implements interiorElement.
+func (el *proxyElement) build() Widget {
+	w := getWidgetChild(el.widget)
 	// TODO(dh): emit a more useful error than a generic assertion failure
 	debug.Assert(w != nil)
 	return w
 }
 
-// PerformRebuild implements InteriorElement.
-func (el *ProxyElement) PerformRebuild() {
-	built := el.Build()
-	el.SetChild(UpdateChild(el, el.Child(), built, el.Handle().slot))
-	el.Handle().dirty = false
+// performRebuild implements interiorElement.
+func (el *proxyElement) performRebuild() {
+	built := el.build()
+	el.SetChild(updateChild(el, el.Child(), built, el.handle().slot))
+	el.handle().dirty = false
 }
 
-// Transition implements InteriorElement.
-func (el *ProxyElement) Transition(t ElementTransition) {
-	switch t.Kind {
-	case ElementMounted:
+// Transition implements interiorElement.
+func (el *proxyElement) transition(t elementTransition) {
+	switch t.kind {
+	case elementMounted:
 		rebuild(el)
-	case ElementActivated:
+	case elementActivated:
 		MarkNeedsBuild(el)
-	case ElementUpdated:
+	case elementUpdated:
 		forceRebuild(el)
 		// notifyClients(el, t.OldWidget)
 	}
 }
 
-func NewInheritedElement[W Widget](w W) InheritedElement {
-	se := &SimpleInheritedElement{}
-	se.ElementHandle.widget = w
+func NewInheritedElement[W Widget](w W) inheritedElement {
+	se := &simpleInheritedElement{}
+	se.elementHandle.widget = w
 	// XXX do we care about StatefulWidget here, analogous to NewInteriorElement?
 	return se
 }
 
-type InheritedElement interface {
-	InteriorElement
-	UpdateInheritance()
+type inheritedElement interface {
+	interiorElement
+	updateInheritance()
 }
 
-type SimpleInheritedElement struct {
-	ProxyElement
+type simpleInheritedElement struct {
+	proxyElement
 }
 
 func updateInheritance(el Element) {
-	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
-	if el, ok := el.(InheritedElement); ok {
-		el.UpdateInheritance()
+	debug.Assert(el.handle().lifecycleState == elementLifecycleActive)
+	if el, ok := el.(inheritedElement); ok {
+		el.updateInheritance()
 		return
 	}
-	h := el.Handle()
+	h := el.handle()
 	if p := h.parent; p != nil {
-		h.inheritedElements = p.Handle().inheritedElements
+		h.inheritedElements = p.handle().inheritedElements
 	} else {
 		h.inheritedElements = nil
 	}
 }
 
-func (el *SimpleInheritedElement) UpdateInheritance() {
-	var incomingWidgets map[reflect.Type]InheritedElement
-	h := el.Handle()
+func (el *simpleInheritedElement) updateInheritance() {
+	var incomingWidgets map[reflect.Type]inheritedElement
+	h := el.handle()
 	if p := h.parent; p != nil {
-		incomingWidgets = mem.CopyMap(p.Handle().inheritedElements)
+		incomingWidgets = mem.CopyMap(p.handle().inheritedElements)
 	} else {
-		incomingWidgets = map[reflect.Type]InheritedElement{}
+		incomingWidgets = map[reflect.Type]inheritedElement{}
 	}
 	incomingWidgets[reflect.TypeOf(h.widget)] = el
 	h.inheritedElements = incomingWidgets
 }
 
-func NewInteriorElement[W Widget](w W) InteriorElement {
-	se := &SimpleInteriorElement[W]{}
-	se.ElementHandle.widget = w
+func NewInteriorElement[W Widget](w W) Element {
+	se := &simpleInteriorElement[W]{}
+	se.elementHandle.widget = w
 	if w2, ok := any(w).(StatefulWidget[W]); ok {
 		se.State = w2.CreateState()
 		sh := se.State.GetStateHandle()
@@ -171,56 +171,56 @@ func NewInteriorElement[W Widget](w W) InteriorElement {
 	return se
 }
 
-type SimpleInteriorElement[W Widget] struct {
-	ElementHandle
+type simpleInteriorElement[W Widget] struct {
+	elementHandle
 	State[W]
-	SingleChildElement
+	singleChildElement
 }
 
-func (el *SimpleInteriorElement[W]) Transition(t ElementTransition) {
-	switch t.Kind {
-	case ElementMounted:
+func (el *simpleInteriorElement[W]) transition(t elementTransition) {
+	switch t.kind {
+	case elementMounted:
 		if s := el.State; s != nil {
 			s.Transition(StateTransition[W]{Kind: StateInitializing})
 			s.Transition(StateTransition[W]{Kind: StateChangedDependencies})
 		}
 		rebuild(el)
-	case ElementActivated:
+	case elementActivated:
 		if s := el.State; s != nil {
 			s.Transition(StateTransition[W]{Kind: StateActivating})
 		}
 		MarkNeedsBuild(el)
-	case ElementUnmounted:
+	case elementUnmounted:
 		if s := el.State; s != nil {
 			h := s.GetStateHandle()
 			s.Transition(StateTransition[W]{Kind: StateDisposing})
 			h.Element = nil
 		}
-	case ElementUpdated:
+	case elementUpdated:
 		if s := el.State; s != nil {
 			h := el.GetStateHandle()
 			oldWidget := h.Widget
-			h.Widget = el.Handle().widget.(W)
+			h.Widget = el.handle().widget.(W)
 			s.Transition(StateTransition[W]{Kind: StateUpdatedWidget, OldWidget: oldWidget})
 		}
 		forceRebuild(el)
-	case ElementDeactivating:
+	case elementDeactivating:
 		if s := el.State; s != nil {
 			s.Transition(StateTransition[W]{Kind: StateDeactivating})
 		}
-	case ElementChangedDependencies:
+	case elementChangedDependencies:
 		if s := el.State; s != nil {
 			el.GetStateHandle().didChangeDependencies = true
 		}
 	}
 }
 
-func (el *SimpleInteriorElement[W]) GetState() State[W] {
+func (el *simpleInteriorElement[W]) GetState() State[W] {
 	// XXX can we delete this?
 	return el.State
 }
 
-func (el *SimpleInteriorElement[W]) Build() Widget {
+func (el *simpleInteriorElement[W]) Build() Widget {
 	if s := el.State; s != nil {
 		return s.Build(el)
 	} else if w, ok := el.widget.(WidgetBuilder); ok {
@@ -230,7 +230,7 @@ func (el *SimpleInteriorElement[W]) Build() Widget {
 	}
 }
 
-func (el *SimpleInteriorElement[W]) PerformRebuild() {
+func (el *simpleInteriorElement[W]) performRebuild() {
 	if s := el.State; s != nil {
 		h := el.GetStateHandle()
 		if h.didChangeDependencies {
@@ -239,19 +239,19 @@ func (el *SimpleInteriorElement[W]) PerformRebuild() {
 		}
 	}
 	built := el.Build()
-	el.SetChild(UpdateChild(el, el.Child(), built, el.Handle().slot))
-	el.Handle().dirty = false
+	el.SetChild(updateChild(el, el.Child(), built, el.handle().slot))
+	el.handle().dirty = false
 }
 
 func DependOnWidgetOfExactType[W Widget](bc BuildContext) W {
 	el := bc.(Element)
-	h := el.Handle()
+	h := el.handle()
 	if ancestor := h.inheritedElements[reflect.TypeOf(*new(W))]; ancestor != nil {
 		if h.dependencies == nil {
-			h.dependencies = make(map[InheritedElement]struct{})
+			h.dependencies = make(map[inheritedElement]struct{})
 		}
 		h.dependencies[ancestor] = struct{}{}
-		ah := ancestor.Handle()
+		ah := ancestor.handle()
 		if ah.dependents == nil {
 			ah.dependents = make(map[Element]struct{})
 		}
@@ -355,47 +355,47 @@ type RenderObjectWidget interface {
 }
 
 type Element interface {
-	Handle() *ElementHandle
-	Transition(t ElementTransition)
-	PerformRebuild()
+	handle() *elementHandle
+	transition(t elementTransition)
+	performRebuild()
 }
 
-type ElementWithChildren interface {
+type elementWithChildren interface {
 	Element
-	Children() iter.Seq[Element]
+	children() iter.Seq[Element]
 }
 
-type InteriorElement interface {
-	ParentElement
-	Build() Widget
+type interiorElement interface {
+	parentElement
+	build() Widget
 }
 
-func DidChangeDependencies(el Element) {
+func didChangeDependencies(el Element) {
 	MarkNeedsBuild(el)
-	el.Transition(ElementTransition{Kind: ElementChangedDependencies})
+	el.transition(elementTransition{kind: elementChangedDependencies})
 }
 
-func Update(el Element, newWidget Widget) {
-	h := el.Handle()
+func update(el Element, newWidget Widget) {
+	h := el.handle()
 	oldWidget := h.widget
 	h.widget = newWidget
 	if pd, ok := h.widget.(ParentDataWidget); ok {
-		ApplyParentData(pd, el)
+		applyParentData(pd, el)
 	}
 	for dependent := range h.dependents {
 		// OPT(dh): introduce UpdateShouldNotify
-		DidChangeDependencies(dependent)
+		didChangeDependencies(dependent)
 	}
-	el.Transition(ElementTransition{Kind: ElementUpdated, OldWidget: oldWidget})
+	el.transition(elementTransition{kind: elementUpdated, oldWidget: oldWidget})
 }
 
-func RenderObjectAttachingChild(el Element) Element {
-	if _, ok := el.(RenderObjectElement); ok {
+func renderObjectAttachingChild(el Element) Element {
+	if _, ok := el.(renderObjectElement); ok {
 		return nil
 	}
 	var out Element
-	if el, ok := el.(ElementWithChildren); ok {
-		for child := range el.Children() {
+	if el, ok := el.(elementWithChildren); ok {
+		for child := range el.children() {
 			debug.Assert(out == nil)
 			out = child
 		}
@@ -404,8 +404,8 @@ func RenderObjectAttachingChild(el Element) Element {
 }
 
 func MarkNeedsBuild(el Element) {
-	h := el.Handle()
-	if h.lifecycleState != ElementLifecycleActive {
+	h := el.handle()
+	if h.lifecycleState != elementLifecycleActive {
 		return
 	}
 	if h.dirty {
@@ -415,58 +415,58 @@ func MarkNeedsBuild(el Element) {
 	h.BuildOwner.scheduleBuildFor(el)
 }
 
-func AttachRenderObject(el Element, slot int) {
+func attachRenderObject(el Element, slot int) {
 	type renderObjectAttacher interface {
-		AttachRenderObject(slot int)
+		attachRenderObject(slot int)
 	}
 
 	if el, ok := el.(renderObjectAttacher); ok {
-		el.AttachRenderObject(slot)
+		el.attachRenderObject(slot)
 		return
 	}
-	if el, ok := el.(ElementWithChildren); ok {
-		for child := range el.Children() {
-			AttachRenderObject(child, slot)
+	if el, ok := el.(elementWithChildren); ok {
+		for child := range el.children() {
+			attachRenderObject(child, slot)
 		}
 	}
-	el.Handle().slot = slot
+	el.handle().slot = slot
 }
 
-type RenderObjectDetacher interface {
-	PerformDetachRenderObject()
+type renderObjectDetacher interface {
+	performDetachRenderObject()
 }
 
-// DetachRenderObject recursively instructs the children of the element to detach their render object.
+// detachRenderObject recursively instructs the children of the element to detach their render object.
 // Elements that implement RenderObjectDetacher have their AfterDetachRenderObject method called instead.
-func DetachRenderObject(el Element) {
-	if el, ok := el.(RenderObjectDetacher); ok {
-		el.PerformDetachRenderObject()
+func detachRenderObject(el Element) {
+	if el, ok := el.(renderObjectDetacher); ok {
+		el.performDetachRenderObject()
 		return
 	}
-	if el, ok := el.(ElementWithChildren); ok {
-		for child := range el.Children() {
-			DetachRenderObject(child)
+	if el, ok := el.(elementWithChildren); ok {
+		for child := range el.children() {
+			detachRenderObject(child)
 		}
 	}
-	el.Handle().slot = int(math.MinInt)
+	el.handle().slot = int(math.MinInt)
 }
 
-type SlotUpdater interface {
-	AfterUpdateSlot(oldSlot, newSlot int)
+type slotUpdater interface {
+	afterUpdateSlot(oldSlot, newSlot int)
 }
 
-// UpdateSlot updates the element's slot. If the element implements SlotUpdater, AfterUpdateSlot is called
+// updateSlot updates the element's slot. If the element implements SlotUpdater, afterUpdateSlot is called
 // afterwards with the old and new slots.
-func UpdateSlot(el Element, newSlot int) {
-	h := el.Handle()
+func updateSlot(el Element, newSlot int) {
+	h := el.handle()
 	old := h.slot
 	h.slot = newSlot
-	if el, ok := el.(SlotUpdater); ok {
-		el.AfterUpdateSlot(old, newSlot)
+	if el, ok := el.(slotUpdater); ok {
+		el.afterUpdateSlot(old, newSlot)
 	}
 }
 
-func UpdateChild(el, child Element, newWidget Widget, newSlot int) Element {
+func updateChild(el, child Element, newWidget Widget, newSlot int) Element {
 	if newWidget == nil {
 		if child != nil {
 			deactivateChild(child)
@@ -476,56 +476,56 @@ func UpdateChild(el, child Element, newWidget Widget, newSlot int) Element {
 
 	var newChild Element
 	if child != nil {
-		if child.Handle().widget == newWidget {
-			if child.Handle().slot != newSlot {
+		if child.handle().widget == newWidget {
+			if child.handle().slot != newSlot {
 				updateSlotForChild(el, child, newSlot)
 			}
 			newChild = child
-		} else if canUpdate(child.Handle().widget, newWidget) {
-			if child.Handle().slot != newSlot {
+		} else if canUpdate(child.handle().widget, newWidget) {
+			if child.handle().slot != newSlot {
 				updateSlotForChild(el, child, newSlot)
 			}
-			Update(child, newWidget)
+			update(child, newWidget)
 			newChild = child
 		} else {
 			deactivateChild(child)
-			newChild = InflateWidget(el, newWidget, newSlot)
+			newChild = inflateWidget(el, newWidget, newSlot)
 		}
 	} else {
-		newChild = InflateWidget(el, newWidget, newSlot)
+		newChild = inflateWidget(el, newWidget, newSlot)
 	}
 
 	return newChild
 }
 
-// Activate activates the element. If it implements Activater, the AfterActivate method will be called afterwards.
-func Activate(el Element) {
-	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
-	hadDependencies := len(el.Handle().dependencies) != 0 || el.Handle().hadUnsatisfiedDependencies
+// activate activates the element. If it implements Activater, the AfterActivate method will be called afterwards.
+func activate(el Element) {
+	debug.Assert(el.handle().lifecycleState == elementLifecycleInactive)
+	hadDependencies := len(el.handle().dependencies) != 0 || el.handle().hadUnsatisfiedDependencies
 
-	h := el.Handle()
-	h.lifecycleState = ElementLifecycleActive
+	h := el.handle()
+	h.lifecycleState = elementLifecycleActive
 	// We unregistered our dependencies in deactivate, but never cleared the list.
 	// Since we're going to be reused, let's clear our list now.
-	clear(el.Handle().dependencies)
-	el.Handle().hadUnsatisfiedDependencies = false
+	clear(el.handle().dependencies)
+	el.handle().hadUnsatisfiedDependencies = false
 	updateInheritance(el)
 	// el.attachNotificationTree()
 	if h.dirty {
 		h.BuildOwner.scheduleBuildFor(el)
 	}
 	if hadDependencies {
-		DidChangeDependencies(el)
+		didChangeDependencies(el)
 	}
 
-	el.Transition(ElementTransition{Kind: ElementActivated})
+	el.transition(elementTransition{kind: elementActivated})
 }
 
-func Deactivate(el Element) {
-	el.Transition(ElementTransition{Kind: ElementDeactivating})
+func deactivate(el Element) {
+	el.transition(elementTransition{kind: elementDeactivating})
 
-	for dependency := range el.Handle().dependencies {
-		delete(dependency.Handle().dependents, el)
+	for dependency := range el.handle().dependencies {
+		delete(dependency.handle().dependents, el)
 		// For expediency, we don't actually clear the list here, even though it's
 		// no longer representative of what we are registered with. If we never
 		// get re-used, it doesn't matter. If we do, then we'll clear the list in
@@ -533,30 +533,30 @@ func Deactivate(el Element) {
 		// implementation to decide whether to rebuild based on whether we had
 		// dependencies here.
 	}
-	el.Handle().inheritedElements = nil
+	el.handle().inheritedElements = nil
 
-	el.Handle().lifecycleState = ElementLifecycleInactive
+	el.handle().lifecycleState = elementLifecycleInactive
 }
 
-func Mount(el, parent Element, newSlot int) {
-	h := el.Handle()
+func mount(el, parent Element, newSlot int) {
+	h := el.handle()
 	h.parent = parent
 	h.slot = newSlot
-	h.lifecycleState = ElementLifecycleActive
+	h.lifecycleState = elementLifecycleActive
 	if parent != nil {
-		h.depth = parent.Handle().depth + 1
+		h.depth = parent.handle().depth + 1
 	} else {
 		h.depth = 1
 	}
 	if parent != nil {
 		// Only assign ownership if the parent is non-null. If parent is null
 		// (the root node), the owner should have already been assigned.
-		h.BuildOwner = parent.Handle().BuildOwner
+		h.BuildOwner = parent.handle().BuildOwner
 	}
 
 	if widget, ok := h.widget.(KeyedWidget); ok {
 		if key, ok := widget.GetKey().(GlobalKey); ok {
-			h.BuildOwner.RegisterGlobalKey(key, el)
+			h.BuildOwner.registerGlobalKey(key, el)
 		}
 	}
 
@@ -564,87 +564,87 @@ func Mount(el, parent Element, newSlot int) {
 
 	// XXX attachNotificationTree
 
-	el.Handle().dirty = true
-	el.Transition(ElementTransition{Kind: ElementMounted, Parent: parent, NewSlot: newSlot})
+	el.handle().dirty = true
+	el.transition(elementTransition{kind: elementMounted, parent: parent, newSlot: newSlot})
 }
 
-// Unmount unmounts the element.
-func Unmount(el Element) {
-	h := el.Handle()
+// unmount unmounts the element.
+func unmount(el Element) {
+	h := el.handle()
 	if keyer, ok := h.widget.(KeyedWidget); ok {
 		if key, ok := keyer.GetKey().(GlobalKey); ok {
-			h.BuildOwner.UnregisterGlobalKey(key, el)
+			h.BuildOwner.unregisterGlobalKey(key, el)
 		}
 	}
-	h.lifecycleState = ElementLifecycleDefunct
+	h.lifecycleState = elementLifecycleDefunct
 
-	el.Transition(ElementTransition{Kind: ElementUnmounted})
+	el.transition(elementTransition{kind: elementUnmounted})
 }
 
-type ChildForgetter interface {
-	ForgetChild(child Element)
+type childForgetter interface {
+	forgetChild(child Element)
 }
 
-// ForgetChild instructs an element to forget one of its children by calling ForgetChild if possible.
-func ForgetChild(el Element, child Element) {
-	if el, ok := el.(ChildForgetter); ok {
-		el.ForgetChild(child)
+// forgetChild instructs an element to forget one of its children by calling forgetChild if possible.
+func forgetChild(el Element, child Element) {
+	if el, ok := el.(childForgetter); ok {
+		el.forgetChild(child)
 	}
 }
 
-type ParentElement interface {
-	ElementWithChildren
+type parentElement interface {
+	elementWithChildren
 	// XXX figure out a better API
-	GetChildren() []Element
-	SetChildren(children []Element)
-	ForgottenChildren() map[Element]struct{}
+	getChildren() []Element
+	setChildren(children []Element)
+	forgottenChildren() map[Element]struct{}
 }
 
 type WidgetBuilder interface {
 	Build(ctx BuildContext) Widget
 }
 
-var _ RenderObjectElement = (*SimpleRenderObjectElement)(nil)
+var _ renderObjectElement = (*simpleRenderObjectElement)(nil)
 
-type SimpleRenderObjectElement struct {
-	RenderObjectElementHandle
-	ManyChildElements
+type simpleRenderObjectElement struct {
+	renderObjectElementHandle
+	manyChildElements
 }
 
-// AttachRenderObject implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) AttachRenderObject(slot int) {
-	RenderObjectElementAttachRenderObject(el, slot)
+// attachRenderObject implements renderObjectElement.
+func (el *simpleRenderObjectElement) attachRenderObject(slot int) {
+	renderObjectElementAttachRenderObject(el, slot)
 }
 
-// InsertRenderObjectChild implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) InsertRenderObjectChild(child render.Object, slot int) {
-	RenderObjectElementInsertRenderObjectChild(el, child, slot)
+// InsertRenderObjectChild implements renderObjectElement.
+func (el *simpleRenderObjectElement) insertRenderObjectChild(child render.Object, slot int) {
+	renderObjectElementInsertRenderObjectChild(el, child, slot)
 }
 
-// MoveRenderObjectChild implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) MoveRenderObjectChild(child render.Object, newSlot int) {
-	RenderObjectElementMoveRenderObjectChild(el, child, newSlot)
+// moveRenderObjectChild implements renderObjectElement.
+func (el *simpleRenderObjectElement) moveRenderObjectChild(child render.Object, newSlot int) {
+	renderObjectElementMoveRenderObjectChild(el, child, newSlot)
 }
 
-// RemoveRenderObjectChild implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) RemoveRenderObjectChild(child render.Object, slot int) {
-	RenderObjectElementRemoveRenderObjectChild(el, child, slot)
+// removeRenderObjectChild implements renderObjectElement.
+func (el *simpleRenderObjectElement) removeRenderObjectChild(child render.Object, slot int) {
+	renderObjectElementRemoveRenderObjectChild(el, child, slot)
 }
 
-// PerformRebuild implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) PerformRebuild() {
-	RenderObjectElementPerformRebuild(el)
+// performRebuild implements renderObjectElement.
+func (el *simpleRenderObjectElement) performRebuild() {
+	renderObjectElementPerformRebuild(el)
 }
 
-// Transition implements RenderObjectElement.
-func (el *SimpleRenderObjectElement) Transition(t ElementTransition) {
-	switch t.Kind {
-	case ElementMounted:
-		RenderObjectElementAfterMount(el, t.Parent, t.NewSlot)
-	case ElementUnmounted:
-		RenderObjectElementAfterUnmount(el)
-	case ElementUpdated:
-		RenderObjectElementAfterUpdate(el, t.OldWidget.(RenderObjectWidget))
+// Transition implements renderObjectElement.
+func (el *simpleRenderObjectElement) transition(t elementTransition) {
+	switch t.kind {
+	case elementMounted:
+		renderObjectElementAfterMount(el, t.parent, t.newSlot)
+	case elementUnmounted:
+		renderObjectElementAfterUnmount(el)
+	case elementUpdated:
+		renderObjectElementAfterUpdate(el, t.oldWidget.(RenderObjectWidget))
 	}
 }
 
@@ -677,11 +677,11 @@ func NewBuildOwner() *BuildOwner {
 	}
 }
 
-func (o *BuildOwner) RegisterGlobalKey(key GlobalKey, el Element) {
+func (o *BuildOwner) registerGlobalKey(key GlobalKey, el Element) {
 	o.globals[key] = el
 }
 
-func (o *BuildOwner) UnregisterGlobalKey(key GlobalKey, el Element) {
+func (o *BuildOwner) unregisterGlobalKey(key GlobalKey, el Element) {
 	if o.globals[key] == el {
 		// We have to check the element because of this sequence of events:
 		//
@@ -701,7 +701,7 @@ func (o *BuildOwner) UnregisterGlobalKey(key GlobalKey, el Element) {
 }
 
 func (o *BuildOwner) scheduleBuildFor(el Element) {
-	if el.Handle().inDirtyList {
+	if el.handle().inDirtyList {
 		o.dirtyElementsNeedsResorting = true
 		return
 	}
@@ -710,7 +710,7 @@ func (o *BuildOwner) scheduleBuildFor(el Element) {
 		o.OnBuildScheduled()
 	}
 	o.dirtyElements = append(o.dirtyElements, el)
-	el.Handle().inDirtyList = true
+	el.handle().inDirtyList = true
 }
 
 func (o *BuildOwner) BuildScope(callback func()) {
@@ -734,7 +734,7 @@ func (o *BuildOwner) BuildScope(callback func()) {
 			sortElements(o.dirtyElements)
 			o.dirtyElementsNeedsResorting = false
 			dirtyCount = len(o.dirtyElements)
-			for index > 0 && o.dirtyElements[index-1].Handle().dirty {
+			for index > 0 && o.dirtyElements[index-1].handle().dirty {
 				// It is possible for previously dirty but inactive widgets to move right in the list.
 				// We therefore have to move the index left in the list to account for this.
 				// We don't know how many could have moved. However, we do know that the only possible
@@ -747,7 +747,7 @@ func (o *BuildOwner) BuildScope(callback func()) {
 		}
 	}
 	for _, element := range o.dirtyElements {
-		element.Handle().inDirtyList = false
+		element.handle().inDirtyList = false
 	}
 	clear(o.dirtyElements)
 	o.dirtyElements = o.dirtyElements[:0]
@@ -755,18 +755,18 @@ func (o *BuildOwner) BuildScope(callback func()) {
 	o.dirtyElementsNeedsResorting = false
 }
 
-func (o *BuildOwner) FinalizeTree() {
+func (o *BuildOwner) finalizeTree() {
 	o.inactiveElements.unmountAll()
 }
 
 //go:generate stringer -type=Lifecycle --trimprefix=ElementLifecycle
-type Lifecycle uint8
+type lifecycle uint8
 
 const (
-	ElementLifecycleIdle Lifecycle = iota
-	ElementLifecycleActive
-	ElementLifecycleInactive
-	ElementLifecycleDefunct
+	elementLifecycleIdle lifecycle = iota
+	elementLifecycleActive
+	elementLifecycleInactive
+	elementLifecycleDefunct
 )
 
 type StateHandle[W Widget] struct {
@@ -775,68 +775,72 @@ type StateHandle[W Widget] struct {
 	didChangeDependencies bool
 }
 
-type ElementHandle struct {
+type elementHandle struct {
 	parent         Element
 	slot           int
-	lifecycleState Lifecycle
+	lifecycleState lifecycle
 	depth          int
 	BuildOwner     *BuildOwner
 	dirty          bool
 	inDirtyList    bool
 	widget         Widget
 	// OPT(dh): use a persistent data structure for inheritedElements
-	inheritedElements          map[reflect.Type]InheritedElement
-	dependencies               map[InheritedElement]struct{}
+	inheritedElements          map[reflect.Type]inheritedElement
+	dependencies               map[inheritedElement]struct{}
 	dependents                 map[Element]struct{}
 	hadUnsatisfiedDependencies bool
 }
 
 func (h *StateHandle[W]) GetStateHandle() *StateHandle[W] { return h }
 
-func (el *ElementHandle) Handle() *ElementHandle { return el }
-func (el *ElementHandle) Parent() Element        { return el.parent }
-func (el *ElementHandle) Slot() any              { return el.slot }
-
-type RenderObjectElementHandle struct {
-	ElementHandle
-	RenderObject                render.Object
-	ancestorRenderObjectElement RenderObjectElement
+func (h *StateHandle[W]) BuildOwner() *BuildOwner {
+	return h.Element.handle().BuildOwner
 }
 
-func (el *RenderObjectElementHandle) RenderHandle() *RenderObjectElementHandle {
+func (el *elementHandle) handle() *elementHandle { return el }
+func (el *elementHandle) Parent() Element        { return el.parent }
+func (el *elementHandle) Slot() any              { return el.slot }
+
+type renderObjectElementHandle struct {
+	elementHandle
+	RenderObject                render.Object
+	ancestorRenderObjectElement renderObjectElement
+}
+
+func (el *renderObjectElementHandle) renderHandle() *renderObjectElementHandle {
 	return el
 }
 
-func (el *RenderObjectElementHandle) AfterUpdateSlot(oldSlot, newSlot int) {
+func (el *renderObjectElementHandle) afterUpdateSlot(oldSlot, newSlot int) {
 	if ancestor := el.ancestorRenderObjectElement; ancestor != nil {
-		ancestor.MoveRenderObjectChild(el.RenderObject, el.slot)
+		ancestor.moveRenderObjectChild(el.RenderObject, el.slot)
 	}
 }
 
-func (el *RenderObjectElementHandle) PerformDetachRenderObject() {
+func (el *renderObjectElementHandle) PerformDetachRenderObject() {
 	if el.ancestorRenderObjectElement != nil {
-		el.ancestorRenderObjectElement.RemoveRenderObjectChild(el.RenderObject, el.slot)
+		el.ancestorRenderObjectElement.removeRenderObjectChild(el.RenderObject, el.slot)
 		el.ancestorRenderObjectElement = nil
 	}
 	el.slot = -1
 }
 
-type RenderObjectUnmountNotifyee interface {
+type renderObjectUnmountNotifyee interface {
 	DidUnmountRenderObject(obj render.Object)
 }
 
-func findAncestorRenderObjectElement(el RenderObjectElement) RenderObjectElement {
-	ancestor := el.Handle().Parent()
+func findAncestorRenderObjectElement(el renderObjectElement) renderObjectElement {
+	ancestor := el.handle().Parent()
 	for ancestor != nil {
-		if _, ok := ancestor.(RenderObjectElement); ok {
+		if _, ok := ancestor.(renderObjectElement); ok {
 			break
 		}
-		ancestor = ancestor.Handle().Parent()
+		ancestor = ancestor.handle().Parent()
 	}
 	if ancestor == nil {
 		return nil
 	}
-	return ancestor.(RenderObjectElement)
+	return ancestor.(renderObjectElement)
 }
 
 func sameType(a, b any) bool {
@@ -858,9 +862,9 @@ func canUpdate(old, new Widget) bool {
 }
 
 func deactivateChild(child Element) {
-	child.Handle().parent = nil
-	DetachRenderObject(child)
-	child.Handle().BuildOwner.inactiveElements.add(child)
+	child.handle().parent = nil
+	detachRenderObject(child)
+	child.handle().BuildOwner.inactiveElements.add(child)
 }
 
 type inactiveElements struct {
@@ -869,12 +873,12 @@ type inactiveElements struct {
 }
 
 func (els *inactiveElements) unmount(el Element) {
-	if el, ok := el.(ElementWithChildren); ok {
-		for child := range el.Children() {
+	if el, ok := el.(elementWithChildren); ok {
+		for child := range el.children() {
 			els.unmount(child)
 		}
 	}
-	Unmount(el)
+	unmount(el)
 }
 
 func (els *inactiveElements) unmountAll() {
@@ -893,8 +897,8 @@ func (els *inactiveElements) unmountAll() {
 
 func sortElements(els []Element) {
 	slices.SortFunc(els, func(a, b Element) int {
-		ah := a.Handle()
-		bh := b.Handle()
+		ah := a.handle()
+		bh := b.handle()
 		diff := ah.depth - bh.depth
 		// If depths are not equal, return the difference.
 		if diff != 0 {
@@ -916,9 +920,9 @@ func sortElements(els []Element) {
 }
 
 func (els *inactiveElements) deactivateRecursively(el Element) {
-	Deactivate(el)
-	if el, ok := el.(ElementWithChildren); ok {
-		for child := range el.Children() {
+	deactivate(el)
+	if el, ok := el.(elementWithChildren); ok {
+		for child := range el.children() {
 			els.deactivateRecursively(child)
 		}
 	}
@@ -928,8 +932,8 @@ func (els *inactiveElements) add(el Element) {
 	debug.Assert(!els.locked)
 	_, ok := els.elements[el]
 	debug.Assert(!ok)
-	debug.Assert(el.Handle().parent == nil)
-	if el.Handle().lifecycleState == ElementLifecycleActive {
+	debug.Assert(el.handle().parent == nil)
+	if el.handle().lifecycleState == elementLifecycleActive {
 		els.deactivateRecursively(el)
 	}
 	// OPT(dh): move this initialization to a constructor
@@ -954,25 +958,25 @@ type GlobalKey struct {
 	Value any
 }
 
-func InflateWidget(parent Element, widget Widget, newSlot int) Element {
+func inflateWidget(parent Element, widget Widget, newSlot int) Element {
 	if widget, ok := widget.(KeyedWidget); ok {
 		if key, ok := widget.GetKey().(GlobalKey); ok {
-			newChild := RetakeInactiveElement(parent, key, widget)
+			newChild := retakeInactiveElement(parent, key, widget)
 			if newChild != nil {
 				activateWithParent(newChild, parent, newSlot)
-				updatedChild := UpdateChild(parent, newChild, widget, newSlot)
+				updatedChild := updateChild(parent, newChild, widget, newSlot)
 				debug.Assert(newChild == updatedChild)
 				return updatedChild
 			}
 		}
 	}
 	newChild := widget.CreateElement()
-	Mount(newChild, parent, newSlot)
+	mount(newChild, parent, newSlot)
 
 	return newChild
 }
 
-func RetakeInactiveElement(el Element, key GlobalKey, newWidget Widget) Element {
+func retakeInactiveElement(el Element, key GlobalKey, newWidget Widget) Element {
 	// The "inactivity" of the element being retaken here may be forward-looking: if
 	// we are taking an element with a GlobalKey from an element that currently has
 	// it as a child, then we know that element will soon no longer have that
@@ -980,37 +984,37 @@ func RetakeInactiveElement(el Element, key GlobalKey, newWidget Widget) Element 
 	// global key is being duplicated, and we'll try to track that using the
 	// _debugTrackElementThatWillNeedToBeRebuiltDueToGlobalKeyShenanigans call below.
 
-	element := el.Handle().BuildOwner.globals[key]
+	element := el.handle().BuildOwner.globals[key]
 	if element == nil {
 		return nil
 	}
-	if !canUpdate(element.Handle().widget, newWidget) {
+	if !canUpdate(element.handle().widget, newWidget) {
 		return nil
 	}
-	parent := element.Handle().Parent()
+	parent := element.handle().Parent()
 	if parent != nil {
-		ForgetChild(parent, element)
+		forgetChild(parent, element)
 		deactivateChild(element)
 	}
-	el.Handle().BuildOwner.inactiveElements.remove(element)
+	el.handle().BuildOwner.inactiveElements.remove(element)
 	return element
 }
 
 func activateWithParent(el, parent Element, newSlot int) {
-	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
-	el.Handle().parent = parent
-	updateDepth(el, parent.Handle().depth)
+	debug.Assert(el.handle().lifecycleState == elementLifecycleInactive)
+	el.handle().parent = parent
+	updateDepth(el, parent.handle().depth)
 	activateRecursively(el)
-	AttachRenderObject(el, newSlot)
-	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
+	attachRenderObject(el, newSlot)
+	debug.Assert(el.handle().lifecycleState == elementLifecycleActive)
 }
 
 func updateDepth(el Element, parentDepth int) {
 	expectedDepth := parentDepth + 1
-	if el.Handle().depth < expectedDepth {
-		el.Handle().depth = expectedDepth
-		if el, ok := el.(ElementWithChildren); ok {
-			for child := range el.Children() {
+	if el.handle().depth < expectedDepth {
+		el.handle().depth = expectedDepth
+		if el, ok := el.(elementWithChildren); ok {
+			for child := range el.children() {
 				updateDepth(child, expectedDepth)
 			}
 		}
@@ -1018,11 +1022,11 @@ func updateDepth(el Element, parentDepth int) {
 }
 
 func activateRecursively(el Element) {
-	debug.Assert(el.Handle().lifecycleState == ElementLifecycleInactive)
-	Activate(el)
-	debug.Assert(el.Handle().lifecycleState == ElementLifecycleActive)
-	if el, ok := el.(ElementWithChildren); ok {
-		for child := range el.Children() {
+	debug.Assert(el.handle().lifecycleState == elementLifecycleInactive)
+	activate(el)
+	debug.Assert(el.handle().lifecycleState == elementLifecycleActive)
+	if el, ok := el.(elementWithChildren); ok {
+		for child := range el.children() {
 			activateRecursively(child)
 		}
 	}
@@ -1030,31 +1034,31 @@ func activateRecursively(el Element) {
 
 func updateSlotForChild(el, child Element, newSlot int) {
 	for child != nil {
-		UpdateSlot(child, newSlot)
-		child = RenderObjectAttachingChild(child)
+		updateSlot(child, newSlot)
+		child = renderObjectAttachingChild(child)
 	}
 }
 
 func rebuild(el Element) {
-	if el.Handle().lifecycleState != ElementLifecycleActive || !el.Handle().dirty {
+	if el.handle().lifecycleState != elementLifecycleActive || !el.handle().dirty {
 		return
 	}
-	el.PerformRebuild()
-	el.Handle().dirty = false
+	el.performRebuild()
+	el.handle().dirty = false
 }
 
 func forceRebuild(el Element) {
-	if el.Handle().lifecycleState != ElementLifecycleActive {
+	if el.handle().lifecycleState != elementLifecycleActive {
 		return
 	}
-	el.PerformRebuild()
-	el.Handle().dirty = false
+	el.performRebuild()
+	el.handle().dirty = false
 }
 
-func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
-	oldChildren := el.GetChildren()
+func updateChildren(el parentElement, newWidgets []Widget) []Element {
+	oldChildren := el.getChildren()
 	replaceWithNilIfForgotten := func(child Element) Element {
-		if _, ok := el.ForgottenChildren()[child]; ok {
+		if _, ok := el.forgottenChildren()[child]; ok {
 			return nil
 		} else {
 			return child
@@ -1111,10 +1115,10 @@ func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 	for (oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom) {
 		oldChild := replaceWithNilIfForgotten(oldChildren[oldChildrenTop])
 		newWidget := newWidgets[newChildrenTop]
-		if oldChild == nil || !canUpdate(oldChild.Handle().widget, newWidget) {
+		if oldChild == nil || !canUpdate(oldChild.handle().widget, newWidget) {
 			break
 		}
-		newChild := UpdateChild(el, oldChild, newWidget, newChildrenTop)
+		newChild := updateChild(el, oldChild, newWidget, newChildrenTop)
 		newChildren[newChildrenTop] = newChild
 		newChildrenTop++
 		oldChildrenTop++
@@ -1124,7 +1128,7 @@ func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 	for (oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom) {
 		oldChild := replaceWithNilIfForgotten(oldChildren[oldChildrenBottom])
 		newWidget := newWidgets[newChildrenBottom]
-		if oldChild == nil || !canUpdate(oldChild.Handle().widget, newWidget) {
+		if oldChild == nil || !canUpdate(oldChild.handle().widget, newWidget) {
 			break
 		}
 		newChildrenBottom--
@@ -1139,8 +1143,8 @@ func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 		for oldChildrenTop <= oldChildrenBottom {
 			oldChild := replaceWithNilIfForgotten(oldChildren[oldChildrenTop])
 			if oldChild != nil {
-				if Key(oldChild.Handle().widget) != nil {
-					oldKeyedChildren[Key(oldChild.Handle().widget)] = oldChild
+				if Key(oldChild.handle().widget) != nil {
+					oldKeyedChildren[Key(oldChild.handle().widget)] = oldChild
 				} else {
 					deactivateChild(oldChild)
 				}
@@ -1158,7 +1162,7 @@ func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 			if key != nil {
 				oldChild = oldKeyedChildren[key]
 				if oldChild != nil {
-					if canUpdate(oldChild.Handle().widget, newWidget) {
+					if canUpdate(oldChild.handle().widget, newWidget) {
 						// we found a match!
 						// remove it from oldKeyedChildren so we don't unsync it later
 						delete(oldKeyedChildren, key)
@@ -1169,7 +1173,7 @@ func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 				}
 			}
 		}
-		newChild := UpdateChild(el, oldChild, newWidget, newChildrenTop)
+		newChild := updateChild(el, oldChild, newWidget, newChildrenTop)
 		newChildren[newChildrenTop] = newChild
 		newChildrenTop++
 	}
@@ -1182,7 +1186,7 @@ func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 	for (oldChildrenTop <= oldChildrenBottom) && (newChildrenTop <= newChildrenBottom) {
 		oldChild := oldChildren[oldChildrenTop]
 		newWidget := newWidgets[newChildrenTop]
-		newChild := UpdateChild(el, oldChild, newWidget, newChildrenTop)
+		newChild := updateChild(el, oldChild, newWidget, newChildrenTop)
 		newChildren[newChildrenTop] = newChild
 		newChildrenTop++
 		oldChildrenTop++
@@ -1190,20 +1194,20 @@ func UpdateChildren(el ParentElement, newWidgets []Widget) []Element {
 
 	// Clean up any of the remaining middle nodes from the old list.
 	for _, oldChild := range oldKeyedChildren {
-		if _, ok := el.ForgottenChildren()[oldChild]; !ok {
+		if _, ok := el.forgottenChildren()[oldChild]; !ok {
 			deactivateChild(oldChild)
 		}
 	}
 	return newChildren
 }
 
-func ApplyParentData(pd ParentDataWidget, childrenOf Element) {
+func applyParentData(pd ParentDataWidget, childrenOf Element) {
 	var applyParentData func(child Element)
 	applyParentData = func(child Element) {
-		if rto, ok := child.(RenderObjectElement); ok {
-			pd.ApplyParentData(rto.RenderHandle().RenderObject)
-		} else if child, ok := child.(ElementWithChildren); ok {
-			for child2 := range child.Children() {
+		if rto, ok := child.(renderObjectElement); ok {
+			pd.ApplyParentData(rto.renderHandle().RenderObject)
+		} else if child, ok := child.(elementWithChildren); ok {
+			for child2 := range child.children() {
 				applyParentData(child2)
 			}
 		}
@@ -1211,7 +1215,7 @@ func ApplyParentData(pd ParentDataWidget, childrenOf Element) {
 	applyParentData(childrenOf)
 }
 
-func GetWidgetChild(parent Widget) Widget {
+func getWidgetChild(parent Widget) Widget {
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Child"); f.IsValid() {
 		if f.IsNil() {
@@ -1226,7 +1230,7 @@ func GetWidgetChild(parent Widget) Widget {
 	}
 }
 
-func WidgetChildrenIter(parent Widget) iter.Seq2[int, Widget] {
+func widgetChildrenIter(parent Widget) iter.Seq2[int, Widget] {
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Children"); f.IsValid() {
 		if f.Len() == 0 {
@@ -1252,7 +1256,7 @@ func WidgetChildrenIter(parent Widget) iter.Seq2[int, Widget] {
 	}
 }
 
-func WidgetChildren(parent Widget) []Widget {
+func widgetChildren(parent Widget) []Widget {
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Children"); f.IsValid() {
 		return f.Interface().([]Widget)
@@ -1267,11 +1271,11 @@ func WidgetChildren(parent Widget) []Widget {
 	}
 }
 
-type SingleChildElement struct {
+type singleChildElement struct {
 	child [1]Element
 }
 
-func (s *SingleChildElement) GetChildren() []Element {
+func (s *singleChildElement) getChildren() []Element {
 	if s.child[0] == nil {
 		return nil
 	} else {
@@ -1279,11 +1283,11 @@ func (s *SingleChildElement) GetChildren() []Element {
 	}
 }
 
-func (s *SingleChildElement) ForgottenChildren() map[Element]struct{} {
+func (s *singleChildElement) forgottenChildren() map[Element]struct{} {
 	return nil
 }
 
-func (s *SingleChildElement) SetChildren(children []Element) {
+func (s *singleChildElement) setChildren(children []Element) {
 	debug.Assert(len(children) < 2)
 	if len(children) == 0 {
 		s.child[0] = nil
@@ -1292,7 +1296,7 @@ func (s *SingleChildElement) SetChildren(children []Element) {
 	}
 }
 
-func (s *SingleChildElement) Children() iter.Seq[Element] {
+func (s *singleChildElement) children() iter.Seq[Element] {
 	return func(yield func(Element) bool) {
 		if s.child[0] == nil {
 			return
@@ -1301,33 +1305,33 @@ func (s *SingleChildElement) Children() iter.Seq[Element] {
 	}
 }
 
-func (s *SingleChildElement) Child() Element {
+func (s *singleChildElement) Child() Element {
 	return s.child[0]
 }
 
-func (s *SingleChildElement) SetChild(child Element) {
+func (s *singleChildElement) SetChild(child Element) {
 	s.child[0] = child
 }
 
-func (s *SingleChildElement) ForgetChild(child Element) {
+func (s *singleChildElement) forgetChild(child Element) {
 	debug.Assert(s.child[0] == child)
 	s.child[0] = nil
 }
 
-type ManyChildElements struct {
-	children          []Element
-	forgottenChildren map[Element]struct{}
+type manyChildElements struct {
+	children_          []Element
+	forgottenChildren_ map[Element]struct{}
 }
 
-func (m *ManyChildElements) SetChildren(children []Element) {
-	m.children = children
-	clear(m.forgottenChildren)
+func (m *manyChildElements) setChildren(children []Element) {
+	m.children_ = children
+	clear(m.forgottenChildren_)
 }
 
-func (m *ManyChildElements) Children() iter.Seq[Element] {
+func (m *manyChildElements) children() iter.Seq[Element] {
 	return func(yield func(Element) bool) {
-		forgotten := m.forgottenChildren
-		for _, child := range m.children {
+		forgotten := m.forgottenChildren_
+		for _, child := range m.children_ {
 			if _, ok := forgotten[child]; !ok {
 				if !yield(child) {
 					break
@@ -1337,23 +1341,23 @@ func (m *ManyChildElements) Children() iter.Seq[Element] {
 	}
 }
 
-func (m *ManyChildElements) GetChildren() []Element {
-	return m.children
+func (m *manyChildElements) getChildren() []Element {
+	return m.children_
 }
 
-func (m *ManyChildElements) ForgottenChildren() map[Element]struct{} {
-	return m.forgottenChildren
+func (m *manyChildElements) forgottenChildren() map[Element]struct{} {
+	return m.forgottenChildren_
 }
 
-func (m *ManyChildElements) ForgetChild(child Element) {
-	if m.forgottenChildren == nil {
-		m.forgottenChildren = make(map[Element]struct{})
+func (m *manyChildElements) forgetChild(child Element) {
+	if m.forgottenChildren_ == nil {
+		m.forgottenChildren_ = make(map[Element]struct{})
 	}
-	m.forgottenChildren[child] = struct{}{}
+	m.forgottenChildren_[child] = struct{}{}
 }
 
-func NewRenderObjectElement(w RenderObjectWidget) *SimpleRenderObjectElement {
-	el := &SimpleRenderObjectElement{}
+func NewRenderObjectElement(w RenderObjectWidget) Element {
+	el := &simpleRenderObjectElement{}
 	el.widget = w
 	return el
 }
