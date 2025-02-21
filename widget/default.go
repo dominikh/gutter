@@ -31,15 +31,6 @@ func renderObjectElementAfterMount(el renderObjectElement, parent Element, newSl
 	}
 	el.setChildren(children)
 }
-func renderObjectElementAfterUnmount(el renderObjectElement) {
-	h := el.renderHandle()
-	oldWidget := h.widget.(RenderObjectWidget)
-	if n, ok := oldWidget.(renderObjectUnmountNotifyee); ok {
-		n.DidUnmountRenderObject(h.RenderObject)
-	}
-	render.Dispose(h.RenderObject)
-	h.RenderObject = nil
-}
 func renderObjectElementAttachRenderObject(el renderObjectElement, slot int) {
 	h := el.renderHandle()
 	h.slot = slot
@@ -53,22 +44,11 @@ func renderObjectElementAttachRenderObject(el renderObjectElement, slot int) {
 		return true
 	})
 }
-func renderObjectElementPerformRebuild(el renderObjectElement) {
-	h := el.renderHandle()
-	h.widget.(RenderObjectWidget).UpdateRenderObject(el, h.RenderObject)
-	el.handle().dirty = false
-}
 func renderObjectElementInsertRenderObjectChild(el renderObjectElement, child render.Object, slot int) {
 	if slot >= 0 {
 		slot--
 	}
 	render.InsertChild(el.renderHandle().RenderObject.(render.ObjectWithChildren), child, slot)
-}
-func renderObjectElementMoveRenderObjectChild(el renderObjectElement, child render.Object, newSlot int) {
-	if newSlot >= 0 {
-		newSlot--
-	}
-	render.MoveChild(el.renderHandle().RenderObject.(render.ObjectWithChildren), child, newSlot)
 }
 func renderObjectElementRemoveRenderObjectChild(el renderObjectElement, child render.Object, slot int) {
 	render.RemoveChild(el.renderHandle().RenderObject.(render.ChildRemover), child)

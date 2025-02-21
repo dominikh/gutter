@@ -120,10 +120,6 @@ func newRenderObjectToWidgetElement(w Widget) *renderObjectToWidgetElement {
 	return &el
 }
 
-func (el *renderObjectToWidgetElement) attachRenderObject(slot int) {
-	renderObjectElementAttachRenderObject(el, slot)
-}
-
 func (el *renderObjectToWidgetElement) AssignOwner(owner *BuildOwner) {
 	el.BuildOwner = owner
 }
@@ -160,4 +156,8 @@ func (el *renderObjectToWidgetElement) removeRenderObjectChild(child render.Obje
 
 func (el *renderObjectToWidgetElement) moveRenderObjectChild(child render.Object, newSlot int) {
 	panic("unexpected call")
+}
+
+func (el *renderObjectToWidgetElement) attachRenderObject(slot int) {
+	renderObjectElementAttachRenderObject(el, slot)
 }

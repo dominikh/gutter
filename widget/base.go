@@ -623,7 +623,10 @@ func (el *simpleRenderObjectElement) insertRenderObjectChild(child render.Object
 
 // moveRenderObjectChild implements renderObjectElement.
 func (el *simpleRenderObjectElement) moveRenderObjectChild(child render.Object, newSlot int) {
-	renderObjectElementMoveRenderObjectChild(el, child, newSlot)
+	if newSlot >= 0 {
+		newSlot--
+	}
+	render.MoveChild(renderObjectElement(el).renderHandle().RenderObject.(render.ObjectWithChildren), child, newSlot)
 }
 
 // removeRenderObjectChild implements renderObjectElement.
@@ -633,7 +636,9 @@ func (el *simpleRenderObjectElement) removeRenderObjectChild(child render.Object
 
 // performRebuild implements renderObjectElement.
 func (el *simpleRenderObjectElement) performRebuild() {
-	renderObjectElementPerformRebuild(el)
+	h := renderObjectElement(el).renderHandle()
+	h.widget.(RenderObjectWidget).UpdateRenderObject(renderObjectElement(el), h.RenderObject)
+	renderObjectElement(el).handle().dirty = false
 }
 
 // Transition implements renderObjectElement.
@@ -642,7 +647,13 @@ func (el *simpleRenderObjectElement) transition(t elementTransition) {
 	case elementMounted:
 		renderObjectElementAfterMount(el, t.parent, t.newSlot)
 	case elementUnmounted:
-		renderObjectElementAfterUnmount(el)
+		h := renderObjectElement(el).renderHandle()
+		oldWidget := h.widget.(RenderObjectWidget)
+		if n, ok := oldWidget.(renderObjectUnmountNotifyee); ok {
+			n.DidUnmountRenderObject(h.RenderObject)
+		}
+		render.Dispose(h.RenderObject)
+		h.RenderObject = nil
 	case elementUpdated:
 		renderObjectElementAfterUpdate(el, t.oldWidget.(RenderObjectWidget))
 	}
