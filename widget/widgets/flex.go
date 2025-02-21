@@ -3,11 +3,12 @@
 //
 // SPDX-License-Identifier: MIT AND BSD-3-Clause
 
-package widget
+package widgets
 
 import (
 	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/render"
+	"honnef.co/go/gutter/widget"
 )
 
 type Flex struct {
@@ -16,18 +17,18 @@ type Flex struct {
 	MainAxisSize       render.MainAxisSize
 	CrossAxisAlignment render.CrossAxisAlignment
 	// XXX add clip behavior
-	Children []Widget
+	Children []widget.Widget
 }
 
 // CreateRenderObject implements RenderObjectWidget.
-func (f *Flex) CreateRenderObject(ctx BuildContext) render.Object {
+func (f *Flex) CreateRenderObject(ctx widget.BuildContext) render.Object {
 	obj := &render.Flex{}
 	f.UpdateRenderObject(ctx, obj)
 	return obj
 }
 
 // UpdateRenderObject implements RenderObjectWidget.
-func (f *Flex) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+func (f *Flex) UpdateRenderObject(ctx widget.BuildContext, obj render.Object) {
 	fobj := obj.(*render.Flex)
 	fobj.SetDirection(f.Direction)
 	fobj.SetMainAxisAlignment(f.MainAxisAlignment)
@@ -36,19 +37,19 @@ func (f *Flex) UpdateRenderObject(ctx BuildContext, obj render.Object) {
 }
 
 // CreateElement implements MultiChildWidget.
-func (f *Flex) CreateElement() Element {
-	return NewRenderObjectElement(f)
+func (f *Flex) CreateElement() widget.Element {
+	return widget.NewRenderObjectElement(f)
 }
 
 type Flexible struct {
 	Flex  float64
 	Fit   render.FlexFit
-	Child Widget
+	Child widget.Widget
 }
 
 // CreateElement implements SingleChildWidget.
-func (f *Flexible) CreateElement() Element {
-	return NewProxyElement(f)
+func (f *Flexible) CreateElement() widget.Element {
+	return widget.NewProxyElement(f)
 }
 
 func (f *Flexible) ApplyParentData(obj render.Object) {
@@ -74,14 +75,14 @@ type Row struct {
 	MainAxisAlignment  render.MainAxisAlignment
 	MainAxisSize       render.MainAxisSize
 	CrossAxisAlignment render.CrossAxisAlignment
-	Children           []Widget
+	Children           []widget.Widget
 }
 
-func (r *Row) CreateElement() Element {
-	return NewInteriorElement(r)
+func (r *Row) CreateElement() widget.Element {
+	return widget.NewInteriorElement(r)
 }
 
-func (r *Row) Build(ctx BuildContext) Widget {
+func (r *Row) Build(ctx widget.BuildContext) widget.Widget {
 	return &Flex{
 		Direction:          render.Horizontal,
 		MainAxisAlignment:  r.MainAxisAlignment,
@@ -95,14 +96,14 @@ type Column struct {
 	MainAxisAlignment  render.MainAxisAlignment
 	MainAxisSize       render.MainAxisSize
 	CrossAxisAlignment render.CrossAxisAlignment
-	Children           []Widget
+	Children           []widget.Widget
 }
 
-func (r *Column) CreateElement() Element {
-	return NewInteriorElement(r)
+func (r *Column) CreateElement() widget.Element {
+	return widget.NewInteriorElement(r)
 }
 
-func (r *Column) Build(ctx BuildContext) Widget {
+func (r *Column) Build(ctx widget.BuildContext) widget.Widget {
 	return &Flex{
 		Direction:          render.Vertical,
 		MainAxisAlignment:  r.MainAxisAlignment,
@@ -116,11 +117,11 @@ type Spacer struct {
 	Flex maybe.Option[float64]
 }
 
-func (s *Spacer) CreateElement() Element {
-	return NewInteriorElement(s)
+func (s *Spacer) CreateElement() widget.Element {
+	return widget.NewInteriorElement(s)
 }
 
-func (s *Spacer) Build(ctx BuildContext) Widget {
+func (s *Spacer) Build(ctx widget.BuildContext) widget.Widget {
 	return &Flexible{
 		Flex:  s.Flex.UnwrapOr(1.0),
 		Fit:   render.FlexFitTight,

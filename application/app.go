@@ -10,6 +10,7 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
+	"honnef.co/go/gutter/widget/widgets"
 	"honnef.co/go/gutter/wsi"
 )
 
@@ -53,7 +54,7 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 
 		// XXX
 		app.widgetBinding.DrawFrame(ev, nil)
-	case widget.CallbackEvent:
+	case widgets.CallbackEvent:
 	default:
 		panic(fmt.Sprintf("internal error: unhandled event type %T", ev))
 	}

@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-package widget
+package widgets
 
 import (
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/lottie/lottie_model"
 	"honnef.co/go/gutter/render"
+	"honnef.co/go/gutter/widget"
 )
 
 type LottieFrame struct {
@@ -16,12 +17,12 @@ type LottieFrame struct {
 }
 
 // CreateElement implements RenderObjectWidget.
-func (l *LottieFrame) CreateElement() Element {
-	return NewRenderObjectElement(l)
+func (l *LottieFrame) CreateElement() widget.Element {
+	return widget.NewRenderObjectElement(l)
 }
 
 // CreateRenderObject implements RenderObjectWidget.
-func (l *LottieFrame) CreateRenderObject(ctx BuildContext) render.Object {
+func (l *LottieFrame) CreateRenderObject(ctx widget.BuildContext) render.Object {
 	var obj render.Lottie
 	obj.SetComposition(l.Composition)
 	obj.SetFrame(l.Frame)
@@ -29,7 +30,7 @@ func (l *LottieFrame) CreateRenderObject(ctx BuildContext) render.Object {
 }
 
 // UpdateRenderObject implements RenderObjectWidget.
-func (l *LottieFrame) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+func (l *LottieFrame) UpdateRenderObject(ctx widget.BuildContext, obj render.Object) {
 	obj_ := obj.(*render.Lottie)
 	obj_.SetComposition(l.Composition)
 	obj_.SetFrame(l.Frame)
@@ -50,33 +51,33 @@ type Lottie struct {
 }
 
 // CreateState implements StatefulWidget.
-func (l *Lottie) CreateState() State[*Lottie] {
+func (l *Lottie) CreateState() widget.State[*Lottie] {
 	return &lottieState{}
 }
 
-// CreateElement implements Widget.
-func (l *Lottie) CreateElement() Element {
-	return NewInteriorElement(l)
+// CreateElement implements widget.Widget.
+func (l *Lottie) CreateElement() widget.Element {
+	return widget.NewInteriorElement(l)
 }
 
 type lottieState struct {
-	StateHandle[*Lottie]
+	widget.StateHandle[*Lottie]
 
 	// animation controller to use when Lottie.Controller is nil.
 	autoAnimation *animation.Controller
 }
 
 // Transition implements State.
-func (l *lottieState) Transition(t StateTransition[*Lottie]) {
+func (l *lottieState) Transition(t widget.StateTransition[*Lottie]) {
 	switch t.Kind {
-	case StateInitializing:
+	case widget.StateInitializing:
 		// XXX guard against malformed frame numbers and frame rates
 		l.autoAnimation = animation.NewController(l.GetStateHandle().Element.Handle().BuildOwner)
 		l.autoAnimation.Duration = l.Widget.Composition.Duration()
 		l.autoAnimation.LowerBound = l.Widget.Composition.FirstFrame
 		l.autoAnimation.UpperBound = l.Widget.Composition.LastFrame
 		l.updateAutoAnimation()
-	case StateUpdatedWidget:
+	case widget.StateUpdatedWidget:
 		if l.Widget.Composition != t.OldWidget.Composition ||
 			l.Widget.Controller != t.OldWidget.Controller {
 			l.autoAnimation.Duration = l.Widget.Composition.Duration()
@@ -85,9 +86,9 @@ func (l *lottieState) Transition(t StateTransition[*Lottie]) {
 			l.updateAutoAnimation()
 		}
 		if *l.Widget != *t.OldWidget {
-			MarkNeedsBuild(l.Element)
+			widget.MarkNeedsBuild(l.Element)
 		}
-	case StateDisposing:
+	case widget.StateDisposing:
 		l.autoAnimation.Dispose()
 	}
 }
@@ -112,10 +113,10 @@ func (l *lottieState) animation() animation.Animation[float64] {
 }
 
 // Build implements State.
-func (l *lottieState) Build(ctx BuildContext) Widget {
+func (l *lottieState) Build(ctx widget.BuildContext) widget.Widget {
 	return &ListenableBuilder{
 		Listenable: l.animation(),
-		Builder: func(ctx BuildContext, child Widget) Widget {
+		Builder: func(ctx widget.BuildContext, child widget.Widget) widget.Widget {
 			frame := l.animation().Value()
 			w := l.Widget.Width
 			h := l.Widget.Height

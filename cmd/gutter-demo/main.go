@@ -15,6 +15,7 @@ import (
 	"honnef.co/go/gutter/lottie/lottie_encoding"
 	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/widget"
+	"honnef.co/go/gutter/widget/widgets"
 	"honnef.co/go/gutter/wsi"
 )
 
@@ -51,7 +52,7 @@ func main() {
 	}
 	comp := lottie_converter.ConvertAnimation(anim)
 
-	l := widget.NewChannelListener(theCh, func(ev wsi.Event) {
+	l := widgets.NewChannelListener(theCh, func(ev wsi.Event) {
 		// Ignore that we need this argument, ideally widget.NewChannelListener
 		// would have a magic way to get the event emitter, while not depending
 		// on the 'application' package.
@@ -60,20 +61,20 @@ func main() {
 	})
 	defer l.Dispose()
 
-	root := &widget.ValueListenableBuilder[float64]{
+	root := &widgets.ValueListenableBuilder[float64]{
 		ValueListenable: l,
 		Builder: func(ctx widget.BuildContext, mv maybe.Option[float64], child widget.Widget) widget.Widget {
-			return &widget.Column{
+			return &widgets.Column{
 				Children: []widget.Widget{
-					&widget.Lottie{
+					&widgets.Lottie{
 						Composition: comp,
 						Animate:     true,
 						Repeat:      true,
 						Reverse:     false,
 						Width:       64,
 					},
-					&widget.Spacer{},
-					&widget.Lottie{
+					&widgets.Spacer{},
+					&widgets.Lottie{
 						Composition: comp,
 						Animate:     true,
 						Repeat:      true,

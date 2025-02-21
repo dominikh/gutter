@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: MIT AND BSD-3-Clause
 
-package widget
+package widgets
 
 import (
 	"fmt"
@@ -11,14 +11,15 @@ import (
 	"time"
 
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/widget"
 )
 
-type AnimatedState[W Widget] interface {
-	State[W]
+type AnimatedState[W widget.Widget] interface {
+	widget.State[W]
 	Tweens(yield func(any, any) bool)
 }
 
-type AnimatedStateHelper[W Widget, S AnimatedState[W]] struct {
+type AnimatedStateHelper[W widget.Widget, S AnimatedState[W]] struct {
 	controller     *animation.Controller
 	animation      *animation.CurvedAnimation
 	statusListener animation.StatusListener
@@ -26,7 +27,7 @@ type AnimatedStateHelper[W Widget, S AnimatedState[W]] struct {
 
 func (is *AnimatedStateHelper[W, S]) RebuildOnAnimation(s S) {
 	is.controller.AddListener(func() {
-		MarkNeedsBuild(s.GetStateHandle().Element)
+		widget.MarkNeedsBuild(s.GetStateHandle().Element)
 	})
 }
 
@@ -40,9 +41,9 @@ func (is *AnimatedStateHelper[W, S]) updateTweens(s S) {
 	}
 }
 
-func (is *AnimatedStateHelper[W, S]) Transition(s S, t StateTransition[W]) (updatedTweens bool) {
+func (is *AnimatedStateHelper[W, S]) Transition(s S, t widget.StateTransition[W]) (updatedTweens bool) {
 	switch t.Kind {
-	case StateInitializing:
+	case widget.StateInitializing:
 		is.controller = animation.NewController(s.GetStateHandle().Element.Handle().BuildOwner)
 		widget := s.GetStateHandle().Widget
 		if f := reflect.ValueOf(widget).Elem().FieldByName("Curve"); f.IsValid() {
@@ -73,7 +74,7 @@ func (is *AnimatedStateHelper[W, S]) Transition(s S, t StateTransition[W]) (upda
 		is.controller.SetValue(1)
 		is.controller.Forward()
 		return true
-	case StateUpdatedWidget:
+	case widget.StateUpdatedWidget:
 		widget := s.GetStateHandle().Widget
 		rwidget := reflect.ValueOf(widget).Elem()
 
@@ -116,10 +117,10 @@ func (is *AnimatedStateHelper[W, S]) Transition(s S, t StateTransition[W]) (upda
 			return true
 		}
 		return false
-	case StateChangedDependencies:
-	case StateDeactivating:
-	case StateActivating:
-	case StateDisposing:
+	case widget.StateChangedDependencies:
+	case widget.StateDeactivating:
+	case widget.StateActivating:
+	case widget.StateDisposing:
 		is.animation.Dispose()
 		is.controller.Dispose()
 	}
@@ -141,11 +142,11 @@ type animatedField[T any] struct {
 	) animation.Animation[T]
 }
 
-func NewAutomaticAnimatedState[Anims any, W Widget](
+func NewAutomaticAnimatedState[Anims any, W widget.Widget](
 	fields map[string]any, // map from widget field to AnimatedField
-	build func(ctx BuildContext, s State[W], anims *Anims) Widget,
+	build func(ctx widget.BuildContext, s widget.State[W], anims *Anims) widget.Widget,
 	rebuildOnAnimation bool,
-) State[W] {
+) widget.State[W] {
 	return &automaticAnimatedState[W, *Anims]{
 		fields:             fields,
 		animations:         new(Anims),
@@ -154,14 +155,14 @@ func NewAutomaticAnimatedState[Anims any, W Widget](
 	}
 }
 
-type automaticAnimatedState[W Widget, Anims any] struct {
-	StateHandle[W]
+type automaticAnimatedState[W widget.Widget, Anims any] struct {
+	widget.StateHandle[W]
 
 	animState AnimatedStateHelper[W, *automaticAnimatedState[W, Anims]]
 
 	fields             map[string]any // map from widget field to animatedField[T]
 	animations         Anims
-	builder            func(ctx BuildContext, state State[W], anims Anims) Widget
+	builder            func(ctx widget.BuildContext, state widget.State[W], anims Anims) widget.Widget
 	rebuildOnAnimation bool
 }
 
@@ -175,7 +176,7 @@ func (m *automaticAnimatedState[W, Anims]) Tweens(yield func(any, any) bool) {
 	}
 }
 
-func (m *automaticAnimatedState[W, Anims]) Transition(t StateTransition[W]) {
+func (m *automaticAnimatedState[W, Anims]) Transition(t widget.StateTransition[W]) {
 	rvanims := reflect.ValueOf(m.animations).Elem()
 	if m.animState.Transition(m, t) {
 		rvanim := reflect.ValueOf(m.animState.animation)
@@ -195,6 +196,6 @@ func (m *automaticAnimatedState[W, Anims]) Transition(t StateTransition[W]) {
 	}
 }
 
-func (m *automaticAnimatedState[W, Anims]) Build(ctx BuildContext) Widget {
+func (m *automaticAnimatedState[W, Anims]) Build(ctx widget.BuildContext) widget.Widget {
 	return m.builder(ctx, m, m.animations)
 }

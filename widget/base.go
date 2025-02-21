@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT AND BSD-3-Clause
 
+// Package widget implements the widget tree. For actual widgets, see
+// [honnef.co/go/gutter/widget/widgets].
 package widget
 
 import (
@@ -1349,6 +1351,14 @@ func (m *ManyChildElements) ForgetChild(child Element) {
 	}
 	m.forgottenChildren[child] = struct{}{}
 }
+
+func NewRenderObjectElement(w RenderObjectWidget) *SimpleRenderObjectElement {
+	el := &SimpleRenderObjectElement{}
+	el.widget = w
+	return el
+}
+
+var _ Widget = (*MediaQuery)(nil)
 
 type MediaQuery struct {
 	Data  MediaQueryData

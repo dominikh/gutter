@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-package widget
+package widgets
 
 import (
 	"honnef.co/go/gutter/maybe"
@@ -10,11 +10,12 @@ import (
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/text"
 	"honnef.co/go/gutter/text/bidi"
+	"honnef.co/go/gutter/widget"
 )
 
 type WidgetSpan interface{}
 
-var _ RenderObjectWidget = (*RichText)(nil)
+var _ widget.RenderObjectWidget = (*RichText)(nil)
 
 type RichText struct {
 	Text          paint.InlineSpan
@@ -33,18 +34,18 @@ type RichText struct {
 }
 
 // CreateElement implements widget.RenderObjectWidget.
-func (r *RichText) CreateElement() Element {
-	return NewRenderObjectElement(r)
+func (r *RichText) CreateElement() widget.Element {
+	return widget.NewRenderObjectElement(r)
 }
 
 // CreateRenderObject implements widget.RenderObjectWidget.
-func (r *RichText) CreateRenderObject(ctx BuildContext) render.Object {
+func (r *RichText) CreateRenderObject(ctx widget.BuildContext) render.Object {
 	// XXX
 	return &render.Paragraph{}
 }
 
 // UpdateRenderObject implements widget.RenderObjectWidget.
-func (r *RichText) UpdateRenderObject(ctx BuildContext, obj render.Object) {
+func (r *RichText) UpdateRenderObject(ctx widget.BuildContext, obj render.Object) {
 	panic("unimplemented")
 	// XXX update all the fields
 }
