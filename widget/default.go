@@ -74,22 +74,6 @@ func RenderObjectElementRemoveRenderObjectChild(el RenderObjectElement, child re
 	render.RemoveChild(el.RenderHandle().RenderObject.(render.ChildRemover), child)
 }
 
-func RenderTreeRootElementAfterUpdate(el RenderObjectElement, oldWidget Widget) {
-	RenderObjectElementAfterUpdate(el, oldWidget)
-}
-func RenderTreeRootElementAfterMount(el RenderObjectElement, parent Element, newSlot int) {
-	RenderObjectElementAfterMount(el, parent, newSlot)
-}
-func RenderTreeRootElementAfterUnmount(el RenderObjectElement) {
-	RenderObjectElementAfterUnmount(el)
-}
-func RenderTreeRootElementAttachRenderObject(el RenderObjectElement, newSlot int) {
-	el.Handle().slot = newSlot
-}
-func RenderTreeRootElementPerformRebuild(el RenderObjectElement) {
-	RenderObjectElementPerformRebuild(el)
-}
-
 func ancestorParentDataElements(el RenderObjectElement) func(yield func(pd ParentDataWidget) bool) {
 	return func(yield func(pd ParentDataWidget) bool) {
 		ancestor := el.Handle().parent
