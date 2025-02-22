@@ -19,19 +19,19 @@ type AnimatedState[W widget.Widget] interface {
 	Tweens(yield func(any, any) bool)
 }
 
-type AnimatedStateHelper[W widget.Widget, S AnimatedState[W]] struct {
+type animatedStateHelper[W widget.Widget, S AnimatedState[W]] struct {
 	controller     *animation.Controller
 	animation      *animation.CurvedAnimation
 	statusListener animation.StatusListener
 }
 
-func (is *AnimatedStateHelper[W, S]) RebuildOnAnimation(s S) {
+func (is *animatedStateHelper[W, S]) RebuildOnAnimation(s S) {
 	is.controller.AddListener(func() {
 		widget.MarkNeedsBuild(s.GetStateHandle().Element)
 	})
 }
 
-func (is *AnimatedStateHelper[W, S]) updateTweens(s S) {
+func (is *animatedStateHelper[W, S]) updateTweens(s S) {
 	for tween, targetValue := range s.Tweens {
 		rvtween := reflect.ValueOf(tween)
 		newBegin := rvtween.MethodByName("Evaluate").
@@ -41,7 +41,7 @@ func (is *AnimatedStateHelper[W, S]) updateTweens(s S) {
 	}
 }
 
-func (is *AnimatedStateHelper[W, S]) Transition(s S, t widget.StateTransition[W]) (updatedTweens bool) {
+func (is *animatedStateHelper[W, S]) Transition(s S, t widget.StateTransition[W]) (updatedTweens bool) {
 	switch t.Kind {
 	case widget.StateInitializing:
 		is.controller = animation.NewController(s.GetStateHandle().BuildOwner())
@@ -158,7 +158,7 @@ func NewAutomaticAnimatedState[Anims any, W widget.Widget](
 type automaticAnimatedState[W widget.Widget, Anims any] struct {
 	widget.StateHandle[W]
 
-	animState AnimatedStateHelper[W, *automaticAnimatedState[W, Anims]]
+	animState animatedStateHelper[W, *automaticAnimatedState[W, Anims]]
 
 	fields             map[string]any // map from widget field to animatedField[T]
 	animations         Anims
