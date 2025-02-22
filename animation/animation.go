@@ -43,11 +43,70 @@ func Animate[T any](parent Animation[float64], animatable Animatable[T]) Animati
 	}
 }
 
+type animatedEvaluation[T any] struct {
+	parent     Animation[float64]
+	animatable Animatable[T]
+}
+
+// AddListener implements Animation.
+func (a *animatedEvaluation[T]) AddListener(cb func()) base.Listener {
+	return a.parent.AddListener(cb)
+}
+
+// AddStatusListener implements Animation.
+func (a *animatedEvaluation[T]) AddStatusListener(cb func(status Status)) StatusListener {
+	return a.parent.AddStatusListener(cb)
+}
+
+// Animating implements Animation.
+func (a *animatedEvaluation[T]) Animating() bool {
+	return a.parent.Animating()
+}
+
+// RemoveListener implements Animation.
+func (a *animatedEvaluation[T]) RemoveListener(l base.Listener) {
+	a.parent.RemoveListener(l)
+}
+
+// RemoveStatusListener implements Animation.
+func (a *animatedEvaluation[T]) RemoveStatusListener(l StatusListener) {
+	a.parent.RemoveStatusListener(l)
+}
+
+// ClearListeners implements Animation.
+func (a *animatedEvaluation[T]) ClearListeners() {
+	a.parent.ClearListeners()
+}
+
+// ClearStatusListeners implements Animation.
+func (a *animatedEvaluation[T]) ClearStatusListeners() {
+	a.parent.ClearStatusListeners()
+}
+
+// Status implements Animation.
+func (a *animatedEvaluation[T]) Status() Status {
+	return a.parent.Status()
+}
+
+// Value implements Animation.
+func (a *animatedEvaluation[T]) Value() T {
+	return a.animatable.Evaluate(a.parent.Value())
+}
+
 func Chain[T any](parent Animatable[float64], animatable Animatable[T]) Animatable[T] {
 	return &chainedEvaluation[T]{
 		parent:     parent,
 		animatable: animatable,
 	}
+}
+
+type chainedEvaluation[T any] struct {
+	parent     Animatable[float64]
+	animatable Animatable[T]
+}
+
+func (c *chainedEvaluation[T]) Evaluate(t float64) T {
+	return c.animatable.Evaluate(c.parent.Evaluate(t))
 }
 
 var _ Animation[float64] = (*CurvedAnimation)(nil)
@@ -111,63 +170,6 @@ func (e *CurvedAnimation) Value() float64 {
 		return t
 	}
 	return ease.Transform(t)
-}
-
-type chainedEvaluation[T any] struct {
-	parent     Animatable[float64]
-	animatable Animatable[T]
-}
-
-func (c *chainedEvaluation[T]) Evaluate(t float64) T {
-	return c.animatable.Evaluate(c.parent.Evaluate(t))
-}
-
-type animatedEvaluation[T any] struct {
-	parent     Animation[float64]
-	animatable Animatable[T]
-}
-
-// AddListener implements Animation.
-func (a *animatedEvaluation[T]) AddListener(cb func()) base.Listener {
-	return a.parent.AddListener(cb)
-}
-
-// AddStatusListener implements Animation.
-func (a *animatedEvaluation[T]) AddStatusListener(cb func(status Status)) StatusListener {
-	return a.parent.AddStatusListener(cb)
-}
-
-// Animating implements Animation.
-func (a *animatedEvaluation[T]) Animating() bool {
-	return a.parent.Animating()
-}
-
-// RemoveListener implements Animation.
-func (a *animatedEvaluation[T]) RemoveListener(l base.Listener) {
-	a.parent.RemoveListener(l)
-}
-
-// RemoveStatusListener implements Animation.
-func (a *animatedEvaluation[T]) RemoveStatusListener(l StatusListener) {
-	a.parent.RemoveStatusListener(l)
-}
-
-func (a *animatedEvaluation[T]) ClearListeners() {
-	a.parent.ClearListeners()
-}
-
-func (a *animatedEvaluation[T]) ClearStatusListeners() {
-	a.parent.ClearStatusListeners()
-}
-
-// Status implements Animation.
-func (a *animatedEvaluation[T]) Status() Status {
-	return a.parent.Status()
-}
-
-// Value implements Animation.
-func (a *animatedEvaluation[T]) Value() T {
-	return a.animatable.Evaluate(a.parent.Value())
 }
 
 func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T {
