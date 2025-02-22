@@ -87,7 +87,7 @@ func (a *AnimatedPadding) CreateElement() widget.Element {
 }
 
 func (a *AnimatedPadding) CreateState() widget.State[*AnimatedPadding] {
-	return NewAutomaticAnimatedState[paddingAnimations](
+	return NewAutomaticAnimatedState(
 		map[string]any{
 			"Padding": NewAnimatedField(render.LerpInset),
 		},
@@ -250,7 +250,7 @@ type opacityAnimations struct {
 
 // CreateState implements StatefulWidget.
 func (a *AnimatedOpacity) CreateState() widget.State[*AnimatedOpacity] {
-	return NewAutomaticAnimatedState[opacityAnimations](
+	return NewAutomaticAnimatedState(
 		map[string]any{
 			"Opacity": NewAnimatedField(animation.Lerp[float32]),
 		},
@@ -544,7 +544,7 @@ func (a *AnimatedAlign) CreateElement() widget.Element {
 }
 
 func (a *AnimatedAlign) CreateState() widget.State[*AnimatedAlign] {
-	return NewAutomaticAnimatedState[alignAnimations](
+	return NewAutomaticAnimatedState(
 		map[string]any{
 			"Alignment":    NewAnimatedField(render.LerpAlignment),
 			"WidthFactor":  NewAnimatedField(animation.MaybeLerp[float64]),
