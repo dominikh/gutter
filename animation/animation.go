@@ -306,12 +306,12 @@ func (kfs Keyframes[T]) ComputeFramesAndWeight(frame float64) (startValue, endVa
 	return kfs.Values[idx0], kfs.Values[idx1], easing.Transform(jmath.Clamp(t, 0, 1)), true
 }
 
-type Transform struct {
-	Anchor   Point
-	Position Point
+type KeyframedTransform struct {
+	Anchor   KeyframedPoint
+	Position KeyframedPoint
 	// Rotation, in radians
 	Rotation Keyframes[float64]
-	Scale    Vec2
+	Scale    KeyframedVec2
 	// Skew, in radians
 	Skew Keyframes[float64]
 	// Skew angle, in radians
@@ -319,7 +319,7 @@ type Transform struct {
 }
 
 // Evaluate implements Animatable.
-func (t Transform) Evaluate(frame float64) curve.Affine {
+func (t KeyframedTransform) Evaluate(frame float64) curve.Affine {
 	anchor := t.Anchor.Evaluate(frame)
 	position := t.Position.Evaluate(frame)
 	rotation := t.Rotation.Evaluate(frame)
@@ -343,36 +343,36 @@ func (t Transform) Evaluate(frame float64) curve.Affine {
 		Mul(curve.Translate(curve.Vec(-anchor.X, -anchor.Y)))
 }
 
-type Vec2 struct {
+type KeyframedVec2 struct {
 	X, Y Keyframes[float64]
 }
 
 // Evaluate implements Animatable.
-func (p Vec2) Evaluate(frame float64) curve.Vec2 {
+func (p KeyframedVec2) Evaluate(frame float64) curve.Vec2 {
 	return curve.Vec2{
 		X: p.X.Evaluate(frame),
 		Y: p.Y.Evaluate(frame),
 	}
 }
 
-type Point struct {
+type KeyframedPoint struct {
 	X, Y Keyframes[float64]
 }
 
 // Evaluate implements Animatable.
-func (p Point) Evaluate(frame float64) curve.Point {
+func (p KeyframedPoint) Evaluate(frame float64) curve.Point {
 	return curve.Point{
 		X: p.X.Evaluate(frame),
 		Y: p.Y.Evaluate(frame),
 	}
 }
 
-type Size struct {
+type KeyframedSize struct {
 	Width, Height Keyframes[float64]
 }
 
 // Evaluate implements Animatable.
-func (sz Size) Evaluate(frame float64) curve.Size {
+func (sz KeyframedSize) Evaluate(frame float64) curve.Size {
 	return curve.Size{
 		Width:  sz.Width.Evaluate(frame),
 		Height: sz.Height.Evaluate(frame),
@@ -380,14 +380,14 @@ func (sz Size) Evaluate(frame float64) curve.Size {
 }
 
 // Evaluate implements Animatable.
-type Stroke struct {
+type KeyframedStroke struct {
 	Width      Keyframes[float64]
 	Join       curve.Join
 	MiterLimit maybe.Option[float64]
 	Cap        curve.Cap
 }
 
-func (s Stroke) Evaluate(frame float64) curve.Stroke {
+func (s KeyframedStroke) Evaluate(frame float64) curve.Stroke {
 	width := s.Width.Evaluate(frame)
 	stroke := curve.DefaultStroke.WithWidth(width).WithCaps(s.Cap).WithJoin(s.Join)
 	if l, ok := s.MiterLimit.Get(); ok {
@@ -396,27 +396,27 @@ func (s Stroke) Evaluate(frame float64) curve.Stroke {
 	return stroke
 }
 
-type Ellipse struct {
-	Position Point
-	Size     Size
+type KeyframedEllipse struct {
+	Position KeyframedPoint
+	Size     KeyframedSize
 }
 
 // Evaluate implements Animatable.
-func (e Ellipse) Evaluate(frame float64) curve.Ellipse {
+func (e KeyframedEllipse) Evaluate(frame float64) curve.Ellipse {
 	pos := e.Position.Evaluate(frame)
 	size := e.Size.Evaluate(frame)
 	radii := curve.Vec(size.Width*0.5, size.Height*0.5)
 	return curve.NewEllipse(pos, radii, 0)
 }
 
-type RoundedRect struct {
-	Position     Point
-	Size         Size
+type KeyframedRoundedRect struct {
+	Position     KeyframedPoint
+	Size         KeyframedSize
 	CornerRadius Keyframes[float64]
 }
 
 // Evaluate implements Animatable.
-func (r RoundedRect) Evaluate(frame float64) curve.RoundedRect {
+func (r KeyframedRoundedRect) Evaluate(frame float64) curve.RoundedRect {
 	pos := r.Position.Evaluate(frame)
 	size := r.Size.Evaluate(frame)
 	radius := r.CornerRadius.Evaluate(frame)
@@ -433,14 +433,14 @@ type ColorStop struct {
 	Color  color.Color
 }
 
-type ColorStops struct {
+type KeyframedColorStops struct {
 	Keyframes[[]ColorStop]
 	// XXX do we need Count
 	Count int
 }
 
 // Evaluate implements Animatable.
-func (s ColorStops) Evaluate(frame float64) []gfx.ColorStop {
+func (s KeyframedColorStops) Evaluate(frame float64) []gfx.ColorStop {
 	v0, v1, t, ok := s.ComputeFramesAndWeight(frame)
 	if !ok {
 		return nil
@@ -465,15 +465,15 @@ func (s ColorStops) Evaluate(frame float64) []gfx.ColorStop {
 	return stops
 }
 
-type Gradient struct {
+type KeyframedGradient struct {
 	IsRadial   bool
-	StartPoint Point
-	EndPoint   Point
-	Stops      ColorStops
+	StartPoint KeyframedPoint
+	EndPoint   KeyframedPoint
+	Stops      KeyframedColorStops
 }
 
 // Evaluate implements Animatable.
-func (g Gradient) Evaluate(frame float64) gfx.Brush {
+func (g KeyframedGradient) Evaluate(frame float64) gfx.Brush {
 	start := g.StartPoint.Evaluate(frame)
 	end := g.EndPoint.Evaluate(frame)
 	stops := g.Stops.Evaluate(frame)

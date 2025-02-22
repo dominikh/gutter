@@ -24,7 +24,7 @@ const (
 type Brush struct {
 	Kind     BrushKind
 	Solid    [3]animation.Keyframes[float64]
-	Gradient animation.Gradient
+	Gradient animation.KeyframedGradient
 }
 
 func (b Brush) Evaluate(alpha, frame float64) gfx.Brush {
@@ -49,7 +49,7 @@ func (b Brush) Evaluate(alpha, frame float64) gfx.Brush {
 type Star struct {
 	IsPolygon      bool
 	Direction      float64
-	Position       animation.Point
+	Position       animation.KeyframedPoint
 	InnerRadius    animation.Keyframes[float64]
 	InnerRoundness animation.Keyframes[float64]
 	OuterRadius    animation.Keyframes[float64]
@@ -149,10 +149,10 @@ func (s Spline) Evaluate(frame float64, path curve.BezPath) (curve.BezPath, bool
 type Repeater struct {
 	Copies       animation.Keyframes[float64]
 	Offset       animation.Keyframes[float64]
-	AnchorPoint  animation.Point
-	Position     animation.Point
+	AnchorPoint  animation.KeyframedPoint
+	Position     animation.KeyframedPoint
 	Rotation     animation.Keyframes[float64]
-	Scale        animation.Vec2
+	Scale        animation.KeyframedVec2
 	StartOpacity animation.Keyframes[float64]
 	EndOpacity   animation.Keyframes[float64]
 }

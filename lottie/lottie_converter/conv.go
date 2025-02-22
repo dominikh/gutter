@@ -268,11 +268,11 @@ func convertBlendMode(value encoding.BlendMode) maybe.Option[gfx.BlendMode] {
 	}
 }
 
-func convertTransform(value *encoding.Transform) (animation.Transform, animation.Keyframes[float64]) {
-	var position animation.Point
+func convertTransform(value *encoding.Transform) (animation.KeyframedTransform, animation.Keyframes[float64]) {
+	var position animation.KeyframedPoint
 
 	if value.Position.Split {
-		position = animation.Point{
+		position = animation.KeyframedPoint{
 			X: convertScalar(value.Position.X),
 			Y: convertScalar(value.Position.Y),
 		}
@@ -285,7 +285,7 @@ func convertTransform(value *encoding.Transform) (animation.Transform, animation
 			Value: encoding.Vec2{1, 1},
 		},
 	}
-	transform := animation.Transform{
+	transform := animation.KeyframedTransform{
 		Anchor:    convertPos(value.AnchorPoint),
 		Position:  position,
 		Scale:     convertVec2(value.Scale.UnwrapOr(one)),
@@ -421,18 +421,18 @@ func convertMultiKeyframes[T ~[]float64 | ~[2]float64 | ~[3]float64](keyframes [
 	return out
 }
 
-func convertPos(pos encoding.PositionProperty) animation.Point {
+func convertPos(pos encoding.PositionProperty) animation.KeyframedPoint {
 	if pos.Animated {
 		// TODO: Are we using PositionKeyframes here how we're supposed to?
 		// there are in_tangents and out_tangents in addition to the keyframes.
 		// conv_keyframes(pos_keyframes.iter().map(|pk| &pk.keyframe), |k| f(&k.value))
 		xy := convertMultiKeyframes(pos.Keyframes, 2)
-		return animation.Point{
+		return animation.KeyframedPoint{
 			X: xy[0],
 			Y: xy[1],
 		}
 	} else {
-		return animation.Point{
+		return animation.KeyframedPoint{
 			X: fixedValue(pos.Value[0]),
 			Y: fixedValue(pos.Value[1]),
 		}
@@ -450,25 +450,25 @@ func convert2D(v encoding.VectorProperty) []animation.Keyframes[float64] {
 	}
 }
 
-func convertVec2(value encoding.VectorProperty) animation.Vec2 {
+func convertVec2(value encoding.VectorProperty) animation.KeyframedVec2 {
 	xy := convert2D(value)
-	return animation.Vec2{
+	return animation.KeyframedVec2{
 		X: xy[0],
 		Y: xy[1],
 	}
 }
 
-func convertSize(value encoding.VectorProperty) animation.Size {
+func convertSize(value encoding.VectorProperty) animation.KeyframedSize {
 	wh := convert2D(value)
-	return animation.Size{
+	return animation.KeyframedSize{
 		Width:  wh[0],
 		Height: wh[1],
 	}
 }
 
-func convertPoint(value encoding.PositionProperty) animation.Point {
+func convertPoint(value encoding.PositionProperty) animation.KeyframedPoint {
 	xy := convert2D(value)
-	return animation.Point{
+	return animation.KeyframedPoint{
 		X: xy[0],
 		Y: xy[1],
 	}
@@ -584,7 +584,7 @@ func convertGeometry(value encoding.AnyGraphicElement) (model.Geometry, bool) {
 	case encoding.Ellipse:
 		return model.Geometry{
 			Kind: model.GeometryKindEllipse,
-			Ellipse: animation.Ellipse{
+			Ellipse: animation.KeyframedEllipse{
 				Position: convertPos(value.Position),
 				Size:     convertSize(value.Size),
 			},
@@ -592,7 +592,7 @@ func convertGeometry(value encoding.AnyGraphicElement) (model.Geometry, bool) {
 	case encoding.Rectangle:
 		return model.Geometry{
 			Kind: model.GeometryKindRect,
-			Rect: animation.RoundedRect{
+			Rect: animation.KeyframedRoundedRect{
 				Position:     convertPos(value.Position),
 				Size:         convertSize(value.Size),
 				CornerRadius: convertScalar(value.Rounded),
@@ -661,7 +661,7 @@ func convertDraw(value encoding.AnyGraphicElement) (model.Draw, bool) {
 		default:
 			cap = curve.ButtCap
 		}
-		stroke := animation.Stroke{
+		stroke := animation.KeyframedStroke{
 			Width:      convertScalar(value.StrokeWidth),
 			Join:       join,
 			MiterLimit: maybe.Some(value.MiterLimit),
@@ -683,7 +683,7 @@ func convertDraw(value encoding.AnyGraphicElement) (model.Draw, bool) {
 		isRadial := value.GradientType == encoding.GradientTypeRadial
 		startPoint := convertPoint(value.StartPoint)
 		endPoint := convertPoint(value.EndPoint)
-		gradient := animation.Gradient{
+		gradient := animation.KeyframedGradient{
 			IsRadial:   isRadial,
 			StartPoint: startPoint,
 			EndPoint:   endPoint,
@@ -721,7 +721,7 @@ func convertDraw(value encoding.AnyGraphicElement) (model.Draw, bool) {
 		default:
 			cap = curve.RoundCap
 		}
-		stroke := animation.Stroke{
+		stroke := animation.KeyframedStroke{
 			Width:      convertScalar(value.StrokeWidth),
 			Join:       join,
 			MiterLimit: maybe.Some(value.MiterLimit),
@@ -730,7 +730,7 @@ func convertDraw(value encoding.AnyGraphicElement) (model.Draw, bool) {
 		isRadial := value.GradientType == encoding.GradientTypeRadial
 		startPoint := convertPoint(value.StartPoint)
 		endPoint := convertPoint(value.EndPoint)
-		gradient := animation.Gradient{
+		gradient := animation.KeyframedGradient{
 			IsRadial:   isRadial,
 			StartPoint: startPoint,
 			EndPoint:   endPoint,
@@ -750,7 +750,7 @@ func convertDraw(value encoding.AnyGraphicElement) (model.Draw, bool) {
 	}
 }
 
-func convertGradientColors(value encoding.GradientProperty) animation.ColorStops {
+func convertGradientColors(value encoding.GradientProperty) animation.KeyframedColorStops {
 	count := value.NumColorStops
 	if value.Value.Animated {
 		n := len(value.Value.Keyframes)
@@ -761,7 +761,7 @@ func convertGradientColors(value encoding.GradientProperty) animation.ColorStops
 			frames[i], easings[i] = convertKeyframe(value.BaseKeyframe)
 			values[i] = convertStops(value.Value, count)
 		}
-		return animation.ColorStops{
+		return animation.KeyframedColorStops{
 			Keyframes: animation.Keyframes[[]animation.ColorStop]{
 				Frames: frames,
 				Curves: easings,
@@ -771,7 +771,7 @@ func convertGradientColors(value encoding.GradientProperty) animation.ColorStops
 		}
 	} else {
 		raw := convertStops(value.Value.Value, count)
-		return animation.ColorStops{
+		return animation.KeyframedColorStops{
 			Keyframes: animation.Keyframes[[]animation.ColorStop]{
 				Frames: []float64{0},
 				Curves: []animation.Curve{animation.CurveIdentity},

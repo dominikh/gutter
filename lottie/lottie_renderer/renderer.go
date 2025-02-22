@@ -284,7 +284,7 @@ func newDrawData(draw model.Draw, geometry [2]int, frame float64) drawData {
 		kind: drawDataDraw,
 		stroke: maybe.Map(
 			draw.Stroke,
-			func(stroke animation.Stroke) curve.Stroke { return stroke.Evaluate(frame) },
+			func(stroke animation.KeyframedStroke) curve.Stroke { return stroke.Evaluate(frame) },
 		),
 		brush:    draw.Brush.Evaluate(1, frame),
 		alpha:    draw.Opacity.Evaluate(frame) / 100.0,

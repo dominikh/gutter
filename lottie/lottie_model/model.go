@@ -43,8 +43,8 @@ const (
 type Geometry struct {
 	Kind    GeometryKind
 	Fixed   []curve.PathElement
-	Rect    animation.RoundedRect
-	Ellipse animation.Ellipse
+	Rect    animation.KeyframedRoundedRect
+	Ellipse animation.KeyframedEllipse
 	Spline  Spline
 }
 
@@ -65,7 +65,7 @@ func (g Geometry) Evaluate(frame float64, path curve.BezPath) curve.BezPath {
 }
 
 type Draw struct {
-	Stroke maybe.Option[animation.Stroke]
+	Stroke maybe.Option[animation.KeyframedStroke]
 	Brush  Brush
 	// XXX use 0-1, not 0-100
 	Opacity animation.Keyframes[float64]
@@ -91,7 +91,7 @@ type Shape struct {
 }
 
 type GroupTransform struct {
-	Transform animation.Transform
+	Transform animation.KeyframedTransform
 	// XXX use 0-1, not 0-100
 	Opacity animation.Keyframes[float64]
 }
@@ -99,7 +99,7 @@ type GroupTransform struct {
 type Layer struct {
 	Name      string
 	Parent    maybe.Option[int]
-	Transform animation.Transform
+	Transform animation.KeyframedTransform
 	// XXX use 0-1, not 0-100
 	Opacity    animation.Keyframes[float64]
 	Width      float64
