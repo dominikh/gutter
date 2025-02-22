@@ -15,69 +15,73 @@ type Curve interface {
 	Transform(t float64) float64
 }
 
-var CurveIdentity = Curve(&curveIdentity{})
-var CurveInBack = Curve(&curveInBack{})
-var CurveInBounce = Curve(&curveInBounce{})
-var CurveInCirc = Curve(&curveInCirc{})
-var CurveInCubic = Curve(&curveInCubic{})
-var CurveInElastic = Curve(&curveInElastic{})
-var CurveInExpo = Curve(&curveInExpo{})
-var CurveInOutBack = Curve(&curveInOutBack{})
-var CurveInOutBounce = Curve(&curveInOutBounce{})
-var CurveInOutCirc = Curve(&curveInOutCirc{})
-var CurveInOutCubic = Curve(&curveInOutCubic{})
-var CurveInOutElastic = Curve(&curveInOutElastic{})
-var CurveInOutExpo = Curve(&curveInOutExpo{})
-var CurveInOutQuad = Curve(&curveInOutQuad{})
-var CurveInOutQuart = Curve(&curveInOutQuart{})
-var CurveInOutQuint = Curve(&curveInOutQuint{})
-var CurveInOutSine = Curve(&curveInOutSine{})
-var CurveInQuad = Curve(&curveInQuad{})
-var CurveInQuart = Curve(&curveInQuart{})
-var CurveInQuint = Curve(&curveInQuint{})
-var CurveInSine = Curve(&curveInSine{})
-var CurveOutBack = Curve(&curveOutBack{})
-var CurveOutBounce = Curve(&curveOutBounce{})
-var CurveOutCirc = Curve(&curveOutCirc{})
-var CurveOutCubic = Curve(&curveOutCubic{})
-var CurveOutElastic = Curve(&curveOutElastic{})
-var CurveOutExpo = Curve(&curveOutExpo{})
-var CurveOutQuad = Curve(&curveOutQuad{})
-var CurveOutQuart = Curve(&curveOutQuart{})
-var CurveOutQuint = Curve(&curveOutQuint{})
-var CurveOutSine = Curve(&curveOutSine{})
+var (
+	CurveIdentity     = Curve(&curveIdentity{})
+	CurveInBack       = Curve(&curveInBack{})
+	CurveInBounce     = Curve(&curveInBounce{})
+	CurveInCirc       = Curve(&curveInCirc{})
+	CurveInCubic      = Curve(&curveInCubic{})
+	CurveInElastic    = Curve(&curveInElastic{})
+	CurveInExpo       = Curve(&curveInExpo{})
+	CurveInOutBack    = Curve(&curveInOutBack{})
+	CurveInOutBounce  = Curve(&curveInOutBounce{})
+	CurveInOutCirc    = Curve(&curveInOutCirc{})
+	CurveInOutCubic   = Curve(&curveInOutCubic{})
+	CurveInOutElastic = Curve(&curveInOutElastic{})
+	CurveInOutExpo    = Curve(&curveInOutExpo{})
+	CurveInOutQuad    = Curve(&curveInOutQuad{})
+	CurveInOutQuart   = Curve(&curveInOutQuart{})
+	CurveInOutQuint   = Curve(&curveInOutQuint{})
+	CurveInOutSine    = Curve(&curveInOutSine{})
+	CurveInQuad       = Curve(&curveInQuad{})
+	CurveInQuart      = Curve(&curveInQuart{})
+	CurveInQuint      = Curve(&curveInQuint{})
+	CurveInSine       = Curve(&curveInSine{})
+	CurveOutBack      = Curve(&curveOutBack{})
+	CurveOutBounce    = Curve(&curveOutBounce{})
+	CurveOutCirc      = Curve(&curveOutCirc{})
+	CurveOutCubic     = Curve(&curveOutCubic{})
+	CurveOutElastic   = Curve(&curveOutElastic{})
+	CurveOutExpo      = Curve(&curveOutExpo{})
+	CurveOutQuad      = Curve(&curveOutQuad{})
+	CurveOutQuart     = Curve(&curveOutQuart{})
+	CurveOutQuint     = Curve(&curveOutQuint{})
+	CurveOutSine      = Curve(&curveOutSine{})
+)
 
-type curveIdentity struct{}
-type curveInBack struct{}
-type curveInBounce struct{}
-type curveInCirc struct{}
-type curveInCubic struct{}
-type curveInElastic struct{}
-type curveInExpo struct{}
-type curveInOutBack struct{}
-type curveInOutBounce struct{}
-type curveInOutCirc struct{}
-type curveInOutCubic struct{}
-type curveInOutElastic struct{}
-type curveInOutExpo struct{}
-type curveInOutQuad struct{}
-type curveInOutQuart struct{}
-type curveInOutQuint struct{}
-type curveInOutSine struct{}
-type curveInQuad struct{}
-type curveInQuart struct{}
-type curveInQuint struct{}
-type curveInSine struct{}
-type curveOutBack struct{}
-type curveOutBounce struct{}
-type curveOutCirc struct{}
-type curveOutCubic struct{}
-type curveOutElastic struct{}
-type curveOutExpo struct{}
-type curveOutQuad struct{}
-type curveOutQuart struct{}
-type curveOutQuint struct{}
-type curveOutSine struct{}
+type (
+	curveIdentity     struct{}
+	curveInBack       struct{}
+	curveInBounce     struct{}
+	curveInCirc       struct{}
+	curveInCubic      struct{}
+	curveInElastic    struct{}
+	curveInExpo       struct{}
+	curveInOutBack    struct{}
+	curveInOutBounce  struct{}
+	curveInOutCirc    struct{}
+	curveInOutCubic   struct{}
+	curveInOutElastic struct{}
+	curveInOutExpo    struct{}
+	curveInOutQuad    struct{}
+	curveInOutQuart   struct{}
+	curveInOutQuint   struct{}
+	curveInOutSine    struct{}
+	curveInQuad       struct{}
+	curveInQuart      struct{}
+	curveInQuint      struct{}
+	curveInSine       struct{}
+	curveOutBack      struct{}
+	curveOutBounce    struct{}
+	curveOutCirc      struct{}
+	curveOutCubic     struct{}
+	curveOutElastic   struct{}
+	curveOutExpo      struct{}
+	curveOutQuad      struct{}
+	curveOutQuart     struct{}
+	curveOutQuint     struct{}
+	curveOutSine      struct{}
+)
 
 func (*curveIdentity) Transform(t float64) float64 {
 	return t
