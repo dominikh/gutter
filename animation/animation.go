@@ -28,6 +28,8 @@ type Animation[T any] interface {
 	Value() T
 }
 
+// An Animatable is a value that varies over time and can be evaluated at a time
+// t that is nominally in [0, 1].
 type Animatable[T any] interface {
 	Evaluate(t float64) T
 }
@@ -172,6 +174,7 @@ func (e *CurvedAnimation) Value() float64 {
 	return ease.Transform(t)
 }
 
+// Lerp linearly interpolates between integer and float types.
 func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T {
 	switch t {
 	case 0:
@@ -183,6 +186,8 @@ func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T 
 	}
 }
 
+// MaybeLerp linearly interpolates between integer and float types wrapped in
+// [maybe.Option]. None values default to the zero value.
 func MaybeLerp[T constraints.Integer | constraints.Float](start, end maybe.Option[T], t float64) maybe.Option[T] {
 	switch t {
 	case 0:
@@ -200,6 +205,9 @@ func MaybeLerp[T constraints.Integer | constraints.Float](start, end maybe.Optio
 	}
 }
 
+// Tween is an [Animatable] whose value varies from Start to End, computed by
+// Compute. Optionally, Curve can be used to apply an easing function to t
+// before it is passed to Compute.
 type Tween[T any] struct {
 	Start T
 	End   T
@@ -208,6 +216,7 @@ type Tween[T any] struct {
 	Compute func(start, end T, progress float64) T
 }
 
+// Evaluate implements Animatable.
 func (tween *Tween[T]) Evaluate(t float64) (v T) {
 	if c := tween.Curve; c != nil {
 		t = c.Transform(t)
@@ -215,6 +224,7 @@ func (tween *Tween[T]) Evaluate(t float64) (v T) {
 	return tween.Compute(tween.Start, tween.End, t)
 }
 
+// Keyframes is an [Animatable] that uses keyframes.
 type Keyframes[T any] struct {
 	Frames []float64
 	Curves []Curve
@@ -225,6 +235,7 @@ type Keyframes[T any] struct {
 	Lerp func(T, T, float64) T
 }
 
+// Evaluate implements Animatable.
 func (v *Keyframes[T]) Evaluate(frame float64) T {
 	var def T
 
@@ -307,6 +318,7 @@ type Transform struct {
 	SkewAngle Keyframes[float64]
 }
 
+// Evaluate implements Animatable.
 func (t Transform) Evaluate(frame float64) curve.Affine {
 	anchor := t.Anchor.Evaluate(frame)
 	position := t.Position.Evaluate(frame)
@@ -335,6 +347,7 @@ type Vec2 struct {
 	X, Y Keyframes[float64]
 }
 
+// Evaluate implements Animatable.
 func (p Vec2) Evaluate(frame float64) curve.Vec2 {
 	return curve.Vec2{
 		X: p.X.Evaluate(frame),
@@ -346,6 +359,7 @@ type Point struct {
 	X, Y Keyframes[float64]
 }
 
+// Evaluate implements Animatable.
 func (p Point) Evaluate(frame float64) curve.Point {
 	return curve.Point{
 		X: p.X.Evaluate(frame),
@@ -357,6 +371,7 @@ type Size struct {
 	Width, Height Keyframes[float64]
 }
 
+// Evaluate implements Animatable.
 func (sz Size) Evaluate(frame float64) curve.Size {
 	return curve.Size{
 		Width:  sz.Width.Evaluate(frame),
@@ -364,6 +379,7 @@ func (sz Size) Evaluate(frame float64) curve.Size {
 	}
 }
 
+// Evaluate implements Animatable.
 type Stroke struct {
 	Width      Keyframes[float64]
 	Join       curve.Join
@@ -385,6 +401,7 @@ type Ellipse struct {
 	Size     Size
 }
 
+// Evaluate implements Animatable.
 func (e Ellipse) Evaluate(frame float64) curve.Ellipse {
 	pos := e.Position.Evaluate(frame)
 	size := e.Size.Evaluate(frame)
@@ -398,6 +415,7 @@ type RoundedRect struct {
 	CornerRadius Keyframes[float64]
 }
 
+// Evaluate implements Animatable.
 func (r RoundedRect) Evaluate(frame float64) curve.RoundedRect {
 	pos := r.Position.Evaluate(frame)
 	size := r.Size.Evaluate(frame)
@@ -421,6 +439,7 @@ type ColorStops struct {
 	Count int
 }
 
+// Evaluate implements Animatable.
 func (s ColorStops) Evaluate(frame float64) []gfx.ColorStop {
 	v0, v1, t, ok := s.ComputeFramesAndWeight(frame)
 	if !ok {
@@ -453,6 +472,7 @@ type Gradient struct {
 	Stops      ColorStops
 }
 
+// Evaluate implements Animatable.
 func (g Gradient) Evaluate(frame float64) gfx.Brush {
 	start := g.StartPoint.Evaluate(frame)
 	end := g.EndPoint.Evaluate(frame)

@@ -15,7 +15,11 @@ import (
 )
 
 type AnimatedState[W widget.Widget] interface {
+	// XXX does this have to be exported?
+
 	widget.State[W]
+	// Tweens iterates over all tweens, yielding pairs of
+	// (tween *animation.Tween[T], target T)
 	Tweens(yield func(any, any) bool)
 }
 
@@ -33,7 +37,9 @@ func (is *animatedStateHelper[W, S]) RebuildOnAnimation(s S) {
 
 func (is *animatedStateHelper[W, S]) updateTweens(s S) {
 	for tween, targetValue := range s.Tweens {
+		// rtype(rvtween) == animation.Tween[T].
 		rvtween := reflect.ValueOf(tween)
+		// rtype(newBegin) == T
 		newBegin := rvtween.MethodByName("Evaluate").
 			Call([]reflect.Value{reflect.ValueOf(is.animation.Value())})[0]
 		rvtween.Elem().FieldByName("Start").Set(newBegin)
@@ -142,8 +148,88 @@ type animatedField[T any] struct {
 	) animation.Animation[T]
 }
 
+// NewAutomaticAnimatedState can be used to implement implicitly animated
+// widgets, by creating [widget.State] that automatically animate select fields
+// of widgets.
+//
+// The type parameter W is the concrete widget we're implementing that we want
+// to be implicitly animated. For example, this package uses this function to
+// implement [AnimatedAlign].
+//
+// The type parameter Anims is a struct with one field per animated field in W,
+// where each field has the type [animation.Animation], instantiated with the
+// corresponding field type in W. A value of type *Anims is passed to the build
+// function, which allows type-safe access to the animated fields.
+//
+// The fields parameter specifies which fields in W to animate and which lerp
+// functions to use. Values in the map should all be the return values from
+// NewAnimatedField.
+//
+// The function provided via the build parameter gets called whenever the widget
+// needs to be rebuilt and takes the place of the [widget.State.Build] method.
+// Commonly, build functions return the equivalent unanimated widget, using the
+// current values of the animated fields. For example, [AnimatedAlign] returns
+// [Align] whenever the animation advances. In this case, the rebuildOnAnimation
+// parameter must be true.
+//
+// rebuildOnAnimation controls whether the build function gets called every time
+// the animation advances. This has to be true for animated widgets that work by
+// returning unanimated widgets (as described previously). However, some
+// implicitly animated widgets may choose to build to explicitly animated
+// widgets instead--for example, [AnimatedOpacity] builds to a [FadeTransition].
+// In that case, the animation directly drives a render object and doesn't
+// require widgets to be rebuilt.
+//
+// Implicitly animated widgets are required to have a field called "Duration" of
+// type "time.Duration". This field is used to configure the duration of
+// animations.
+//
+// Implicitly animated widgets can optionally have a field called "Curve" of
+// type "animation.Curve" to allow configuring the animation's curve (also known
+// as the easing function).
+//
+// Example:
+//
+//	type AnimatedAlign struct {
+//		Alignment    render.Alignment
+//		WidthFactor  maybe.Option[float64]
+//		HeightFactor maybe.Option[float64]
+//		Child        widget.Widget
+//
+//		Duration time.Duration
+//		Curve    animation.Curve
+//	}
+//
+//	type alignAnimations struct {
+//		Alignment    animation.Animation[render.Alignment]
+//		WidthFactor  animation.Animation[maybe.Option[float64]]
+//		HeightFactor animation.Animation[maybe.Option[float64]]
+//	}
+//
+//	func (a *AnimatedAlign) CreateElement() widget.Element {
+//		return widget.NewInteriorElement(a)
+//	}
+//
+//	func (a *AnimatedAlign) CreateState() widget.State[*AnimatedAlign] {
+//		return NewAutomaticAnimatedState(
+//			map[string]any{
+//				"Alignment":    NewAnimatedField(render.LerpAlignment),
+//				"WidthFactor":  NewAnimatedField(animation.MaybeLerp[float64]),
+//				"HeightFactor": NewAnimatedField(animation.MaybeLerp[float64]),
+//			},
+//			func(ctx widget.BuildContext, s widget.State[*AnimatedAlign], anims *alignAnimations) widget.Widget {
+//				return &Align{
+//					Alignment:    anims.Alignment.Value(),
+//					WidthFactor:  anims.WidthFactor.Value(),
+//					HeightFactor: anims.HeightFactor.Value(),
+//					Child:        s.GetStateHandle().Widget.Child,
+//				}
+//			},
+//			true,
+//		)
+//	}
 func NewAutomaticAnimatedState[Anims any, W widget.Widget](
-	fields map[string]any, // map from widget field to AnimatedField
+	fields map[string]any,
 	build func(ctx widget.BuildContext, s widget.State[W], anims *Anims) widget.Widget,
 	rebuildOnAnimation bool,
 ) widget.State[W] {
@@ -166,24 +252,37 @@ type automaticAnimatedState[W widget.Widget, Anims any] struct {
 	rebuildOnAnimation bool
 }
 
+// Tweens implements AnimatedState.
 func (m *automaticAnimatedState[W, Anims]) Tweens(yield func(any, any) bool) {
-	rvw := reflect.ValueOf(m.Widget).Elem()
+	// For every implicitly animated field, we yield the current animation.Tween
+	// and the new target value it should be updated to. This is used by
+	// animatedStateHelper.updateTweens to evaluate and update the tweens.
+	rvwidget := reflect.ValueOf(m.Widget).Elem()
 	for field, afield := range m.fields {
+		// rtype(tween) == *animatedField[T]
 		tween := reflect.ValueOf(afield).Elem().FieldByName("Tween").Interface()
-		if !yield(tween, rvw.FieldByName(field).Interface()) {
+		if !yield(tween, rvwidget.FieldByName(field).Interface()) {
 			break
 		}
 	}
 }
 
+// Transition implements widget.State.
 func (m *automaticAnimatedState[W, Anims]) Transition(t widget.StateTransition[W]) {
-	rvanims := reflect.ValueOf(m.animations).Elem()
 	if m.animState.Transition(m, t) {
+		// rtype(rvanims) == Anims
+		rvanims := reflect.ValueOf(m.animations).Elem()
+		// rtype(rvanim) == *animation.CurvedAnimation
 		rvanim := reflect.ValueOf(m.animState.animation)
 		for field, afield := range m.fields {
+			// rtype(rvafield) == *animatedField[T]
 			rvafield := reflect.ValueOf(afield).Elem()
+			// rtype(tween) == *animation.Tween[T]
 			tween := rvafield.FieldByName("Tween")
+			// rtype(animate) ==
+			//     func(animation.Animation[float64], animation.Animatable[T]) animation.Animation[T]
 			animate := rvafield.FieldByName("Animate")
+			// rtype(anim) == animation.Animation[T]
 			anim := animate.Call([]reflect.Value{
 				rvanim,
 				tween,
@@ -196,6 +295,7 @@ func (m *automaticAnimatedState[W, Anims]) Transition(t widget.StateTransition[W
 	}
 }
 
+// Transition implements widget.State.
 func (m *automaticAnimatedState[W, Anims]) Build(ctx widget.BuildContext) widget.Widget {
 	return m.builder(ctx, m, m.animations)
 }
