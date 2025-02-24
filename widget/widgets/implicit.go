@@ -213,7 +213,7 @@ type animatedField[T any] struct {
 //	func (a *AnimatedAlign) CreateState() widget.State[*AnimatedAlign] {
 //		return NewAutomaticAnimatedState(
 //			map[string]any{
-//				"Alignment":    NewAnimatedField(render.LerpAlignment),
+//				"Alignment":    NewAnimatedField(render.Alignment.Lerp),
 //				"WidthFactor":  NewAnimatedField(animation.MaybeLerp[float64]),
 //				"HeightFactor": NewAnimatedField(animation.MaybeLerp[float64]),
 //			},

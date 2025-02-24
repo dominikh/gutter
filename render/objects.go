@@ -104,7 +104,7 @@ func NewInset(v float64) Inset {
 	return Inset{v, v, v, v}
 }
 
-func LerpInset(start, end Inset, t float64) Inset {
+func (start Inset) Lerp(end Inset, t float64) Inset {
 	return Inset{
 		Left:   animation.Lerp(start.Left, end.Left, t),
 		Top:    animation.Lerp(start.Top, end.Top, t),
@@ -176,7 +176,7 @@ type Alignment struct {
 	X, Y float64
 }
 
-func LerpAlignment(a, b Alignment, t float64) Alignment {
+func (a Alignment) Lerp(b Alignment, t float64) Alignment {
 	return Alignment{
 		X: animation.Lerp(a.X, b.X, t),
 		Y: animation.Lerp(a.Y, b.Y, t),

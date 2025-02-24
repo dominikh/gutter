@@ -89,7 +89,7 @@ func (a *AnimatedPadding) CreateElement() widget.Element {
 func (a *AnimatedPadding) CreateState() widget.State[*AnimatedPadding] {
 	return NewAutomaticAnimatedState(
 		map[string]any{
-			"Padding": NewAnimatedField(render.LerpInset),
+			"Padding": NewAnimatedField(render.Inset.Lerp),
 		},
 		func(ctx widget.BuildContext, s widget.State[*AnimatedPadding], anims *paddingAnimations) widget.Widget {
 			return &Padding{
@@ -546,7 +546,7 @@ func (a *AnimatedAlign) CreateElement() widget.Element {
 func (a *AnimatedAlign) CreateState() widget.State[*AnimatedAlign] {
 	return NewAutomaticAnimatedState(
 		map[string]any{
-			"Alignment":    NewAnimatedField(render.LerpAlignment),
+			"Alignment":    NewAnimatedField(render.Alignment.Lerp),
 			"WidthFactor":  NewAnimatedField(animation.MaybeLerp[float64]),
 			"HeightFactor": NewAnimatedField(animation.MaybeLerp[float64]),
 		},
