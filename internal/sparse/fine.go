@@ -19,13 +19,14 @@ type fine struct {
 
 func newFine(width, height int, out [][4]float32) *fine {
 	// Align scratch memory to this many bytes. This should match the largest
-	// vector width that we use in assembly. Currently that is 32 for AVX.
+	// vector width that we use in assembly. Currently that is 32 for AVX. Has
+	// to be a power of 2.
 	const align = 32
 
 	var f fine
 	scratch := make([]byte, unsafe.Sizeof(*f.scratch)+align)
 	ptr := unsafe.Pointer(&scratch[0])
-	alignedPtr := unsafe.Pointer(((uintptr(ptr) + align - 1) / align) * align)
+	alignedPtr := unsafe.Pointer((uintptr(ptr) + align - 1) &^ (align - 1))
 	scratch2 := (*[wideTileWidth][stripHeight][4]float32)(alignedPtr)
 	return &fine{width, height, out, scratch2}
 }
