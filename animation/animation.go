@@ -7,6 +7,7 @@ package animation
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 
 	"honnef.co/go/color"
@@ -182,7 +183,11 @@ func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T 
 	case 1:
 		return end
 	default:
-		return (T(float64(start) + float64(end-start)*t))
+		if rv := reflect.ValueOf(start); rv.CanInt() || rv.CanUint() {
+			return (T(math.Round(float64(start) + float64(end-start)*t)))
+		} else {
+			return (T(float64(start) + float64(end-start)*t))
+		}
 	}
 }
 
