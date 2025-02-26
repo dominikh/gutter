@@ -11,25 +11,25 @@ import (
 
 func benchmarkFineFill(
 	b *testing.B,
-	fn func(out [][stripHeight][4]float32, color [4]float32),
+	fn func(out [][stripHeight]Color, color Color),
 ) {
 	for _, t := range []struct {
 		name  string
 		width int
 		short bool
-		color [4]float32
+		color Color
 	}{
-		{"opaque", wideTileWidth, true, [4]float32{0.5, 0.5, 0.5, 1}},
-		{"translucent", wideTileWidth, true, [4]float32{0.1, 0.1, 0.1, 0.1}},
+		{"opaque", wideTileWidth, true, Color{0.5, 0.5, 0.5, 1}},
+		{"translucent", wideTileWidth, true, Color{0.1, 0.1, 0.1, 0.1}},
 
-		{"opaque", 16, false, [4]float32{0.5, 0.5, 0.5, 1}},
-		{"translucent", 16, false, [4]float32{0.1, 0.1, 0.1, 0.1}},
+		{"opaque", 16, false, Color{0.5, 0.5, 0.5, 1}},
+		{"translucent", 16, false, Color{0.1, 0.1, 0.1, 0.1}},
 
-		{"opaque", 2, false, [4]float32{0.5, 0.5, 0.5, 1}},
-		{"translucent", 2, false, [4]float32{0.1, 0.1, 0.1, 0.1}},
+		{"opaque", 2, false, Color{0.5, 0.5, 0.5, 1}},
+		{"translucent", 2, false, Color{0.1, 0.1, 0.1, 0.1}},
 
-		{"opaque", 1, false, [4]float32{0.5, 0.5, 0.5, 1}},
-		{"translucent", 1, false, [4]float32{0.1, 0.1, 0.1, 0.1}},
+		{"opaque", 1, false, Color{0.5, 0.5, 0.5, 1}},
+		{"translucent", 1, false, Color{0.1, 0.1, 0.1, 0.1}},
 	} {
 		if testing.Short() && !t.short {
 			b.Skip("skipping benchmark in short mode.")

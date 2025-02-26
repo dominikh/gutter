@@ -15,12 +15,12 @@ import (
 type fine struct {
 	// the width and height of the output image, in pixels
 	width, height int
-	outBuf        [][4]float32
-	// [x][y][4]float32
-	scratch *[wideTileWidth][stripHeight][4]float32
+	outBuf        []Color
+	// [x][y]Color
+	scratch *[wideTileWidth][stripHeight]Color
 }
 
-func newFine(width, height int, out [][4]float32) *fine {
+func newFine(width, height int, out []Color) *fine {
 	// Align scratch memory to this many bytes. This should match the largest
 	// vector width that we use in assembly. Currently that is 32 for AVX. Has
 	// to be a power of 2.
@@ -30,15 +30,15 @@ func newFine(width, height int, out [][4]float32) *fine {
 	scratch := make([]byte, unsafe.Sizeof(*f.scratch)+align)
 	ptr := unsafe.Pointer(&scratch[0])
 	alignedPtr := unsafe.Pointer((uintptr(ptr) + align - 1) &^ (align - 1))
-	scratch2 := (*[wideTileWidth][stripHeight][4]float32)(alignedPtr)
+	scratch2 := (*[wideTileWidth][stripHeight]Color)(alignedPtr)
 	return &fine{width, height, out, scratch2}
 }
 
-func (f *fine) clear(c [4]float32) {
+func (f *fine) clear(c Color) {
 	const sz1 = len(f.scratch)
 	const sz2 = len(f.scratch[0])
 	// This is faster than using two loops.
-	b := safeish.Cast[*[sz1 * sz2][4]float32](f.scratch)
+	b := safeish.Cast[*[sz1 * sz2]Color](f.scratch)
 	for i := range b {
 		b[i] = c
 	}
@@ -76,16 +76,16 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 
 var fillFp = fineFillNative
 
-func (f *fine) fill(x, width int, color [4]float32) {
+func (f *fine) fill(x, width int, color Color) {
 	f.fillWithFp(x, width, color, fillFp)
 }
 
-func (f *fine) fillWithFp(x, width int, color [4]float32, fillFp func([][stripHeight][4]float32, [4]float32)) {
+func (f *fine) fillWithFp(x, width int, color Color, fillFp func([][stripHeight]Color, Color)) {
 	buf := f.scratch[x : x+width]
 	fillFp(buf, color)
 }
 
-func fineFillNative(buf [][stripHeight][4]float32, color [4]float32) {
+func fineFillNative(buf [][stripHeight]Color, color Color) {
 	if color[3] == 1.0 {
 		for x := range buf {
 			col := &buf[x]
@@ -107,7 +107,7 @@ func fineFillNative(buf [][stripHeight][4]float32, color [4]float32) {
 	}
 }
 
-func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color [4]float32) {
+func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
 	if len(alphas) < width {
 		panic(fmt.Sprintf("internal error: got %d alphas for a width of %d",
 			len(alphas), width))

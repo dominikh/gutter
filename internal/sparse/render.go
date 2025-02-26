@@ -22,6 +22,8 @@ const (
 	EvenOdd
 )
 
+type Color [4]float32
+
 type CsRenderCtx struct {
 	width  int
 	height int
@@ -56,7 +58,7 @@ func (ctx *CsRenderCtx) Reset() {
 	for _, row := range ctx.tiles {
 		for x := range row {
 			tile := &row[x]
-			tile.bg = [4]float32{}
+			tile.bg = Color{}
 			clear(tile.cmds)
 			tile.cmds = tile.cmds[:0]
 		}
@@ -65,7 +67,7 @@ func (ctx *CsRenderCtx) Reset() {
 	ctx.alphas = ctx.alphas[:0]
 }
 
-func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap [][4]float32) {
+func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap []Color) {
 	fine := newFine(width, height, pixmap)
 	for y, row := range ctx.tiles {
 		for x := range row {
@@ -80,7 +82,7 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap [][4]float32) {
 	}
 }
 
-func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, color [4]float32) {
+func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, color Color) {
 	// XXX support a brush
 
 	t1 := time.Now()
@@ -167,14 +169,14 @@ func (ctx *CsRenderCtx) getAffine() curve.Affine {
 	return ctx.transform
 }
 
-func (ctx *CsRenderCtx) Fill(path iter.Seq[curve.PathElement], fillRule FillRule, color [4]float32) {
+func (ctx *CsRenderCtx) Fill(path iter.Seq[curve.PathElement], fillRule FillRule, color Color) {
 	// XXX support brushes
 	affine := ctx.getAffine()
 	it := fill(path, affine)
 	ctx.renderPath(it, fillRule, color)
 }
 
-func (ctx *CsRenderCtx) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color [4]float32) {
+func (ctx *CsRenderCtx) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color Color) {
 	// XXX support brushes
 	affine := ctx.getAffine()
 	it := stroke(path, stroke_, affine)

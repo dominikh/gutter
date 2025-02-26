@@ -6,5 +6,5 @@
 
 package sparse
 
-func fineFillSSE(out [][stripHeight][4]float32, color [4]float32)
-func fineFillAVX(out [][stripHeight][4]float32, color [4]float32)
+func fineFillSSE(out [][stripHeight]Color, color Color)
+func fineFillAVX(out [][stripHeight]Color, color Color)
