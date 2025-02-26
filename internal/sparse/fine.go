@@ -8,9 +8,12 @@ package sparse
 import (
 	"fmt"
 	"unsafe"
+
+	"honnef.co/go/safeish"
 )
 
 type fine struct {
+	// the width and height of the output image, in pixels
 	width, height int
 	outBuf        [][4]float32
 	// [x][y][4]float32
@@ -32,36 +35,30 @@ func newFine(width, height int, out [][4]float32) *fine {
 }
 
 func (f *fine) clear(c [4]float32) {
-	for y := range f.scratch {
-		row := &f.scratch[y]
-		for x := range row {
-			row[x] = c
-		}
+	const sz1 = len(f.scratch)
+	const sz2 = len(f.scratch[0])
+	// This is faster than using two loops.
+	b := safeish.Cast[*[sz1 * sz2][4]float32](f.scratch)
+	for i := range b {
+		b[i] = c
 	}
 }
 
+// pack writes the tile at (x, y) to the output buffer. x and y are tile
+// indices, not pixels.
 func (f *fine) pack(x, y int) {
-	if px, py := x*wideTileWidth, y*stripHeight; px > f.width || py > f.height {
-		panic(fmt.Sprintf("tile (%d, %d) starts at pixel (%d, %d), which is out of bounds for size (%d, %d)",
-			x, y, px, py, f.width, f.height))
-	}
 	baseIdx := (y*stripHeight*f.width + x*wideTileWidth)
-	for j := range stripHeight {
-		lineIdx := baseIdx + j*f.width
 
-		// Continue if the current row is outside the range of the pixmap.
-		if y*stripHeight+j >= f.height {
-			break
+	maxi := max(0, min(wideTileWidth, f.width-x*wideTileWidth))
+	maxj := max(0, min(4, f.height-y*stripHeight))
+	_ = f.outBuf[baseIdx+(maxj-1)*f.width+maxi-1]
+
+	out := f.outBuf[baseIdx:]
+	for j := range maxj {
+		for i := range maxi {
+			*safeish.Index(out, i) = f.scratch[i][j]
 		}
-
-		for i := range wideTileWidth {
-			// Abort if the current column is outside the range of the pixmap.
-			if x*wideTileWidth+i >= f.width {
-				break
-			}
-
-			f.outBuf[lineIdx+i] = f.scratch[i][j]
-		}
+		out = out[min(len(out), f.width):]
 	}
 }
 
