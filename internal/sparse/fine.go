@@ -114,7 +114,7 @@ func (f *fine) fill(x, width int, color Color) {
 	f.fillWithFp(x, width, color, fillFp)
 }
 
-func (f *fine) fillWithFp(x, width int, color Color, fillFp func(*fine, [][stripHeight]Color, Color)) {
+func (f *fine) fillWithFp(x, width int, color Color, fillFp func([][stripHeight]Color, Color, bool, Color)) {
 	if x == 0 && width == wideTileWidth {
 		if color[3] == 1.0 {
 			f.clear(color)
@@ -138,14 +138,14 @@ func (f *fine) fillWithFp(x, width int, color Color, fillFp func(*fine, [][strip
 	}
 
 	buf := f.scratch[x : x+width]
-	fillFp(f, buf, color)
+	fillFp(buf, color, f.complex, f.singleColor)
 
 	if x != 0 || width != wideTileWidth {
 		f.complex = true
 	}
 }
 
-func fineFillNative(f *fine, buf [][stripHeight]Color, color Color) {
+func fineFillNative(buf [][stripHeight]Color, color Color, complex bool, singleColor Color) {
 	if color[3] == 1.0 {
 		for x := range buf {
 			col := &buf[x]
@@ -155,7 +155,7 @@ func fineFillNative(f *fine, buf [][stripHeight]Color, color Color) {
 		}
 	} else {
 		oneMinusAlpha := 1.0 - color[3]
-		if f.complex {
+		if complex {
 			for x := range buf {
 				col := &buf[x]
 				for y := range col {
@@ -167,10 +167,10 @@ func fineFillNative(f *fine, buf [][stripHeight]Color, color Color) {
 			}
 		} else {
 			color = Color{
-				0: color[0] + oneMinusAlpha*f.singleColor[0],
-				1: color[1] + oneMinusAlpha*f.singleColor[1],
-				2: color[2] + oneMinusAlpha*f.singleColor[2],
-				3: color[3] + oneMinusAlpha*f.singleColor[3],
+				0: color[0] + oneMinusAlpha*singleColor[0],
+				1: color[1] + oneMinusAlpha*singleColor[1],
+				2: color[2] + oneMinusAlpha*singleColor[2],
+				3: color[3] + oneMinusAlpha*singleColor[3],
 			}
 			col := [4]Color{color, color, color, color}
 			for x := range buf {

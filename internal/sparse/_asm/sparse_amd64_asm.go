@@ -81,15 +81,13 @@ func fillAVX() {
 	VSHUFPS(Imm(0), oneMinusAlpha.AsX(), oneMinusAlpha.AsX(), oneMinusAlpha.AsX())
 	VINSERTF128(Imm(1), oneMinusAlpha.AsX(), oneMinusAlpha, oneMinusAlpha)
 
-	f := Dereference(Param("f"))
-
-	state := Load(f.Field("complex"), GP64())
+	state := Load(Param("complex"), GP64())
 	TESTQ(state, state)
 	JNZ(LabelRef("loopTranslucent"))
 
 	// Old tile contents are a single color
 	bg := YMM()
-	b, _ = f.Field("singleColor").Index(0).Resolve()
+	b, _ = Param("singleColor").Index(0).Resolve()
 	VBROADCASTF128(b.Addr, bg)
 	VMULPS(oneMinusAlpha, bg, bg)
 	VADDPS(colorx2, bg, bg)
@@ -164,15 +162,13 @@ func fillSSE() {
 	SUBSS(alpha, oneMinusAlpha)
 	SHUFPS(Imm(0), oneMinusAlpha, oneMinusAlpha)
 
-	f := Dereference(Param("f"))
-
-	state := Load(f.Field("complex"), GP8())
+	state := Load(Param("complex"), GP8())
 	TESTB(state, state)
 	JNZ(LabelRef("loopTranslucent"))
 
 	// Old tile contents are a single color
 	bg := XMM()
-	b, _ = f.Field("singleColor").Index(0).Resolve()
+	b, _ = Param("singleColor").Index(0).Resolve()
 	MOVUPS(b.Addr, bg)
 	MULPS(oneMinusAlpha, bg)
 	ADDPS(color, bg)

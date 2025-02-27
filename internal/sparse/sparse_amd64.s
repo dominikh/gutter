@@ -7,20 +7,20 @@
 DATA one<>+0(SB)/4, $(1.0)
 GLOBL one<>(SB), RODATA|NOPTR, $4
 
-// func fineFillAVX(f *fine, out [][4]Color, color Color)
+// func fineFillAVX(out [][4]Color, color Color, complex bool, singleColor Color)
 // Requires: AVX
-TEXT ·fineFillAVX(SB), $0-48
-	MOVQ           out_len+16(FP), AX
+TEXT ·fineFillAVX(SB), $0-60
+	MOVQ           out_len+8(FP), AX
 	SHLQ           $0x02, AX
 	TESTQ          AX, AX
 	JZ             exit
 	VMOVSS         one<>+0(SB), X0
-	VBROADCASTF128 color_0+32(FP), Y1
-	MOVQ           out_base+8(FP), CX
+	VBROADCASTF128 color_0+24(FP), Y1
+	MOVQ           out_base+0(FP), CX
 	SHLQ           $0x04, AX
 	ADDQ           AX, CX
 	NEGQ           AX
-	VMOVSS         color_3+44(FP), X2
+	VMOVSS         color_3+36(FP), X2
 	VUCOMISS       X0, X2
 	JNE            blend
 	PCALIGN        $0x10
@@ -37,11 +37,10 @@ blend:
 	VSUBSS         X2, X0, X0
 	VSHUFPS        $0x00, X0, X0, X0
 	VINSERTF128    $0x01, X0, Y0, Y0
-	MOVQ           f+0(FP), DX
-	MOVBQZX        64(DX), BX
-	TESTQ          BX, BX
+	MOVBQZX        complex+40(FP), DX
+	TESTQ          DX, DX
 	JNZ            loopTranslucent
-	VBROADCASTF128 48(DX), Y2
+	VBROADCASTF128 singleColor_0+44(FP), Y2
 	VMULPS         Y0, Y2, Y2
 	VADDPS         Y1, Y2, Y2
 	PCALIGN        $0x10
@@ -71,20 +70,20 @@ exit:
 	VZEROUPPER
 	RET
 
-// func fineFillSSE(f *fine, out [][4]Color, color Color)
+// func fineFillSSE(out [][4]Color, color Color, complex bool, singleColor Color)
 // Requires: SSE
-TEXT ·fineFillSSE(SB), $0-48
-	MOVQ    out_len+16(FP), AX
+TEXT ·fineFillSSE(SB), $0-60
+	MOVQ    out_len+8(FP), AX
 	SHLQ    $0x02, AX
 	TESTQ   AX, AX
 	JZ      exit
 	MOVSS   one<>+0(SB), X0
-	MOVUPS  color_0+32(FP), X1
-	MOVQ    out_base+8(FP), CX
+	MOVUPS  color_0+24(FP), X1
+	MOVQ    out_base+0(FP), CX
 	SHLQ    $0x04, AX
 	ADDQ    AX, CX
 	NEGQ    AX
-	MOVSS   color_3+44(FP), X2
+	MOVSS   color_3+36(FP), X2
 	UCOMISS X0, X2
 	JNE     blend
 
@@ -99,11 +98,10 @@ blend:
 	MOVSS  X0, X3
 	SUBSS  X2, X3
 	SHUFPS $0x00, X3, X3
-	MOVQ   f+0(FP), DX
-	MOVB   64(DX), BL
-	TESTB  BL, BL
+	MOVB   complex+40(FP), DL
+	TESTB  DL, DL
 	JNZ    loopTranslucent
-	MOVUPS 48(DX), X0
+	MOVUPS singleColor_0+44(FP), X0
 	MULPS  X3, X0
 	ADDPS  X1, X0
 
