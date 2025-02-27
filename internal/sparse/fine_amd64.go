@@ -6,9 +6,7 @@
 
 package sparse
 
-import (
-	"golang.org/x/sys/cpu"
-)
+import "golang.org/x/sys/cpu"
 
 func init() {
 	switch {

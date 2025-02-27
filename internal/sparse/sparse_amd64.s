@@ -7,20 +7,20 @@
 DATA one<>+0(SB)/4, $(1.0)
 GLOBL one<>(SB), RODATA|NOPTR, $4
 
-// func fineFillAVX(out [][4][4]float32, color [4]float32)
+// func fineFillAVX(f *fine, out [][4]Color, color Color)
 // Requires: AVX
-TEXT ·fineFillAVX(SB), $0-40
-	MOVQ           out_len+8(FP), AX
+TEXT ·fineFillAVX(SB), $0-48
+	MOVQ           out_len+16(FP), AX
 	SHLQ           $0x02, AX
 	TESTQ          AX, AX
 	JZ             exit
 	VMOVSS         one<>+0(SB), X0
-	VBROADCASTF128 color+24(FP), Y1
-	MOVQ           out_base+0(FP), CX
+	VBROADCASTF128 color_0+32(FP), Y1
+	MOVQ           out_base+8(FP), CX
 	SHLQ           $0x04, AX
 	ADDQ           AX, CX
 	NEGQ           AX
-	VMOVSS         color_3+36(FP), X2
+	VMOVSS         color_3+44(FP), X2
 	VUCOMISS       X0, X2
 	JNE            blend
 	PCALIGN        $0x10
@@ -34,10 +34,26 @@ loopOpaque:
 	RET
 
 blend:
-	VSUBSS      X2, X0, X0
-	VSHUFPS     $0x00, X0, X0, X0
-	VINSERTF128 $0x01, X0, Y0, Y0
-	PCALIGN     $0x10
+	VSUBSS         X2, X0, X0
+	VSHUFPS        $0x00, X0, X0, X0
+	VINSERTF128    $0x01, X0, Y0, Y0
+	MOVQ           f+0(FP), DX
+	MOVBQZX        64(DX), BX
+	TESTQ          BX, BX
+	JNZ            loopTranslucent
+	VBROADCASTF128 48(DX), Y2
+	VMULPS         Y0, Y2, Y2
+	VADDPS         Y1, Y2, Y2
+	PCALIGN        $0x10
+
+loopTranslucentSingle:
+	VMOVAPS Y2, (CX)(AX*1)
+	VMOVAPS Y2, 32(CX)(AX*1)
+	ADDQ    $+64, AX
+	JL      loopTranslucentSingle
+	VZEROUPPER
+	RET
+	PCALIGN $0x10
 
 loopTranslucent:
 	VMOVAPS (CX)(AX*1), Y2
@@ -55,20 +71,20 @@ exit:
 	VZEROUPPER
 	RET
 
-// func fineFillSSE(out [][4][4]float32, color [4]float32)
+// func fineFillSSE(f *fine, out [][4]Color, color Color)
 // Requires: SSE
-TEXT ·fineFillSSE(SB), $0-40
-	MOVQ    out_len+8(FP), AX
+TEXT ·fineFillSSE(SB), $0-48
+	MOVQ    out_len+16(FP), AX
 	SHLQ    $0x02, AX
 	TESTQ   AX, AX
 	JZ      exit
 	MOVSS   one<>+0(SB), X0
-	MOVUPS  color+24(FP), X1
-	MOVQ    out_base+0(FP), CX
+	MOVUPS  color_0+32(FP), X1
+	MOVQ    out_base+8(FP), CX
 	SHLQ    $0x04, AX
 	ADDQ    AX, CX
 	NEGQ    AX
-	MOVSS   color_3+36(FP), X2
+	MOVSS   color_3+44(FP), X2
 	UCOMISS X0, X2
 	JNE     blend
 
@@ -83,6 +99,20 @@ blend:
 	MOVSS  X0, X3
 	SUBSS  X2, X3
 	SHUFPS $0x00, X3, X3
+	MOVQ   f+0(FP), DX
+	MOVB   64(DX), BL
+	TESTB  BL, BL
+	JNZ    loopTranslucent
+	MOVUPS 48(DX), X0
+	MULPS  X3, X0
+	ADDPS  X1, X0
+
+loopTranslucentSingle:
+	MOVAPS X0, (CX)(AX*1)
+	MOVAPS X0, 16(CX)(AX*1)
+	ADDQ   $0x20, AX
+	JL     loopTranslucentSingle
+	RET
 
 loopTranslucent:
 	MOVAPS (CX)(AX*1), X0

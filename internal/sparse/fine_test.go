@@ -11,7 +11,7 @@ import (
 
 func benchmarkFineFill(
 	b *testing.B,
-	fn func(out [][stripHeight]Color, color Color),
+	fn func(f *fine, out [][stripHeight]Color, color Color),
 ) {
 	for _, t := range []struct {
 		name  string

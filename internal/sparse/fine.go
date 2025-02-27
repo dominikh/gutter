@@ -12,12 +12,19 @@ import (
 	"honnef.co/go/safeish"
 )
 
+const debugPack = false
+
 type fine struct {
 	// the width and height of the output image, in pixels
 	width, height int
 	outBuf        []Color
 	// [x][y]Color
-	scratch *[wideTileWidth][stripHeight]Color
+	scratch     *[wideTileWidth][stripHeight]Color
+	singleColor Color
+
+	// if complex is false, all pixels have the color stored in singleColor and
+	// the contents of scratch may be undefined.
+	complex bool
 }
 
 func newFine(width, height int, out []Color) *fine {
@@ -31,17 +38,17 @@ func newFine(width, height int, out []Color) *fine {
 	ptr := unsafe.Pointer(&scratch[0])
 	alignedPtr := unsafe.Pointer((uintptr(ptr) + align - 1) &^ (align - 1))
 	scratch2 := (*[wideTileWidth][stripHeight]Color)(alignedPtr)
-	return &fine{width, height, out, scratch2}
+	return &fine{
+		width:   width,
+		height:  height,
+		outBuf:  out,
+		scratch: scratch2,
+	}
 }
 
 func (f *fine) clear(c Color) {
-	const sz1 = len(f.scratch)
-	const sz2 = len(f.scratch[0])
-	// This is faster than using two loops.
-	b := safeish.Cast[*[sz1 * sz2]Color](f.scratch)
-	for i := range b {
-		b[i] = c
-	}
+	f.complex = false
+	f.singleColor = c
 }
 
 // pack writes the tile at (x, y) to the output buffer. x and y are tile
@@ -54,11 +61,38 @@ func (f *fine) pack(x, y int) {
 	_ = f.outBuf[baseIdx+(maxj-1)*f.width+maxi-1]
 
 	out := f.outBuf[baseIdx:]
-	for j := range maxj {
-		for i := range maxi {
-			*safeish.Index(out, i) = f.scratch[i][j]
+
+	if f.complex {
+		for j := range maxj {
+			for i := range maxi {
+				*safeish.Index(out, i) = f.scratch[i][j]
+			}
+			out = out[min(len(out), f.width):]
 		}
-		out = out[min(len(out), f.width):]
+	} else {
+		for range maxj {
+			for i := range maxi {
+				if debugPack {
+					*safeish.Index(out, i) = Color{1, 0, 0, 1}
+				} else {
+					*safeish.Index(out, i) = f.singleColor
+				}
+			}
+			out = out[min(len(out), f.width):]
+		}
+	}
+}
+
+func (f *fine) materialize(start, end int) {
+	col := [4]Color{
+		f.singleColor,
+		f.singleColor,
+		f.singleColor,
+		f.singleColor,
+	}
+	buf := f.scratch[start:end]
+	for x := range buf {
+		buf[x] = col
 	}
 }
 
@@ -80,12 +114,38 @@ func (f *fine) fill(x, width int, color Color) {
 	f.fillWithFp(x, width, color, fillFp)
 }
 
-func (f *fine) fillWithFp(x, width int, color Color, fillFp func([][stripHeight]Color, Color)) {
+func (f *fine) fillWithFp(x, width int, color Color, fillFp func(*fine, [][stripHeight]Color, Color)) {
+	if x == 0 && width == wideTileWidth {
+		if color[3] == 1.0 {
+			f.clear(color)
+			return
+		} else if !f.complex {
+			oneMinusAlpha := 1.0 - color[3]
+			color = Color{
+				0: color[0] + oneMinusAlpha*f.singleColor[0],
+				1: color[1] + oneMinusAlpha*f.singleColor[1],
+				2: color[2] + oneMinusAlpha*f.singleColor[2],
+				3: color[3] + oneMinusAlpha*f.singleColor[3],
+			}
+			f.clear(color)
+			return
+		}
+	} else if !f.complex {
+		f.materialize(0, x)
+		f.materialize(x+width, wideTileWidth)
+		// Don't change state yet, the fill implementation can reduce blending
+		// work if it knows the single color.
+	}
+
 	buf := f.scratch[x : x+width]
-	fillFp(buf, color)
+	fillFp(f, buf, color)
+
+	if x != 0 || width != wideTileWidth {
+		f.complex = true
+	}
 }
 
-func fineFillNative(buf [][stripHeight]Color, color Color) {
+func fineFillNative(f *fine, buf [][stripHeight]Color, color Color) {
 	if color[3] == 1.0 {
 		for x := range buf {
 			col := &buf[x]
@@ -95,13 +155,26 @@ func fineFillNative(buf [][stripHeight]Color, color Color) {
 		}
 	} else {
 		oneMinusAlpha := 1.0 - color[3]
-		for x := range buf {
-			col := &buf[x]
-			for y := range col {
-				col[y][0] = color[0] + oneMinusAlpha*col[y][0]
-				col[y][1] = color[1] + oneMinusAlpha*col[y][1]
-				col[y][2] = color[2] + oneMinusAlpha*col[y][2]
-				col[y][3] = color[3] + oneMinusAlpha*col[y][3]
+		if f.complex {
+			for x := range buf {
+				col := &buf[x]
+				for y := range col {
+					col[y][0] = color[0] + oneMinusAlpha*col[y][0]
+					col[y][1] = color[1] + oneMinusAlpha*col[y][1]
+					col[y][2] = color[2] + oneMinusAlpha*col[y][2]
+					col[y][3] = color[3] + oneMinusAlpha*col[y][3]
+				}
+			}
+		} else {
+			color = Color{
+				0: color[0] + oneMinusAlpha*f.singleColor[0],
+				1: color[1] + oneMinusAlpha*f.singleColor[1],
+				2: color[2] + oneMinusAlpha*f.singleColor[2],
+				3: color[3] + oneMinusAlpha*f.singleColor[3],
+			}
+			col := [4]Color{color, color, color, color}
+			for x := range buf {
+				buf[x] = col
 			}
 		}
 	}
@@ -118,16 +191,38 @@ func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
 	color[3] *= (1.0 / 255.0)
 
 	dst := f.scratch[x : x+width]
-	for x := range dst {
-		col := &dst[x]
-		a := &alphas[x]
-		for y := range col {
-			maskAlpha := float32(a[y])
-			oneMinusAlpha := 1.0 - maskAlpha*color[3]
-			col[y][0] = col[y][0]*oneMinusAlpha + maskAlpha*color[0]
-			col[y][1] = col[y][1]*oneMinusAlpha + maskAlpha*color[1]
-			col[y][2] = col[y][2]*oneMinusAlpha + maskAlpha*color[2]
-			col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*color[3]
+
+	if f.complex {
+		for x := range dst {
+			col := &dst[x]
+			a := &alphas[x]
+			for y := range col {
+				maskAlpha := float32(a[y])
+				oneMinusAlpha := 1.0 - maskAlpha*color[3]
+				col[y][0] = col[y][0]*oneMinusAlpha + maskAlpha*color[0]
+				col[y][1] = col[y][1]*oneMinusAlpha + maskAlpha*color[1]
+				col[y][2] = col[y][2]*oneMinusAlpha + maskAlpha*color[2]
+				col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*color[3]
+			}
+		}
+	} else {
+		bg := f.singleColor
+		f.materialize(0, x)
+		f.materialize(x+width, wideTileWidth)
+		f.complex = true
+
+		for x := range dst {
+			col := &dst[x]
+			a := &alphas[x]
+			for y := range col {
+				maskAlpha := float32(a[y])
+				oneMinusAlpha := 1.0 - maskAlpha*color[3]
+				col[y][0] = bg[0]*oneMinusAlpha + maskAlpha*color[0]
+				col[y][1] = bg[1]*oneMinusAlpha + maskAlpha*color[1]
+				col[y][2] = bg[2]*oneMinusAlpha + maskAlpha*color[2]
+				col[y][3] = bg[3]*oneMinusAlpha + maskAlpha*color[3]
+			}
 		}
 	}
+
 }

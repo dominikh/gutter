@@ -40,11 +40,9 @@ func fillAVX() {
 	one := XMM()
 	VMOVSS(gOne, one)
 
-	// TODO: Not satisfying because we have to manually specify the offset. Is
-	// there a way to go from Param("color") to its address?
-	mem := NewParamAddr("color", 24)
+	b, _ := Param("color").Index(0).Resolve()
 	colorx2 := YMM()
-	VBROADCASTF128(mem, colorx2)
+	VBROADCASTF128(b.Addr, colorx2)
 
 	outData := Load(Param("out").Base(), GP64())
 	SHLQ(Imm(4), outLen)
@@ -83,6 +81,29 @@ func fillAVX() {
 	VSHUFPS(Imm(0), oneMinusAlpha.AsX(), oneMinusAlpha.AsX(), oneMinusAlpha.AsX())
 	VINSERTF128(Imm(1), oneMinusAlpha.AsX(), oneMinusAlpha, oneMinusAlpha)
 
+	f := Dereference(Param("f"))
+
+	state := Load(f.Field("complex"), GP64())
+	TESTQ(state, state)
+	JNZ(LabelRef("loopTranslucent"))
+
+	// Old tile contents are a single color
+	bg := YMM()
+	b, _ = f.Field("singleColor").Index(0).Resolve()
+	VBROADCASTF128(b.Addr, bg)
+	VMULPS(oneMinusAlpha, bg, bg)
+	VADDPS(colorx2, bg, bg)
+	PCALIGN(Imm(16))
+	Label("loopTranslucentSingle")
+	for i := range unroll {
+		VMOVAPS(bg, Mem{Base: outData}.Idx(outLen, 1).Offset(i*2*4*4))
+	}
+	ADDQ(I32(unroll*2*4*4), outLen)
+	JL(LabelRef("loopTranslucentSingle"))
+	VZEROUPPER()
+	RET()
+
+	// Old tile contents are multiple colors
 	PCALIGN(Imm(16))
 	Label("loopTranslucent")
 	for i := range unroll {
@@ -112,11 +133,9 @@ func fillSSE() {
 	one := XMM()
 	MOVSS(gOne, one)
 
-	// TODO: Not satisfying because we have to manually specify the offset. Is
-	// there a way to go from Param("color") to its address?
-	mem := NewParamAddr("color", 24)
+	b, _ := Param("color").Index(0).Resolve()
 	color := XMM()
-	MOVUPS(mem, color)
+	MOVUPS(b.Addr, color)
 
 	outData := Load(Param("out").Base(), GP64())
 	SHLQ(Imm(4), outLen)
@@ -145,6 +164,28 @@ func fillSSE() {
 	SUBSS(alpha, oneMinusAlpha)
 	SHUFPS(Imm(0), oneMinusAlpha, oneMinusAlpha)
 
+	f := Dereference(Param("f"))
+
+	state := Load(f.Field("complex"), GP8())
+	TESTB(state, state)
+	JNZ(LabelRef("loopTranslucent"))
+
+	// Old tile contents are a single color
+	bg := XMM()
+	b, _ = f.Field("singleColor").Index(0).Resolve()
+	MOVUPS(b.Addr, bg)
+	MULPS(oneMinusAlpha, bg)
+	ADDPS(color, bg)
+
+	Label("loopTranslucentSingle")
+	for i := range unroll {
+		MOVAPS(bg, Mem{Base: outData}.Idx(outLen, 1).Offset(i*4*4))
+	}
+	ADDQ(Imm(unroll*4*4), outLen)
+	JL(LabelRef("loopTranslucentSingle"))
+	RET()
+
+	// Old tile contents are multiple colors
 	Label("loopTranslucent")
 	for i := range unroll {
 		bg := XMM()
