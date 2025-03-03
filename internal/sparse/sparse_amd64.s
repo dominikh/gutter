@@ -7,122 +7,178 @@
 DATA one<>+0(SB)/4, $(1.0)
 GLOBL one<>(SB), RODATA|NOPTR, $4
 
-// func fineFillAVX(out [][4]Color, color Color, complex bool, singleColor Color)
+// func fineFillSolidAVX(buf [][4]Color, color Color)
 // Requires: AVX
-TEXT ·fineFillAVX(SB), $0-60
-	MOVQ           out_len+8(FP), AX
+TEXT ·fineFillSolidAVX(SB), $0-40
+	MOVQ           buf_len+8(FP), AX
 	SHLQ           $0x02, AX
 	TESTQ          AX, AX
 	JZ             exit
-	VMOVSS         one<>+0(SB), X0
-	VBROADCASTF128 color_0+24(FP), Y1
-	MOVQ           out_base+0(FP), CX
+	MOVQ           buf_base+0(FP), CX
 	SHLQ           $0x04, AX
 	ADDQ           AX, CX
 	NEGQ           AX
-	VMOVSS         color_3+36(FP), X2
-	VUCOMISS       X0, X2
-	JNE            blend
+	VBROADCASTF128 color_0+24(FP), Y0
 	PCALIGN        $0x10
 
-loopOpaque:
-	VMOVAPS Y1, (CX)(AX*1)
-	VMOVAPS Y1, 32(CX)(AX*1)
+loop:
+	VMOVAPS Y0, (CX)(AX*1)
+	VMOVAPS Y0, 32(CX)(AX*1)
 	ADDQ    $0x40, AX
-	JL      loopOpaque
-	VZEROUPPER
-	RET
-
-blend:
-	VSUBSS         X2, X0, X0
-	VSHUFPS        $0x00, X0, X0, X0
-	VINSERTF128    $0x01, X0, Y0, Y0
-	MOVBQZX        complex+40(FP), DX
-	TESTQ          DX, DX
-	JNZ            loopTranslucent
-	VBROADCASTF128 singleColor_0+44(FP), Y2
-	VMULPS         Y0, Y2, Y2
-	VADDPS         Y1, Y2, Y2
-	PCALIGN        $0x10
-
-loopTranslucentSingle:
-	VMOVAPS Y2, (CX)(AX*1)
-	VMOVAPS Y2, 32(CX)(AX*1)
-	ADDQ    $+64, AX
-	JL      loopTranslucentSingle
-	VZEROUPPER
-	RET
-	PCALIGN $0x10
-
-loopTranslucent:
-	VMOVAPS (CX)(AX*1), Y2
-	VMULPS  Y0, Y2, Y2
-	VADDPS  Y1, Y2, Y2
-	VMOVAPS Y2, (CX)(AX*1)
-	VMOVAPS 32(CX)(AX*1), Y2
-	VMULPS  Y0, Y2, Y2
-	VADDPS  Y1, Y2, Y2
-	VMOVAPS Y2, 32(CX)(AX*1)
-	ADDQ    $+64, AX
-	JL      loopTranslucent
+	JL      loop
 
 exit:
 	VZEROUPPER
 	RET
 
-// func fineFillSSE(out [][4]Color, color Color, complex bool, singleColor Color)
-// Requires: SSE
-TEXT ·fineFillSSE(SB), $0-60
-	MOVQ    out_len+8(FP), AX
-	SHLQ    $0x02, AX
-	TESTQ   AX, AX
-	JZ      exit
-	MOVSS   one<>+0(SB), X0
-	MOVUPS  color_0+24(FP), X1
-	MOVQ    out_base+0(FP), CX
-	SHLQ    $0x04, AX
-	ADDQ    AX, CX
-	NEGQ    AX
-	MOVSS   color_3+36(FP), X2
-	UCOMISS X0, X2
-	JNE     blend
+// func fineFillSimpleAVX(buf [][4]Color, color Color, bg Color)
+// Requires: AVX
+TEXT ·fineFillSimpleAVX(SB), $0-56
+	MOVQ           buf_len+8(FP), AX
+	SHLQ           $0x02, AX
+	TESTQ          AX, AX
+	JZ             exit
+	MOVQ           buf_base+0(FP), CX
+	SHLQ           $0x04, AX
+	ADDQ           AX, CX
+	NEGQ           AX
+	VBROADCASTF128 color_0+24(FP), Y0
+	VMOVSS         color_3+36(FP), X1
+	VMOVSS         one<>+0(SB), X2
+	VSUBSS         X1, X2, X1
+	VSHUFPS        $0x00, X1, X1, X1
+	VINSERTF128    $0x01, X1, Y1, Y1
+	VBROADCASTF128 bg_0+40(FP), Y2
+	VMULPS         Y1, Y2, Y2
+	VADDPS         Y0, Y2, Y2
+	PCALIGN        $0x10
 
-loopOpaque:
+loop:
+	VMOVAPS Y2, (CX)(AX*1)
+	VMOVAPS Y2, 32(CX)(AX*1)
+	ADDQ    $+64, AX
+	JL      loop
+
+exit:
+	VZEROUPPER
+	RET
+
+// func fineFillComplexAVX(buf [][4]Color, color Color)
+// Requires: AVX
+TEXT ·fineFillComplexAVX(SB), $0-40
+	MOVQ           buf_len+8(FP), AX
+	SHLQ           $0x02, AX
+	TESTQ          AX, AX
+	JZ             exit
+	MOVQ           buf_base+0(FP), CX
+	SHLQ           $0x04, AX
+	ADDQ           AX, CX
+	NEGQ           AX
+	VBROADCASTF128 color_0+24(FP), Y0
+	VMOVSS         color_3+36(FP), X1
+	VMOVSS         one<>+0(SB), X2
+	VSUBSS         X1, X2, X1
+	VSHUFPS        $0x00, X1, X1, X1
+	VINSERTF128    $0x01, X1, Y1, Y1
+	PCALIGN        $0x10
+
+loop:
+	VMOVAPS (CX)(AX*1), Y2
+	VMULPS  Y1, Y2, Y2
+	VADDPS  Y0, Y2, Y2
+	VMOVAPS Y2, (CX)(AX*1)
+	VMOVAPS 32(CX)(AX*1), Y2
+	VMULPS  Y1, Y2, Y2
+	VADDPS  Y0, Y2, Y2
+	VMOVAPS Y2, 32(CX)(AX*1)
+	ADDQ    $+64, AX
+	JL      loop
+
+exit:
+	VZEROUPPER
+	RET
+
+// func fineFillSolidSSE(buf [][4]Color, color Color)
+// Requires: SSE
+TEXT ·fineFillSolidSSE(SB), $0-40
+	MOVQ   buf_len+8(FP), AX
+	SHLQ   $0x02, AX
+	TESTQ  AX, AX
+	JZ     exit
+	MOVQ   buf_base+0(FP), CX
+	SHLQ   $0x04, AX
+	ADDQ   AX, CX
+	NEGQ   AX
+	MOVUPS color_0+24(FP), X0
+
+loop:
+	MOVAPS X0, (CX)(AX*1)
+	MOVAPS X0, 16(CX)(AX*1)
+	ADDQ   $0x20, AX
+	JL     loop
+
+exit:
+	RET
+
+// func fineFillSimpleSSE(buf [][4]Color, color Color, bg Color)
+// Requires: SSE
+TEXT ·fineFillSimpleSSE(SB), $0-56
+	MOVQ   buf_len+8(FP), AX
+	SHLQ   $0x02, AX
+	TESTQ  AX, AX
+	JZ     exit
+	MOVQ   buf_base+0(FP), CX
+	SHLQ   $0x04, AX
+	ADDQ   AX, CX
+	NEGQ   AX
+	MOVUPS color_0+24(FP), X0
+	MOVSS  color_3+36(FP), X1
+	MOVSS  one<>+0(SB), X3
+	MOVSS  X3, X2
+	SUBSS  X1, X2
+	SHUFPS $0x00, X2, X2
+	MOVUPS bg_0+40(FP), X1
+	MULPS  X2, X1
+	ADDPS  X0, X1
+
+loop:
 	MOVAPS X1, (CX)(AX*1)
 	MOVAPS X1, 16(CX)(AX*1)
 	ADDQ   $0x20, AX
-	JL     loopOpaque
+	JL     loop
+
+exit:
 	RET
 
-blend:
-	MOVSS  X0, X3
-	SUBSS  X2, X3
-	SHUFPS $0x00, X3, X3
-	MOVB   complex+40(FP), DL
-	TESTB  DL, DL
-	JNZ    loopTranslucent
-	MOVUPS singleColor_0+44(FP), X0
-	MULPS  X3, X0
-	ADDPS  X1, X0
+// func fineFillComplexSSE(buf [][4]Color, color Color)
+// Requires: SSE
+TEXT ·fineFillComplexSSE(SB), $0-40
+	MOVQ   buf_len+8(FP), AX
+	SHLQ   $0x02, AX
+	TESTQ  AX, AX
+	JZ     exit
+	MOVQ   buf_base+0(FP), CX
+	SHLQ   $0x04, AX
+	ADDQ   AX, CX
+	NEGQ   AX
+	MOVUPS color_0+24(FP), X0
+	MOVSS  color_3+36(FP), X1
+	MOVSS  one<>+0(SB), X3
+	MOVSS  X3, X2
+	SUBSS  X1, X2
+	SHUFPS $0x00, X2, X2
 
-loopTranslucentSingle:
-	MOVAPS X0, (CX)(AX*1)
-	MOVAPS X0, 16(CX)(AX*1)
+loop:
+	MOVAPS (CX)(AX*1), X1
+	MULPS  X2, X1
+	ADDPS  X0, X1
+	MOVAPS X1, (CX)(AX*1)
+	MOVAPS 16(CX)(AX*1), X1
+	MULPS  X2, X1
+	ADDPS  X0, X1
+	MOVAPS X1, 16(CX)(AX*1)
 	ADDQ   $0x20, AX
-	JL     loopTranslucentSingle
-	RET
-
-loopTranslucent:
-	MOVAPS (CX)(AX*1), X0
-	MULPS  X3, X0
-	ADDPS  X1, X0
-	MOVAPS X0, (CX)(AX*1)
-	MOVAPS 16(CX)(AX*1), X0
-	MULPS  X3, X0
-	ADDPS  X1, X0
-	MOVAPS X0, 16(CX)(AX*1)
-	ADDQ   $0x20, AX
-	JL     loopTranslucent
+	JL     loop
 
 exit:
 	RET

@@ -12,8 +12,6 @@ import (
 	"honnef.co/go/safeish"
 )
 
-const debugPack = false
-
 type fine struct {
 	// the width and height of the output image, in pixels
 	width, height int
@@ -57,11 +55,10 @@ func (f *fine) pack(x, y int) {
 	baseIdx := (y*stripHeight*f.width + x*wideTileWidth)
 
 	maxi := max(0, min(wideTileWidth, f.width-x*wideTileWidth))
-	maxj := max(0, min(4, f.height-y*stripHeight))
-	_ = f.outBuf[baseIdx+(maxj-1)*f.width+maxi-1]
+	maxj := max(0, min(stripHeight, f.height-y*stripHeight))
 
 	out := f.outBuf[baseIdx:]
-
+	_ = out[(maxj-1)*f.width+maxi-1]
 	if f.complex {
 		for j := range maxj {
 			for i := range maxi {
@@ -72,11 +69,7 @@ func (f *fine) pack(x, y int) {
 	} else {
 		for range maxj {
 			for i := range maxi {
-				if debugPack {
-					*safeish.Index(out, i) = Color{1, 0, 0, 1}
-				} else {
-					*safeish.Index(out, i) = f.singleColor
-				}
+				*safeish.Index(out, i) = f.singleColor
 			}
 			out = out[min(len(out), f.width):]
 		}
@@ -84,11 +77,9 @@ func (f *fine) pack(x, y int) {
 }
 
 func (f *fine) materialize(start, end int) {
-	col := [4]Color{
-		f.singleColor,
-		f.singleColor,
-		f.singleColor,
-		f.singleColor,
+	var col [stripHeight]Color
+	for i := range col {
+		col[i] = f.singleColor
 	}
 	buf := f.scratch[start:end]
 	for x := range buf {
@@ -108,18 +99,22 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 	}
 }
 
-var fillFp = fineFillNative
+var (
+	fillSolidFp   = fineFillSolidNative
+	fillSimpleFp  = fineFillSimpleNative
+	fillComplexFp = fineFillComplexNative
+)
 
 func (f *fine) fill(x, width int, color Color) {
-	f.fillWithFp(x, width, color, fillFp)
-}
+	buf := f.scratch[x : x+width]
 
-func (f *fine) fillWithFp(x, width int, color Color, fillFp func([][stripHeight]Color, Color, bool, Color)) {
 	if x == 0 && width == wideTileWidth {
-		if color[3] == 1.0 {
-			f.clear(color)
-			return
-		} else if !f.complex {
+		// If the fill covers the whole tile, then the fill color is never opaque,
+		// due to an optimization when building the command list. If the tile is
+		// already complex, do a complex fill. Else, compute the new simple color.
+		if f.complex {
+			fillComplexFp(buf, color)
+		} else {
 			oneMinusAlpha := 1.0 - color[3]
 			color = Color{
 				0: color[0] + oneMinusAlpha*f.singleColor[0],
@@ -128,54 +123,68 @@ func (f *fine) fillWithFp(x, width int, color Color, fillFp func([][stripHeight]
 				3: color[3] + oneMinusAlpha*f.singleColor[3],
 			}
 			f.clear(color)
-			return
 		}
-	} else if !f.complex {
-		f.materialize(0, x)
-		f.materialize(x+width, wideTileWidth)
-		// Don't change state yet, the fill implementation can reduce blending
-		// work if it knows the single color.
-	}
+	} else {
+		if !f.complex {
+			// If the tile isn't complex yet, it will be after we've processed this
+			// fill. Materialize all the pixels that this fill isn't going to
+			// overwrite.
+			f.materialize(0, x)
+			f.materialize(x+width, wideTileWidth)
+		}
 
-	buf := f.scratch[x : x+width]
-	fillFp(buf, color, f.complex, f.singleColor)
-
-	if x != 0 || width != wideTileWidth {
-		f.complex = true
+		if color[3] == 1.0 {
+			// The fill color is opaque, so we use a fill function that doesn't care
+			// about the background color.
+			fillSolidFp(buf, color)
+			f.complex = true
+		} else if !f.complex {
+			// The tile is simple, which means the fill only has to blend colors
+			// once, not for every pixel.
+			fillSimpleFp(buf, color, f.singleColor)
+			f.complex = true
+		} else {
+			// Do the general, per-pixel fill.
+			fillComplexFp(buf, color)
+		}
 	}
 }
 
-func fineFillNative(buf [][stripHeight]Color, color Color, complex bool, singleColor Color) {
-	if color[3] == 1.0 {
-		for x := range buf {
-			col := &buf[x]
-			for y := range col {
-				col[y] = color
-			}
+func fineFillSolidNative(buf [][stripHeight]Color, color Color) {
+	for x := range buf {
+		col := &buf[x]
+		for y := range col {
+			col[y] = color
 		}
-	} else {
-		oneMinusAlpha := 1.0 - color[3]
-		if complex {
-			for x := range buf {
-				col := &buf[x]
-				for y := range col {
-					col[y][0] = color[0] + oneMinusAlpha*col[y][0]
-					col[y][1] = color[1] + oneMinusAlpha*col[y][1]
-					col[y][2] = color[2] + oneMinusAlpha*col[y][2]
-					col[y][3] = color[3] + oneMinusAlpha*col[y][3]
-				}
-			}
-		} else {
-			color = Color{
-				0: color[0] + oneMinusAlpha*singleColor[0],
-				1: color[1] + oneMinusAlpha*singleColor[1],
-				2: color[2] + oneMinusAlpha*singleColor[2],
-				3: color[3] + oneMinusAlpha*singleColor[3],
-			}
-			col := [4]Color{color, color, color, color}
-			for x := range buf {
-				buf[x] = col
-			}
+	}
+}
+
+func fineFillSimpleNative(buf [][stripHeight]Color, color Color, bg Color) {
+	oneMinusAlpha := 1.0 - color[3]
+	color = Color{
+		0: color[0] + oneMinusAlpha*bg[0],
+		1: color[1] + oneMinusAlpha*bg[1],
+		2: color[2] + oneMinusAlpha*bg[2],
+		3: color[3] + oneMinusAlpha*bg[3],
+	}
+	var col [stripHeight]Color
+	for i := range col {
+		col[i] = color
+	}
+	for x := range buf {
+		buf[x] = col
+	}
+}
+
+func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
+	oneMinusAlpha := 1.0 - color[3]
+	for x := range buf {
+		col := &buf[x]
+		for y := range col {
+			col[y][0] = color[0] + oneMinusAlpha*col[y][0]
+			col[y][1] = color[1] + oneMinusAlpha*col[y][1]
+			col[y][2] = color[2] + oneMinusAlpha*col[y][2]
+			col[y][3] = color[3] + oneMinusAlpha*col[y][3]
 		}
 	}
 }

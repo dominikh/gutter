@@ -9,37 +9,18 @@ import (
 	"testing"
 )
 
-func benchmarkFineFill(
-	b *testing.B,
-	fn func(out [][stripHeight]Color, color Color, complex bool, singleColor Color),
-) {
-	for _, t := range []struct {
-		name  string
-		width int
-		short bool
-		color Color
-	}{
-		{"opaque", wideTileWidth, true, Color{0.5, 0.5, 0.5, 1}},
-		{"translucent", wideTileWidth, true, Color{0.1, 0.1, 0.1, 0.1}},
+func benchmarkFill(b *testing.B, fn func(b *testing.B, buf [][stripHeight]Color)) {
+	buf := make([][stripHeight]Color, wideTileWidth)
+	// make sure memory is paged in
+	clear(buf)
 
-		{"opaque", 16, false, Color{0.5, 0.5, 0.5, 1}},
-		{"translucent", 16, false, Color{0.1, 0.1, 0.1, 0.1}},
-
-		{"opaque", 2, false, Color{0.5, 0.5, 0.5, 1}},
-		{"translucent", 2, false, Color{0.1, 0.1, 0.1, 0.1}},
-
-		{"opaque", 1, false, Color{0.5, 0.5, 0.5, 1}},
-		{"translucent", 1, false, Color{0.1, 0.1, 0.1, 0.1}},
-	} {
-		if testing.Short() && !t.short {
-			b.Skip("skipping benchmark in short mode.")
-		}
-		b.Run(fmt.Sprintf("kind=%s/width=%d", t.name, t.width), func(b *testing.B) {
-			f := newFine(t.width, tileHeight, nil)
-			for b.Loop() {
-				f.fillWithFp(1, t.width-1, t.color, fn)
-			}
-			px := float64(t.width * tileHeight * b.N)
+	// We test the full width to measure the best possible performance, and at
+	// the smallest possible width to measure the per-call overhead.
+	fillWidths := []int{wideTileWidth, 1}
+	for _, width := range fillWidths {
+		b.Run(fmt.Sprintf("width=%d", width), func(b *testing.B) {
+			fn(b, buf)
+			px := float64(width * tileHeight * b.N)
 			d := float64(b.Elapsed()) / px
 			bytes := px * 4 * 4
 			r := bytes / float64(b.Elapsed().Seconds())
@@ -49,10 +30,30 @@ func benchmarkFineFill(
 	}
 }
 
-func BenchmarkFineFillAuto(b *testing.B) {
-	benchmarkFineFill(b, fillFp)
+func Benchmark_fineFillSolidNative(b *testing.B) {
+	c := Color{1, 1, 1, 1}
+	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
+		for b.Loop() {
+			fineFillSolidNative(buf, c)
+		}
+	})
 }
 
-func BenchmarkFineFillNative(b *testing.B) {
-	benchmarkFineFill(b, fineFillNative)
+func Benchmark_fineFillSimpleNative(b *testing.B) {
+	c := Color{0.5, 0.5, 0.5, 0.5}
+	bg := Color{1, 0, 0, 1}
+	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
+		for b.Loop() {
+			fineFillSimpleNative(buf, c, bg)
+		}
+	})
+}
+
+func Benchmark_fineFillComplexNative(b *testing.B) {
+	c := Color{0.5, 0.5, 0.5, 0.5}
+	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
+		for b.Loop() {
+			fineFillComplexNative(buf, c)
+		}
+	})
 }
