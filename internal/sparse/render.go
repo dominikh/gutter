@@ -100,15 +100,15 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		strip := &ctx.stripBuf[i]
 
 		// Don't render strips that are outside the viewport.
-		if int(strip.x()) >= ctx.width {
+		if int(strip.x) >= ctx.width {
 			continue
 		}
-		if int(strip.y()) >= ctx.height {
+		if int(strip.y) >= ctx.height {
 			break
 		}
 
 		nextStrip := &ctx.stripBuf[i+1]
-		x0 := strip.x()
+		x0 := uint32(strip.x)
 		y := strip.stripY()
 		stripWidth := nextStrip.col - strip.col
 		x1 := x0 + stripWidth
@@ -139,7 +139,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		}
 		if nextStrip.winding != 0 && y == nextStrip.stripY() {
 			x = x1
-			x2 := nextStrip.x()
+			x2 := uint32(nextStrip.x)
 			fxt0 := x1 / wideTileWidth
 			// TODO: we are limiting fxt1 to widthTiles because strips aren't
 			// being clipped to the viewport yet. Evaluate removing this once we

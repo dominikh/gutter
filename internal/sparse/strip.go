@@ -54,14 +54,15 @@ func (t tile) String() string {
 type strip struct {
 	_ structs.HostLayout
 
-	xy      uint32
+	x       uint16
+	y       uint16
 	col     uint32
 	winding int32
 }
 
 func (s strip) String() string {
 	return fmt.Sprintf("strip(x=%v, y=%v, col=%v, winding=%v)",
-		s.x(), s.y(), s.col, s.winding)
+		s.x, s.y, s.col, s.winding)
 }
 
 func (l loc) sameStrip(other loc) bool {
@@ -215,9 +216,9 @@ func renderStripsScalar(
 			}
 
 			if stripStart {
-				xy := (1<<18)*uint32(prevTile.y) + 4*uint32(prevTile.x) + x0
 				strip := strip{
-					xy:      xy,
+					x:       4*prevTile.x + uint16(x0),
+					y:       4 * prevTile.y,
 					col:     cols,
 					winding: int32(startDelta),
 				}
@@ -242,14 +243,6 @@ func renderStripsScalar(
 	return stripBuf, alphaBuf
 }
 
-func (s *strip) x() uint32 {
-	return s.xy & 0xFFFF
-}
-
-func (s *strip) y() uint32 {
-	return s.xy >> 16
-}
-
 func (s *strip) stripY() uint32 {
-	return s.y() / stripHeight
+	return uint32(s.y) / stripHeight
 }
