@@ -18,3 +18,7 @@ func satConv[D constraints.Unsigned, S ~float32 | ~float64](x S) D {
 		return D(x)
 	}
 }
+
+func divCeil[T int | uint32](a, b T) T {
+	return (a + b - 1) / b
+}
