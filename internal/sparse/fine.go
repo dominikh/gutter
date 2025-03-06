@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+//go:generate go run ./gen.go
+
 package sparse
 
 import (
@@ -156,6 +158,17 @@ func (f *fine) pack(x, y int) {
 	}
 }
 
+func memsetColumns(buf [][stripHeight]Color, c Color) {
+	// OPT add SIMD version
+	var col [stripHeight]Color
+	for i := range col {
+		col[i] = c
+	}
+	for x := range buf {
+		buf[x] = col
+	}
+}
+
 func (f *fine) materialize(l *fineLayer, start, end int) {
 	if l.complex {
 		return
@@ -164,14 +177,7 @@ func (f *fine) materialize(l *fineLayer, start, end int) {
 	f.stats.materializedPixels += uint64(end-start) * stripHeight
 	f.stats.materializedLayers++
 
-	var col [stripHeight]Color
-	for i := range col {
-		col[i] = l.singleColor
-	}
-	buf := l.scratch[start:end]
-	for x := range buf {
-		buf[x] = col
-	}
+	memsetColumns(l.scratch[start:end], l.singleColor)
 }
 
 func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
@@ -204,6 +210,11 @@ var (
 	fillSolidFp   = fineFillSolidNative
 	fillSimpleFp  = fineFillSimpleNative
 	fillComplexFp = fineFillComplexNative
+
+	// OPT add SIMD implementations
+	clipFillSimpleNosFp            = fineClipFillSimpleNosNative
+	clipFillSimpleTosTranslucentFp = fineClipFillSimpleTosTranslucentNative
+	clipFillFp                     = fineClipFillNative
 )
 
 func (f *fine) fill(x, width int, color Color) {
@@ -277,10 +288,12 @@ func (f *fine) clipFill(x, width int) {
 	// OPT see if storing nos and tos fields in local variables reduces memory
 	// bandwidth significantly. Go might well assume that nos.scratch aliases
 	// stuff.
+
+	dst := nos.scratch[x : x+width]
+	src := tos.scratch[x : x+width]
 	switch {
 	case !nos.complex && !tos.complex:
 		f.stats.nostosSimpleClipFills++
-		// OPT add SIMD version
 		oneMinusAlpha := 1.0 - tos.singleColor[3]
 		color := Color{
 			nos.singleColor[0]*oneMinusAlpha + tos.singleColor[0],
@@ -288,63 +301,24 @@ func (f *fine) clipFill(x, width int) {
 			nos.singleColor[2]*oneMinusAlpha + tos.singleColor[2],
 			nos.singleColor[3]*oneMinusAlpha + tos.singleColor[3],
 		}
-		var col [stripHeight]Color
-		for i := range col {
-			col[i] = color
-		}
-		for i := range width {
-			nos.scratch[x+i] = col
-		}
+		memsetColumns(dst, color)
+		nos.complex = true
 	case !nos.complex:
 		f.stats.nosSimpleClipFills++
-		// OPT add SIMD version
-		for i := range width {
-			for j := range stripHeight {
-				oneMinusAlpha := 1.0 - tos.scratch[x+i][j][3]
-				nos.scratch[x+i][j][0] = nos.singleColor[0]*oneMinusAlpha + tos.scratch[x+i][j][0]
-				nos.scratch[x+i][j][1] = nos.singleColor[1]*oneMinusAlpha + tos.scratch[x+i][j][1]
-				nos.scratch[x+i][j][2] = nos.singleColor[2]*oneMinusAlpha + tos.scratch[x+i][j][2]
-				nos.scratch[x+i][j][3] = nos.singleColor[3]*oneMinusAlpha + tos.scratch[x+i][j][3]
-			}
-		}
+		clipFillSimpleNosFp(dst, nos.singleColor, src)
+		nos.complex = true
 	case !tos.complex:
-		// OPT add SIMD version
 		if tos.singleColor[3] == 1 {
 			f.stats.tosSimpleOpaqueClipFills++
-			var col [stripHeight]Color
-			for i := range col {
-				col[i] = tos.singleColor
-			}
-			for i := range width {
-				nos.scratch[x+i] = col
-			}
+			memsetColumns(dst, tos.singleColor)
 		} else {
 			f.stats.tosSimpleTranslucentClipFills++
-			oneMinusAlpha := 1.0 - tos.singleColor[3]
-			for i := range width {
-				for j := range stripHeight {
-					nos.scratch[x+i][j][0] = nos.scratch[x+i][j][0]*oneMinusAlpha + tos.singleColor[0]
-					nos.scratch[x+i][j][1] = nos.scratch[x+i][j][1]*oneMinusAlpha + tos.singleColor[1]
-					nos.scratch[x+i][j][2] = nos.scratch[x+i][j][2]*oneMinusAlpha + tos.singleColor[2]
-					nos.scratch[x+i][j][3] = nos.scratch[x+i][j][3]*oneMinusAlpha + tos.singleColor[3]
-				}
-			}
+			clipFillSimpleTosTranslucentFp(dst, tos.singleColor)
 		}
 	default:
-		// OPT add SIMD version
 		f.stats.complexClipFills++
-		for i := range width {
-			for j := range stripHeight {
-				oneMinusAlpha := 1.0 - tos.scratch[x+i][j][3]
-				nos.scratch[x+i][j][0] = nos.scratch[x+i][j][0]*oneMinusAlpha + tos.scratch[x+i][j][0]
-				nos.scratch[x+i][j][1] = nos.scratch[x+i][j][1]*oneMinusAlpha + tos.scratch[x+i][j][1]
-				nos.scratch[x+i][j][2] = nos.scratch[x+i][j][2]*oneMinusAlpha + tos.scratch[x+i][j][2]
-				nos.scratch[x+i][j][3] = nos.scratch[x+i][j][3]*oneMinusAlpha + tos.scratch[x+i][j][3]
-			}
-		}
+		clipFillFp(dst, src)
 	}
-
-	nos.complex = true
 }
 
 func (f *fine) clipStrip(x, width int, alphas [][stripHeight]uint8) {
@@ -391,13 +365,7 @@ func fineFillSimpleNative(buf [][stripHeight]Color, color Color, bg Color) {
 		2: color[2] + oneMinusAlpha*bg[2],
 		3: color[3] + oneMinusAlpha*bg[3],
 	}
-	var col [stripHeight]Color
-	for i := range col {
-		col[i] = color
-	}
-	for x := range buf {
-		buf[x] = col
-	}
+	memsetColumns(buf, color)
 }
 
 func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
