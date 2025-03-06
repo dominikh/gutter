@@ -7,6 +7,7 @@ package sparse
 
 import (
 	"fmt"
+	"strings"
 	"unsafe"
 
 	"honnef.co/go/safeish"
@@ -15,11 +16,75 @@ import (
 // [x][y]Color
 type fineScratch = [wideTileWidth][stripHeight]Color
 
+type fineStats struct {
+	simplePacks  uint64
+	complexPacks uint64
+	pushClips    uint64
+	popClips     uint64
+
+	fullWidthOpaqueClearFills      uint64
+	fullWidthComplexFills          uint64
+	fullWidthTranslucentClearFills uint64
+	opaqueFills                    uint64
+	simpleFills                    uint64
+	complexFills                   uint64
+
+	simpleStrips  uint64
+	complexStrips uint64
+
+	nostosSimpleClipFills         uint64
+	nosSimpleClipFills            uint64
+	tosSimpleOpaqueClipFills      uint64
+	tosSimpleTranslucentClipFills uint64
+	complexClipFills              uint64
+
+	clipStrips uint64
+
+	materializedLayers uint64
+	materializedPixels uint64
+}
+
+func (s *fineStats) String() string {
+	lines := []string{
+
+		fmt.Sprintf("Full-width opaque clear fills: %d", s.fullWidthOpaqueClearFills),
+		fmt.Sprintf("Full-width translucent clear fills: %d", s.fullWidthTranslucentClearFills),
+		fmt.Sprintf("Full-width complex fills: %d", s.fullWidthComplexFills),
+		fmt.Sprintf("Partial opaque fills: %d", s.opaqueFills),
+		fmt.Sprintf("Partial simple fills: %d", s.simpleFills),
+		fmt.Sprintf("Partial complex fills: %d", s.complexFills),
+
+		fmt.Sprintf("Simple strips: %d", s.simpleStrips),
+		fmt.Sprintf("Complex strips: %d", s.complexStrips),
+
+		fmt.Sprintf("PushClips: %d", s.pushClips),
+		fmt.Sprintf("PopClips: %d", s.popClips),
+
+		fmt.Sprintf("nos+tos simple clip fills: %d", s.nostosSimpleClipFills),
+		fmt.Sprintf("nos simple clip fills: %d", s.nosSimpleClipFills),
+		fmt.Sprintf("tos simple opaque clip fills: %d", s.tosSimpleOpaqueClipFills),
+		fmt.Sprintf("tos simple translucent clip fills: %d", s.tosSimpleTranslucentClipFills),
+		fmt.Sprintf("Complex clip fills: %d", s.complexClipFills),
+
+		fmt.Sprintf("Clip strips: %d", s.clipStrips),
+
+		fmt.Sprintf("Materialized pixels: %d", s.materializedPixels),
+		fmt.Sprintf("Materialized layers: %d", s.materializedLayers),
+
+		fmt.Sprintf("Simple packs: %d", s.simplePacks),
+		fmt.Sprintf("Complex packs: %d", s.complexPacks),
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 type fine struct {
 	// the width and height of the output image, in pixels
 	width, height int
 	outBuf        []Color
 	layers        []fineLayer
+
+	stats fineStats
 }
 
 type fineLayer struct {
@@ -56,8 +121,7 @@ func (f *fine) newScratch() *fineScratch {
 	return (*fineScratch)(alignedPtr)
 }
 
-func (f *fine) clear(c Color) {
-	l := f.topLayer()
+func (l *fineLayer) clear(c Color) {
 	l.complex = false
 	l.singleColor = c
 }
@@ -74,6 +138,7 @@ func (f *fine) pack(x, y int) {
 	_ = out[(maxj-1)*f.width+maxi-1]
 	l := f.topLayer()
 	if l.complex {
+		f.stats.complexPacks++
 		for j := range maxj {
 			for i := range maxi {
 				*safeish.Index(out, i) = l.scratch[i][j]
@@ -81,6 +146,7 @@ func (f *fine) pack(x, y int) {
 			out = out[min(len(out), f.width):]
 		}
 	} else {
+		f.stats.simplePacks++
 		for range maxj {
 			for i := range maxi {
 				*safeish.Index(out, i) = l.singleColor
@@ -90,10 +156,13 @@ func (f *fine) pack(x, y int) {
 	}
 }
 
-func (l *fineLayer) materialize(start, end int) {
+func (f *fine) materialize(l *fineLayer, start, end int) {
 	if l.complex {
 		return
 	}
+
+	f.stats.materializedPixels += uint64(end-start) * stripHeight
+	f.stats.materializedLayers++
 
 	var col [stripHeight]Color
 	for i := range col {
@@ -113,11 +182,13 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 		aslice := alphas[cmd.alphaIdx:]
 		f.strip(int(cmd.x), int(cmd.width), aslice, cmd.color)
 	case cmdPushClip:
+		f.stats.pushClips++
 		// OPT: reuse layers that were popped
 		f.layers = append(f.layers, fineLayer{
 			scratch: f.newScratch(),
 		})
 	case cmdPopClip:
+		f.stats.popClips++
 		f.layers = f.layers[:len(f.layers)-1]
 	case cmdClipFill:
 		f.clipFill(int(cmd.x), int(cmd.width))
@@ -141,10 +212,13 @@ func (f *fine) fill(x, width int, color Color) {
 
 	if x == 0 && width == wideTileWidth {
 		if color[3] == 1.0 {
-			f.clear(color)
+			f.stats.fullWidthOpaqueClearFills++
+			l.clear(color)
 		} else if l.complex {
+			f.stats.fullWidthComplexFills++
 			fillComplexFp(buf, color)
 		} else {
+			f.stats.fullWidthTranslucentClearFills++
 			oneMinusAlpha := 1.0 - color[3]
 			color = Color{
 				0: color[0] + oneMinusAlpha*l.singleColor[0],
@@ -152,28 +226,29 @@ func (f *fine) fill(x, width int, color Color) {
 				2: color[2] + oneMinusAlpha*l.singleColor[2],
 				3: color[3] + oneMinusAlpha*l.singleColor[3],
 			}
-			f.clear(color)
+			l.clear(color)
 		}
 	} else {
-		if !l.complex {
-			// If the tile isn't complex yet, it will be after we've processed this
-			// fill. Materialize all the pixels that this fill isn't going to
-			// overwrite.
-			l.materialize(0, x)
-			l.materialize(x+width, wideTileWidth)
-		}
+		// If the tile isn't complex yet, it will be after we've processed this
+		// fill. Materialize all the pixels that this fill isn't going to
+		// overwrite.
+		f.materialize(l, 0, x)
+		f.materialize(l, x+width, wideTileWidth)
 
 		if color[3] == 1.0 {
+			f.stats.opaqueFills++
 			// The fill color is opaque, so we use a fill function that doesn't care
 			// about the background color.
 			fillSolidFp(buf, color)
 			l.complex = true
 		} else if !l.complex {
+			f.stats.simpleFills++
 			// The tile is simple, which means the fill only has to blend colors
 			// once, not for every pixel.
 			fillSimpleFp(buf, color, l.singleColor)
 			l.complex = true
 		} else {
+			f.stats.complexFills++
 			// Do the general, per-pixel fill.
 			fillComplexFp(buf, color)
 		}
@@ -181,34 +256,105 @@ func (f *fine) fill(x, width int, color Color) {
 }
 
 func (f *fine) clipFill(x, width int) {
+	if x == 0 && width == wideTileWidth {
+		// This shouldn't be possible because we don't push a clip when the
+		// entire wide tile is inside the clipped area. Though this will change
+		// once we support different blend modes.
+		panic("internal error: clipFill for whole wide tile")
+	}
+	if n := len(f.layers); n < 2 {
+		panic(fmt.Sprintf("internal error: trying to clipFill but we only have %d layers", n))
+	}
+
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
 
-	// OPT implement handling of layer.complex
-	tos.materialize(0, wideTileWidth)
-	nos.materialize(0, wideTileWidth)
-	tos.complex = true
-	nos.complex = true
+	// If nos isn't complex yet, it will be after we've processed this fill.
+	// Materialize all the pixels that this fill isn't going to overwrite.
+	f.materialize(nos, 0, x)
+	f.materialize(nos, x+width, wideTileWidth)
 
-	// OPT add SIMD version
-	for i := range width {
-		for j := range stripHeight {
-			oneMinusAlpha := 1.0 - tos.scratch[x+i][j][3]
-			nos.scratch[x+i][j][0] = nos.scratch[x+i][j][0]*oneMinusAlpha + tos.scratch[x+i][j][0]
-			nos.scratch[x+i][j][1] = nos.scratch[x+i][j][1]*oneMinusAlpha + tos.scratch[x+i][j][1]
-			nos.scratch[x+i][j][2] = nos.scratch[x+i][j][2]*oneMinusAlpha + tos.scratch[x+i][j][2]
-			nos.scratch[x+i][j][3] = nos.scratch[x+i][j][3]*oneMinusAlpha + tos.scratch[x+i][j][3]
+	// OPT see if storing nos and tos fields in local variables reduces memory
+	// bandwidth significantly. Go might well assume that nos.scratch aliases
+	// stuff.
+	switch {
+	case !nos.complex && !tos.complex:
+		f.stats.nostosSimpleClipFills++
+		// OPT add SIMD version
+		oneMinusAlpha := 1.0 - tos.singleColor[3]
+		color := Color{
+			nos.singleColor[0]*oneMinusAlpha + tos.singleColor[0],
+			nos.singleColor[1]*oneMinusAlpha + tos.singleColor[1],
+			nos.singleColor[2]*oneMinusAlpha + tos.singleColor[2],
+			nos.singleColor[3]*oneMinusAlpha + tos.singleColor[3],
+		}
+		var col [stripHeight]Color
+		for i := range col {
+			col[i] = color
+		}
+		for i := range width {
+			nos.scratch[x+i] = col
+		}
+	case !nos.complex:
+		f.stats.nosSimpleClipFills++
+		// OPT add SIMD version
+		for i := range width {
+			for j := range stripHeight {
+				oneMinusAlpha := 1.0 - tos.scratch[x+i][j][3]
+				nos.scratch[x+i][j][0] = nos.singleColor[0]*oneMinusAlpha + tos.scratch[x+i][j][0]
+				nos.scratch[x+i][j][1] = nos.singleColor[1]*oneMinusAlpha + tos.scratch[x+i][j][1]
+				nos.scratch[x+i][j][2] = nos.singleColor[2]*oneMinusAlpha + tos.scratch[x+i][j][2]
+				nos.scratch[x+i][j][3] = nos.singleColor[3]*oneMinusAlpha + tos.scratch[x+i][j][3]
+			}
+		}
+	case !tos.complex:
+		// OPT add SIMD version
+		if tos.singleColor[3] == 1 {
+			f.stats.tosSimpleOpaqueClipFills++
+			var col [stripHeight]Color
+			for i := range col {
+				col[i] = tos.singleColor
+			}
+			for i := range width {
+				nos.scratch[x+i] = col
+			}
+		} else {
+			f.stats.tosSimpleTranslucentClipFills++
+			oneMinusAlpha := 1.0 - tos.singleColor[3]
+			for i := range width {
+				for j := range stripHeight {
+					nos.scratch[x+i][j][0] = nos.scratch[x+i][j][0]*oneMinusAlpha + tos.singleColor[0]
+					nos.scratch[x+i][j][1] = nos.scratch[x+i][j][1]*oneMinusAlpha + tos.singleColor[1]
+					nos.scratch[x+i][j][2] = nos.scratch[x+i][j][2]*oneMinusAlpha + tos.singleColor[2]
+					nos.scratch[x+i][j][3] = nos.scratch[x+i][j][3]*oneMinusAlpha + tos.singleColor[3]
+				}
+			}
+		}
+	default:
+		// OPT add SIMD version
+		f.stats.complexClipFills++
+		for i := range width {
+			for j := range stripHeight {
+				oneMinusAlpha := 1.0 - tos.scratch[x+i][j][3]
+				nos.scratch[x+i][j][0] = nos.scratch[x+i][j][0]*oneMinusAlpha + tos.scratch[x+i][j][0]
+				nos.scratch[x+i][j][1] = nos.scratch[x+i][j][1]*oneMinusAlpha + tos.scratch[x+i][j][1]
+				nos.scratch[x+i][j][2] = nos.scratch[x+i][j][2]*oneMinusAlpha + tos.scratch[x+i][j][2]
+				nos.scratch[x+i][j][3] = nos.scratch[x+i][j][3]*oneMinusAlpha + tos.scratch[x+i][j][3]
+			}
 		}
 	}
+
+	nos.complex = true
 }
 
 func (f *fine) clipStrip(x, width int, alphas [][stripHeight]uint8) {
+	f.stats.clipStrips++
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
 
 	// OPT implement handling of layer.complex
-	tos.materialize(0, wideTileWidth)
-	nos.materialize(0, wideTileWidth)
+	f.materialize(tos, 0, wideTileWidth)
+	f.materialize(nos, 0, wideTileWidth)
 	tos.complex = true
 	nos.complex = true
 
@@ -281,6 +427,7 @@ func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
 	dst := l.scratch[x : x+width]
 
 	if l.complex {
+		f.stats.complexStrips++
 		for x := range dst {
 			col := &dst[x]
 			a := &alphas[x]
@@ -294,9 +441,10 @@ func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
 			}
 		}
 	} else {
+		f.stats.simpleStrips++
 		bg := l.singleColor
-		l.materialize(0, x)
-		l.materialize(x+width, wideTileWidth)
+		f.materialize(l, 0, x)
+		f.materialize(l, x+width, wideTileWidth)
 		l.complex = true
 
 		for x := range dst {

@@ -8,6 +8,7 @@ package sparse
 import (
 	"fmt"
 	"iter"
+	"log"
 	"slices"
 
 	"honnef.co/go/curve"
@@ -93,14 +94,27 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap []Color) {
 	for y, row := range ctx.tiles {
 		for x := range row {
 			tile := &row[x]
-			fine.clear(tile.bg)
+			fine.topLayer().clear(tile.bg)
+
+			if false && len(tile.cmds) > 0 {
+				log.Println("tile", x, y)
+				for i := range tile.cmds {
+					log.Println(&tile.cmds[i])
+				}
+				log.Println()
+			}
+
 			for i := range tile.cmds {
 				cmd := tile.cmds[i]
 				fine.runCmd(cmd, ctx.alphas)
 			}
+			if len(fine.layers) != 1 {
+				panic("internal error: left with more than one layer")
+			}
 			fine.pack(x, y)
 		}
 	}
+	log.Println(&fine.stats)
 }
 
 func (ctx *CsRenderCtx) renderPathCommon(path iter.Seq[flatLine], fillRule FillRule) {

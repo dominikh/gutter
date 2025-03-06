@@ -140,6 +140,9 @@ func (wt *wideTile) clipFill(x, width uint32) {
 	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip {
 		return
 	}
+	if len(wt.cmds) == 0 {
+		panic("internal error: called clipFill without pushing a clip")
+	}
 	wt.cmds = append(wt.cmds, cmd{
 		typ:   cmdClipFill,
 		x:     x,
