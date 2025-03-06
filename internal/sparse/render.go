@@ -305,7 +305,7 @@ func (ctx *CsRenderCtx) popClip() {
 				xTileRel := uint32(x1 % wideTileWidth)
 				ctx.tiles[tileY][tileX].clipFill(xTileRel, uint32(width))
 			}
-			if x2 > (tileX+1)*wideTileWidth {
+			if x2 > (tileX+1)*wideTileWidth && x2 < ctx.width {
 				ctx.tiles[tileY][tileX].popClip()
 				width2 := x2 % wideTileWidth
 				tileX = x2 / wideTileWidth
