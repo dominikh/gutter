@@ -233,10 +233,10 @@ func (f *fine) fill(x, width int, color Color) {
 			f.stats.fullWidthTranslucentClearFills++
 			oneMinusAlpha := 1.0 - color[3]
 			color = Color{
-				0: color[0] + oneMinusAlpha*l.singleColor[0],
-				1: color[1] + oneMinusAlpha*l.singleColor[1],
-				2: color[2] + oneMinusAlpha*l.singleColor[2],
-				3: color[3] + oneMinusAlpha*l.singleColor[3],
+				0: l.singleColor[0]*oneMinusAlpha + color[0],
+				1: l.singleColor[1]*oneMinusAlpha + color[1],
+				2: l.singleColor[2]*oneMinusAlpha + color[2],
+				3: l.singleColor[3]*oneMinusAlpha + color[3],
 			}
 			l.clear(color)
 		}
@@ -259,10 +259,10 @@ func (f *fine) fill(x, width int, color Color) {
 			// once, not for every pixel.
 			oneMinusAlpha := 1.0 - color[3]
 			color = Color{
-				0: color[0] + oneMinusAlpha*l.singleColor[0],
-				1: color[1] + oneMinusAlpha*l.singleColor[1],
-				2: color[2] + oneMinusAlpha*l.singleColor[2],
-				3: color[3] + oneMinusAlpha*l.singleColor[3],
+				0: l.singleColor[0]*oneMinusAlpha + color[0],
+				1: l.singleColor[1]*oneMinusAlpha + color[1],
+				2: l.singleColor[2]*oneMinusAlpha + color[2],
+				3: l.singleColor[3]*oneMinusAlpha + color[3],
 			}
 			memsetColumnsFp(buf, color)
 			l.complex = true
@@ -361,10 +361,10 @@ func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
 	for x := range buf {
 		col := &buf[x]
 		for y := range col {
-			col[y][0] = color[0] + oneMinusAlpha*col[y][0]
-			col[y][1] = color[1] + oneMinusAlpha*col[y][1]
-			col[y][2] = color[2] + oneMinusAlpha*col[y][2]
-			col[y][3] = color[3] + oneMinusAlpha*col[y][3]
+			col[y][0] = col[y][0]*oneMinusAlpha + color[0]
+			col[y][1] = col[y][1]*oneMinusAlpha + color[1]
+			col[y][2] = col[y][2]*oneMinusAlpha + color[2]
+			col[y][3] = col[y][3]*oneMinusAlpha + color[3]
 		}
 	}
 }
