@@ -87,6 +87,9 @@ type fine struct {
 	outBuf        []Color
 	layers        []fineLayer
 
+	// free list of scratch space
+	freeScratches []*fineScratch
+
 	stats fineStats
 }
 
@@ -190,12 +193,19 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 		f.strip(int(cmd.x), int(cmd.width), aslice, cmd.color)
 	case cmdPushClip:
 		f.stats.pushClips++
-		// OPT: reuse layers that were popped
+		var scratch *fineScratch
+		if len(f.freeScratches) > 0 {
+			scratch = f.freeScratches[len(f.freeScratches)-1]
+			f.freeScratches = f.freeScratches[:len(f.freeScratches)-1]
+		} else {
+			scratch = f.newScratch()
+		}
 		f.layers = append(f.layers, fineLayer{
-			scratch: f.newScratch(),
+			scratch: scratch,
 		})
 	case cmdPopClip:
 		f.stats.popClips++
+		f.freeScratches = append(f.freeScratches, f.layers[len(f.layers)-1].scratch)
 		f.layers = f.layers[:len(f.layers)-1]
 	case cmdClipFill:
 		f.clipFill(int(cmd.x), int(cmd.width))
