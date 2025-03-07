@@ -31,38 +31,6 @@ exit:
 	VZEROUPPER
 	RET
 
-// func fineFillSimpleAVX(buf [][4]Color, color Color, bg Color)
-// Requires: AVX
-TEXT ·fineFillSimpleAVX(SB), $0-56
-	MOVQ           buf_len+8(FP), AX
-	SHLQ           $0x02, AX
-	TESTQ          AX, AX
-	JZ             exit
-	MOVQ           buf_base+0(FP), CX
-	SHLQ           $0x04, AX
-	ADDQ           AX, CX
-	NEGQ           AX
-	VBROADCASTF128 color_0+24(FP), Y0
-	VMOVSS         color_3+36(FP), X1
-	VMOVSS         one<>+0(SB), X2
-	VSUBSS         X1, X2, X1
-	VSHUFPS        $0x00, X1, X1, X1
-	VINSERTF128    $0x01, X1, Y1, Y1
-	VBROADCASTF128 bg_0+40(FP), Y2
-	VMULPS         Y1, Y2, Y2
-	VADDPS         Y0, Y2, Y2
-	PCALIGN        $0x10
-
-loop:
-	VMOVAPS Y2, (CX)(AX*1)
-	VMOVAPS Y2, 32(CX)(AX*1)
-	ADDQ    $+64, AX
-	JL      loop
-
-exit:
-	VZEROUPPER
-	RET
-
 // func fineFillComplexAVX(buf [][4]Color, color Color)
 // Requires: AVX
 TEXT ·fineFillComplexAVX(SB), $0-40
@@ -114,36 +82,6 @@ TEXT ·memsetColumnsSSE(SB), $0-40
 loop:
 	MOVAPS X0, (CX)(AX*1)
 	MOVAPS X0, 16(CX)(AX*1)
-	ADDQ   $0x20, AX
-	JL     loop
-
-exit:
-	RET
-
-// func fineFillSimpleSSE(buf [][4]Color, color Color, bg Color)
-// Requires: SSE
-TEXT ·fineFillSimpleSSE(SB), $0-56
-	MOVQ   buf_len+8(FP), AX
-	SHLQ   $0x02, AX
-	TESTQ  AX, AX
-	JZ     exit
-	MOVQ   buf_base+0(FP), CX
-	SHLQ   $0x04, AX
-	ADDQ   AX, CX
-	NEGQ   AX
-	MOVUPS color_0+24(FP), X0
-	MOVSS  color_3+36(FP), X1
-	MOVSS  one<>+0(SB), X3
-	MOVSS  X3, X2
-	SUBSS  X1, X2
-	SHUFPS $0x00, X2, X2
-	MOVUPS bg_0+40(FP), X1
-	MULPS  X2, X1
-	ADDPS  X0, X1
-
-loop:
-	MOVAPS X1, (CX)(AX*1)
-	MOVAPS X1, 16(CX)(AX*1)
 	ADDQ   $0x20, AX
 	JL     loop
 

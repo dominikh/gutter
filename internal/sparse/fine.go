@@ -209,7 +209,6 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 var (
 	memsetColumnsFp = memsetColumnsNative
 
-	fillSimpleFp  = fineFillSimpleNative
 	fillComplexFp = fineFillComplexNative
 
 	// OPT add SIMD implementations
@@ -257,7 +256,14 @@ func (f *fine) fill(x, width int, color Color) {
 			f.stats.simpleFills++
 			// The tile is simple, which means the fill only has to blend colors
 			// once, not for every pixel.
-			fillSimpleFp(buf, color, l.singleColor)
+			oneMinusAlpha := 1.0 - color[3]
+			color = Color{
+				0: color[0] + oneMinusAlpha*l.singleColor[0],
+				1: color[1] + oneMinusAlpha*l.singleColor[1],
+				2: color[2] + oneMinusAlpha*l.singleColor[2],
+				3: color[3] + oneMinusAlpha*l.singleColor[3],
+			}
+			memsetColumnsFp(buf, color)
 			l.complex = true
 		} else {
 			f.stats.complexFills++
@@ -347,17 +353,6 @@ func (f *fine) clipStrip(x, width int, alphas [][stripHeight]uint8) {
 			col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*src[x][y][3]
 		}
 	}
-}
-
-func fineFillSimpleNative(buf [][stripHeight]Color, color Color, bg Color) {
-	oneMinusAlpha := 1.0 - color[3]
-	color = Color{
-		0: color[0] + oneMinusAlpha*bg[0],
-		1: color[1] + oneMinusAlpha*bg[1],
-		2: color[2] + oneMinusAlpha*bg[2],
-		3: color[3] + oneMinusAlpha*bg[3],
-	}
-	memsetColumnsNative(buf, color)
 }
 
 func fineFillComplexNative(buf [][stripHeight]Color, color Color) {

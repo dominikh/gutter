@@ -53,16 +53,6 @@ func benchmarkClipFill(b *testing.B, fn func(b *testing.B, dst, src [][stripHeig
 	}
 }
 
-func Benchmark_fineFillSimpleNative(b *testing.B) {
-	c := Color{0.5, 0.5, 0.5, 0.5}
-	bg := Color{1, 0, 0, 1}
-	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
-		for b.Loop() {
-			fineFillSimpleNative(buf, c, bg)
-		}
-	})
-}
-
 func Benchmark_fineFillComplexNative(b *testing.B) {
 	c := Color{0.5, 0.5, 0.5, 0.5}
 	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {

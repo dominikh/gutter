@@ -13,13 +13,11 @@ func init() {
 	case cpu.X86.HasAVX:
 		memsetColumnsFp = memsetColumnsAVX
 
-		fillSimpleFp = fineFillSimpleAVX
 		fillComplexFp = fineFillComplexAVX
 	case cpu.X86.HasSSE2:
 		// amd64 always supports SSE and SSE2
 		memsetColumnsFp = memsetColumnsSSE
 
-		fillSimpleFp = fineFillSimpleSSE
 		fillComplexFp = fineFillComplexSSE
 	}
 }
