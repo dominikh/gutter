@@ -26,11 +26,11 @@ func main() {
 	Package("honnef.co/go/gutter/internal/sparse")
 	ConstraintExpr("!purego")
 
-	fillSolidAVX()
+	memsetColumnsAVX()
 	fillSimpleAVX()
 	fillComplexAVX()
 
-	fillSolidSSE()
+	memsetColumnsSSE()
 	fillSimpleSSE()
 	fillComplexSSE()
 
@@ -68,8 +68,8 @@ func fillEpilogueAVX() {
 	RET()
 }
 
-func fillSolidAVX() {
-	Implement("fineFillSolidAVX")
+func memsetColumnsAVX() {
+	Implement("memsetColumnsAVX")
 
 	outData, outLen, colorx2 := fillPrologueAVX()
 
@@ -180,8 +180,8 @@ func fillEpilogueSSE() {
 	RET()
 }
 
-func fillSolidSSE() {
-	Implement("fineFillSolidSSE")
+func memsetColumnsSSE() {
+	Implement("memsetColumnsSSE")
 
 	outData, outLen, color := fillPrologueSSE()
 

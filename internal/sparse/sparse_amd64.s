@@ -7,9 +7,9 @@
 DATA one<>+0(SB)/4, $(1.0)
 GLOBL one<>(SB), RODATA|NOPTR, $4
 
-// func fineFillSolidAVX(buf [][4]Color, color Color)
+// func memsetColumnsAVX(buf [][4]Color, color Color)
 // Requires: AVX
-TEXT ·fineFillSolidAVX(SB), $0-40
+TEXT ·memsetColumnsAVX(SB), $0-40
 	MOVQ           buf_len+8(FP), AX
 	SHLQ           $0x02, AX
 	TESTQ          AX, AX
@@ -98,9 +98,9 @@ exit:
 	VZEROUPPER
 	RET
 
-// func fineFillSolidSSE(buf [][4]Color, color Color)
+// func memsetColumnsSSE(buf [][4]Color, color Color)
 // Requires: SSE
-TEXT ·fineFillSolidSSE(SB), $0-40
+TEXT ·memsetColumnsSSE(SB), $0-40
 	MOVQ   buf_len+8(FP), AX
 	SHLQ   $0x02, AX
 	TESTQ  AX, AX

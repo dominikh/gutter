@@ -158,7 +158,7 @@ func (f *fine) pack(x, y int) {
 	}
 }
 
-func memsetColumns(buf [][stripHeight]Color, c Color) {
+func memsetColumnsNative(buf [][stripHeight]Color, c Color) {
 	// OPT add SIMD version
 	var col [stripHeight]Color
 	for i := range col {
@@ -177,7 +177,7 @@ func (f *fine) materialize(l *fineLayer, start, end int) {
 	f.stats.materializedPixels += uint64(end-start) * stripHeight
 	f.stats.materializedLayers++
 
-	memsetColumns(l.scratch[start:end], l.singleColor)
+	memsetColumnsFp(l.scratch[start:end], l.singleColor)
 }
 
 func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
@@ -207,7 +207,8 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 }
 
 var (
-	fillSolidFp   = fineFillSolidNative
+	memsetColumnsFp = memsetColumnsNative
+
 	fillSimpleFp  = fineFillSimpleNative
 	fillComplexFp = fineFillComplexNative
 
@@ -250,7 +251,7 @@ func (f *fine) fill(x, width int, color Color) {
 			f.stats.opaqueFills++
 			// The fill color is opaque, so we use a fill function that doesn't care
 			// about the background color.
-			fillSolidFp(buf, color)
+			memsetColumnsFp(buf, color)
 			l.complex = true
 		} else if !l.complex {
 			f.stats.simpleFills++
@@ -301,7 +302,7 @@ func (f *fine) clipFill(x, width int) {
 			nos.singleColor[2]*oneMinusAlpha + tos.singleColor[2],
 			nos.singleColor[3]*oneMinusAlpha + tos.singleColor[3],
 		}
-		memsetColumns(dst, color)
+		memsetColumnsFp(dst, color)
 		nos.complex = true
 	case !nos.complex:
 		f.stats.nosSimpleClipFills++
@@ -310,7 +311,7 @@ func (f *fine) clipFill(x, width int) {
 	case !tos.complex:
 		if tos.singleColor[3] == 1 {
 			f.stats.tosSimpleOpaqueClipFills++
-			memsetColumns(dst, tos.singleColor)
+			memsetColumnsFp(dst, tos.singleColor)
 		} else {
 			f.stats.tosSimpleTranslucentClipFills++
 			clipFillSimpleTosTranslucentFp(dst, tos.singleColor)
@@ -348,15 +349,6 @@ func (f *fine) clipStrip(x, width int, alphas [][stripHeight]uint8) {
 	}
 }
 
-func fineFillSolidNative(buf [][stripHeight]Color, color Color) {
-	for x := range buf {
-		col := &buf[x]
-		for y := range col {
-			col[y] = color
-		}
-	}
-}
-
 func fineFillSimpleNative(buf [][stripHeight]Color, color Color, bg Color) {
 	oneMinusAlpha := 1.0 - color[3]
 	color = Color{
@@ -365,7 +357,7 @@ func fineFillSimpleNative(buf [][stripHeight]Color, color Color, bg Color) {
 		2: color[2] + oneMinusAlpha*bg[2],
 		3: color[3] + oneMinusAlpha*bg[3],
 	}
-	memsetColumns(buf, color)
+	memsetColumnsNative(buf, color)
 }
 
 func fineFillComplexNative(buf [][stripHeight]Color, color Color) {

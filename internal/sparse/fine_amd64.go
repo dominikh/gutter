@@ -11,12 +11,14 @@ import "golang.org/x/sys/cpu"
 func init() {
 	switch {
 	case cpu.X86.HasAVX:
-		fillSolidFp = fineFillSolidAVX
+		memsetColumnsFp = memsetColumnsAVX
+
 		fillSimpleFp = fineFillSimpleAVX
 		fillComplexFp = fineFillComplexAVX
 	case cpu.X86.HasSSE2:
 		// amd64 always supports SSE and SSE2
-		fillSolidFp = fineFillSolidSSE
+		memsetColumnsFp = memsetColumnsSSE
+
 		fillSimpleFp = fineFillSimpleSSE
 		fillComplexFp = fineFillComplexSSE
 	}
