@@ -11,8 +11,6 @@ import (
 	"github.com/mmcloughlin/avo/reg"
 )
 
-//go:generate go run . -out ../sparse_amd64.s -pkg sparse
-
 var gOne = ConstData("one", F32(1))
 
 func PCALIGN(im Op) {

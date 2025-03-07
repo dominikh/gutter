@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 
 //go:generate go run ./gen.go
+//go:generate go run ./_asm -out sparse_amd64.s
 
 package sparse
 
