@@ -132,38 +132,58 @@ func (l *fineLayer) clear(c Color) {
 	l.singleColor = c
 }
 
-// pack writes the tile at (x, y) to the output buffer. x and y are tile
-// indices, not pixels.
-func (f *fine) pack(x, y int) {
-	baseIdx := (y*stripHeight*f.width + x*wideTileWidth)
-
-	maxi := max(0, min(wideTileWidth, f.width-x*wideTileWidth))
-	maxj := max(0, min(stripHeight, f.height-y*stripHeight))
-
-	out := f.outBuf[baseIdx:]
-	_ = out[(maxj-1)*f.width+maxi-1]
+// pack writes the tile at (tileX, tileY) to the output buffer.
+func (f *fine) pack(tileX, tileY int) {
 	l := f.topLayer()
 	if l.complex {
-		f.stats.complexPacks++
-		for j := range maxj {
-			for i := range maxi {
-				*safeish.Index(out, i) = l.scratch[i][j]
-			}
-			out = out[min(len(out), f.width):]
-		}
+		f.packComplex(l, tileX, tileY)
 	} else {
-		f.stats.simplePacks++
-		for range maxj {
-			for i := range maxi {
-				*safeish.Index(out, i) = l.singleColor
-			}
-			out = out[min(len(out), f.width):]
+		f.packSimple(l, tileX, tileY)
+	}
+}
+
+func (f *fine) packSimple(l *fineLayer, tileX, tileY int) {
+	f.stats.simplePacks++
+	outWidth := max(0, min(wideTileWidth, f.width-tileX*wideTileWidth))
+	outHeight := max(0, min(stripHeight, f.height-tileY*stripHeight))
+
+	baseIdx := (tileY*stripHeight*f.width + tileX*wideTileWidth)
+	out := f.outBuf[baseIdx:]
+	for range outHeight {
+		row := out[:min(len(out), outWidth)]
+
+		// We're writing the same color to every pixel, so even though
+		// memsetColumns operates on columns, we can just pretend that a
+		// single row of pixels is a bunch of columns.
+		outCols := safeish.SliceCast[[][stripHeight]Color](row)
+		memsetColumnsFp(outCols, l.singleColor)
+		for x := len(row) &^ 0b11; x < len(row); x++ {
+			row[x] = l.singleColor
 		}
+		out = out[min(uint(len(out)), uint(f.width)):]
+	}
+}
+
+func (f *fine) packComplex(l *fineLayer, tileX, tileY int) {
+	// OPT add SIMD implementation
+
+	f.stats.complexPacks++
+	outWidth := max(0, min(wideTileWidth, f.width-tileX*wideTileWidth))
+	outHeight := max(0, min(stripHeight, f.height-tileY*stripHeight))
+
+	baseIdx := (tileY*stripHeight*f.width + tileX*wideTileWidth)
+	out := f.outBuf[baseIdx:]
+	scratch := l.scratch[:outWidth]
+	for y := range outHeight {
+		row := out[:min(len(out), outWidth)]
+		for x := range row {
+			row[x] = scratch[x][y]
+		}
+		out = out[min(uint(len(out)), uint(f.width)):]
 	}
 }
 
 func memsetColumnsNative(buf [][stripHeight]Color, c Color) {
-	// OPT add SIMD version
 	var col [stripHeight]Color
 	for i := range col {
 		col[i] = c
@@ -303,10 +323,6 @@ func (f *fine) clipFill(x, width int) {
 	f.materialize(nos, 0, x)
 	f.materialize(nos, x+width, wideTileWidth)
 
-	// OPT see if storing nos and tos fields in local variables reduces memory
-	// bandwidth significantly. Go might well assume that nos.scratch aliases
-	// stuff.
-
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
 	switch {
@@ -340,6 +356,8 @@ func (f *fine) clipFill(x, width int) {
 }
 
 func (f *fine) clipStrip(x, width int, alphas [][stripHeight]uint8) {
+	// OPT implement SIMD versions
+
 	f.stats.clipStrips++
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
@@ -380,6 +398,8 @@ func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
 }
 
 func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
+	// OPT implement SIMD versions
+
 	if len(alphas) < width {
 		panic(fmt.Sprintf("internal error: got %d alphas for a width of %d",
 			len(alphas), width))

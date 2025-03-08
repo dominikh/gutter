@@ -73,7 +73,7 @@ func memsetColumnsAVX() {
 	Label("loop")
 	const unroll = 2
 	for i := range unroll {
-		VMOVAPS(colorx2, Mem{Base: outData}.Idx(outLen, 1).Offset(i*2*4*4))
+		VMOVUPS(colorx2, Mem{Base: outData}.Idx(outLen, 1).Offset(i*2*4*4))
 	}
 	ADDQ(Imm(unroll*2*4*4), outLen)
 	JL(LabelRef("loop"))

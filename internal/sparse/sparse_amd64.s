@@ -22,8 +22,8 @@ TEXT ·memsetColumnsAVX(SB), $0-40
 	PCALIGN        $0x10
 
 loop:
-	VMOVAPS Y0, (CX)(AX*1)
-	VMOVAPS Y0, 32(CX)(AX*1)
+	VMOVUPS Y0, (CX)(AX*1)
+	VMOVUPS Y0, 32(CX)(AX*1)
 	ADDQ    $0x40, AX
 	JL      loop
 
