@@ -19,7 +19,8 @@ import (
 const stripHeight = 4
 
 type loc struct {
-	x, y int32
+	x int32
+	y uint16
 }
 
 // footprint is a bitset representing the pixels covered by a set of tiles. Any
@@ -29,7 +30,8 @@ type loc struct {
 type footprint = uint32
 
 type tile struct {
-	x, y   int32
+	x      int32
+	y      uint16
 	p0, p1 vec16
 }
 
@@ -55,7 +57,7 @@ type strip struct {
 	_ structs.HostLayout
 
 	x       int32
-	y       int32
+	y       uint32
 	col     uint32
 	winding int32
 }
@@ -66,7 +68,13 @@ func (s strip) String() string {
 }
 
 func (l loc) sameStrip(other loc) bool {
-	return l.sameRow(other) && (other.x-l.x)/2 == 0
+	abs := func(x int32) int32 {
+		if x < 0 {
+			x = -x
+		}
+		return x
+	}
+	return l.sameRow(other) && abs(other.x-l.x) <= 1
 }
 
 func (l loc) sameRow(other loc) bool {
@@ -83,10 +91,12 @@ func (t tile) loc() loc {
 func (t tile) footprint() footprint {
 	x0 := float64(t.p0.x) * (1.0 / tileScale)
 	x1 := float64(t.p1.x) * (1.0 / tileScale)
+	xmin := math.Floor(min(x0, x1))
+	xmax := math.Ceil(max(x0, x1))
 	// TODO: On CPU, might be better to do this as fixed point
-	xmin := uint32(math.Floor(min(x0, x1)))
-	xmax := min(max(xmin+1, uint32(math.Ceil(max(x0, x1)))), tileWidth)
-	return (1 << xmax) - (1 << xmin)
+	start_i := uint32(xmin)
+	end_i := min(max((start_i+1), uint32(xmax)), tileWidth)
+	return (1 << end_i) - (1 << start_i)
 }
 
 func (t tile) delta() int {
@@ -219,7 +229,7 @@ func renderStripsScalar(
 			if stripStart {
 				strip := strip{
 					x:       4*prevTile.x + int32(x0),
-					y:       4 * prevTile.y,
+					y:       uint32(4 * prevTile.y),
 					col:     cols,
 					winding: int32(startDelta),
 				}
