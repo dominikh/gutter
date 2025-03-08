@@ -5,6 +5,8 @@
 package sparse
 
 import (
+	"math"
+
 	"golang.org/x/exp/constraints"
 )
 
@@ -16,6 +18,18 @@ func satConv[D constraints.Unsigned, S ~float32 | ~float64](x S) D {
 		return max
 	} else {
 		return D(x)
+	}
+}
+
+func satConvI32(x float32) int32 {
+	if x != x {
+		return 0
+	} else if x < math.MinInt32 {
+		return math.MinInt32
+	} else if x > math.MaxInt32 {
+		return math.MaxInt32
+	} else {
+		return int32(x)
 	}
 }
 

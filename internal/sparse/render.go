@@ -134,7 +134,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		strip := &ctx.stripBuf[i]
 
 		// Don't render strips that are outside the viewport.
-		if int(strip.x) >= ctx.width {
+		if int(strip.x) >= ctx.width || strip.y < 0 {
 			continue
 		}
 		if int(strip.y) >= ctx.height {
@@ -142,7 +142,15 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		}
 
 		nextStrip := &ctx.stripBuf[i+1]
-		x0 := uint32(strip.x)
+		// Currently, strips can also start at a negative x position, since we don't
+		// support viewport culling yet. However, when generating the commands
+		// we only want to emit strips >= 0, so we calculate the adjustment
+		// and then only include the alpha indices for columns where x >= 0.
+		var x0_adjustment uint32
+		if strip.x < 0 {
+			x0_adjustment = uint32(-strip.x)
+		}
+		x0 := uint32(strip.x + int32(x0_adjustment))
 		y := int(strip.stripY())
 		if y < bbox[1] {
 			continue
@@ -150,7 +158,12 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		if y >= bbox[3] {
 			break
 		}
-		stripWidth := nextStrip.col - strip.col
+		col := strip.col + x0_adjustment
+		// Can potentially be 0, if the next strip's x values is also < 0.
+		stripWidth := nextStrip.col - col
+		if stripWidth > nextStrip.col {
+			stripWidth = 0
+		}
 		x1 := x0 + stripWidth
 		xtile0 := max(int(x0)/wideTileWidth, bbox[0])
 		// TODO: we are limiting xtile1 to widthTiles because strips aren't
@@ -158,7 +171,6 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 		// clip higher up the stack.
 		xtile1 := min(divCeil(int(x1), wideTileWidth), widthTiles, bbox[2])
 		x := x0
-		col := strip.col
 		if uint32(bbox[0]*wideTileWidth) > x {
 			col += uint32(bbox[0]*wideTileWidth) - x
 			x = uint32(bbox[0] * wideTileWidth)
@@ -181,7 +193,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 			col += width
 			ctx.tiles[y][xtile].strip(cmd)
 		}
-		if nextStrip.winding != 0 && y == int(nextStrip.stripY()) {
+		if nextStrip.winding != 0 && y == int(nextStrip.stripY()) && nextStrip.x >= 0 {
 			x = x1
 			x2 := uint32(nextStrip.x)
 			fxt0 := max(int(x1)/wideTileWidth, bbox[0])

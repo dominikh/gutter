@@ -91,6 +91,11 @@ func sign32(f float32) float32 {
 }
 
 func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
+	pushTile := func(t tile) {
+		if t.y >= 0 {
+			tileBuf = append(tileBuf, t)
+		}
+	}
 
 	tileBuf = tileBuf[:0]
 	for line := range lines {
@@ -151,9 +156,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				yfrac1 := scaleUp(s1.y - y)
 				packed1 := vec16{xfrac1, yfrac1}
 				// 1x1 tile
-				tileBuf = append(tileBuf, tile{
-					x:  satConv[uint16](x),
-					y:  satConv[uint16](y),
+				pushTile(tile{
+					x:  satConvI32(x),
+					y:  satConvI32(y),
 					p0: packed0,
 					p1: packed1,
 				})
@@ -172,9 +177,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					xclip := xclip0 + float32(i)*sign*slope
 					xfrac := max(scaleUp(xclip), 1)
 					packed := vec16{xfrac, yclip}
-					tileBuf = append(tileBuf, tile{
-						x:  satConv[uint16](x),
-						y:  satConv[uint16](y + float32(i)*sign),
+					pushTile(tile{
+						x:  satConvI32(x),
+						y:  satConvI32(y + float32(i)*sign),
 						p0: lastPacked,
 						p1: packed,
 					})
@@ -185,9 +190,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				yfrac1 := scaleUp(s1.y - (y + float32(countY-1)*sign))
 				packed1 := vec16{xfrac1, yfrac1}
 
-				tileBuf = append(tileBuf, tile{
-					x:  satConv[uint16](x),
-					y:  satConv[uint16](y + float32(countY-1)*sign),
+				pushTile(tile{
+					x:  satConvI32(x),
+					y:  satConvI32(y + float32(countY-1)*sign),
 					p0: lastPacked,
 					p1: packed1,
 				})
@@ -207,9 +212,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 				yclip := yclip0 + float32(i)*sign*slope
 				yfrac := max(scaleUp(yclip), 1)
 				packed := vec16{xclip, yfrac}
-				tileBuf = append(tileBuf, tile{
-					x:  satConv[uint16](x + float32(i)*sign),
-					y:  satConv[uint16](y),
+				pushTile(tile{
+					x:  satConvI32(x + float32(i)*sign),
+					y:  satConvI32(y),
 					p0: lastPacked,
 					p1: packed,
 				})
@@ -221,9 +226,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			yfrac1 := scaleUp(s1.y - y)
 			packed1 := vec16{xfrac1, yfrac1}
 
-			tileBuf = append(tileBuf, tile{
-				x:  satConv[uint16](x + float32(countX-1)*sign),
-				y:  satConv[uint16](y),
+			pushTile(tile{
+				x:  satConvI32(x + float32(countX-1)*sign),
+				y:  satConvI32(y),
 				p0: lastPacked,
 				p1: packed1,
 			})
@@ -261,9 +266,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					xIntersect := s0.x + (s1.x-s0.x)*tClipY - xi
 					xfrac := max(scaleUp(xIntersect), 1)
 					packed := vec16{xfrac, yclip}
-					tileBuf = append(tileBuf, tile{
-						x:  satConv[uint16](xi),
-						y:  satConv[uint16](yi),
+					pushTile(tile{
+						x:  satConvI32(xi),
+						y:  satConvI32(yi),
 						p0: lastPacked,
 						p1: packed,
 					})
@@ -276,9 +281,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 					yIntersect := s0.y + (s1.y-s0.y)*tClipX - yi
 					yfrac := max(scaleUp(yIntersect), 1)
 					packed := vec16{xclip, yfrac}
-					tileBuf = append(tileBuf, tile{
-						x:  satConv[uint16](xi),
-						y:  satConv[uint16](yi),
+					pushTile(tile{
+						x:  satConvI32(xi),
+						y:  satConvI32(yi),
 						p0: lastPacked,
 						p1: packed,
 					})
@@ -292,9 +297,9 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			yfrac1 := scaleUp(s1.y - yi)
 			packed1 := vec16{xfrac1, yfrac1}
 
-			tileBuf = append(tileBuf, tile{
-				x:  satConv[uint16](xi),
-				y:  satConv[uint16](yi),
+			pushTile(tile{
+				x:  satConvI32(xi),
+				y:  satConvI32(yi),
 				p0: lastPacked,
 				p1: packed1,
 			})

@@ -19,7 +19,7 @@ import (
 const stripHeight = 4
 
 type loc struct {
-	x, y uint16
+	x, y int32
 }
 
 // footprint is a bitset representing the pixels covered by a set of tiles. Any
@@ -29,7 +29,7 @@ type loc struct {
 type footprint = uint32
 
 type tile struct {
-	x, y   uint16
+	x, y   int32
 	p0, p1 vec16
 }
 
@@ -54,8 +54,8 @@ func (t tile) String() string {
 type strip struct {
 	_ structs.HostLayout
 
-	x       uint16
-	y       uint16
+	x       int32
+	y       int32
 	col     uint32
 	winding int32
 }
@@ -101,9 +101,10 @@ func (t tile) delta() int {
 }
 
 func (t tile) cmp(b tile) int {
-	xya := (uint32(t.y) << 16) + uint32(t.x)
-	xyb := (uint32(b.y) << 16) + uint32(b.x)
-	return cmp.Compare(xya, xyb)
+	if n := cmp.Compare(t.y, b.y); n != 0 {
+		return n
+	}
+	return cmp.Compare(t.x, b.x)
 }
 
 func clamp[T float32 | int32](v, low, high T) T {
@@ -217,7 +218,7 @@ func renderStripsScalar(
 
 			if stripStart {
 				strip := strip{
-					x:       4*prevTile.x + uint16(x0),
+					x:       4*prevTile.x + int32(x0),
 					y:       4 * prevTile.y,
 					col:     cols,
 					winding: int32(startDelta),
