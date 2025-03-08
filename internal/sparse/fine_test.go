@@ -96,3 +96,62 @@ func Benchmark_memsetColumnsNative(b *testing.B) {
 		}
 	})
 }
+
+func benchmarkFinePack(b *testing.B, complex bool) {
+	tests := []struct {
+		label  string
+		width  int
+		height int
+	}{
+		// 256*4 uses 16 KiB, which fits into L1 on somewhat modern CPUs.
+		{"L1", 256, 4},
+		// 256*128 uses 512 KiB, which fits into L2 on somewhat modern CPUs.
+		{"L2", 256, 128},
+		// 512*512 uses 4 MiB, which fits into L3 on somewhat modern CPUs.
+		{"L3", 512, 512},
+		// 4096*4096 uses 256 MiB, which does not fit into L3 on most CPUs.
+		{"mem", 4096, 4096},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.label, func(b *testing.B) {
+			if tt.width%wideTileWidth != 0 {
+				b.Fatalf("width %d isn't multiple of wideTileWidth", tt.width)
+			}
+			if tt.height%stripHeight != 0 {
+				b.Fatalf("height %d isn't multiple of stripHeight", tt.height)
+			}
+
+			pixmap := make([]Color, tt.width*tt.height)
+			f := newFine(tt.width, tt.height, pixmap)
+			clear(pixmap)
+			if complex {
+				clear(f.layers[len(f.layers)-1].scratch[:])
+				f.layers[len(f.layers)-1].complex = true
+			}
+
+			for b.Loop() {
+				for x := range tt.width / wideTileWidth {
+					for y := range tt.height / stripHeight {
+						f.pack(x, y)
+					}
+				}
+			}
+
+			px := float64(tt.width * tt.height * b.N)
+			d := float64(b.Elapsed()) / px
+			bytes := px * 4 * 4
+			r := bytes / float64(b.Elapsed().Seconds())
+			b.ReportMetric(d, "ns/px")
+			b.ReportMetric(r, "B/s")
+		})
+	}
+}
+
+func Benchmark_fine_pack_simple(b *testing.B) {
+	benchmarkFinePack(b, false)
+}
+
+func Benchmark_fine_pack_complex(b *testing.B) {
+	benchmarkFinePack(b, true)
+}
