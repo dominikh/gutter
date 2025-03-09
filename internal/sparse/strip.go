@@ -6,10 +6,7 @@
 package sparse
 
 import (
-	"cmp"
 	"fmt"
-	"math"
-	"math/bits"
 	"structs"
 )
 
@@ -21,50 +18,6 @@ const stripHeight = 4
 type loc struct {
 	x int32
 	y uint16
-}
-
-// footprint is a bitset representing the pixels covered by a set of tiles. Any
-// individual tile will cover a contiguous range of pixels, as each tile
-// contains exactly one line segment. However, when multiple tiles are processed
-// together, footprints can be ORed together, which may result in gaps.
-type footprint = uint32
-
-type tile struct {
-	x      int32
-	y      uint16
-	p0, p1 vec16
-}
-
-type vec16 struct {
-	x, y uint16
-}
-
-func (v vec16) float32() vec2 {
-	x := float32(v.x) * (1.0 / tileScale)
-	y := float32(v.y) * (1.0 / tileScale)
-	return vec2{x, y}
-}
-
-func (v vec16) String() string {
-	return v.float32().String()
-}
-
-func (t tile) String() string {
-	return fmt.Sprintf("(%d, %d) = %s--%s", t.x, t.y, t.p0, t.p1)
-}
-
-type strip struct {
-	_ structs.HostLayout
-
-	x       int32
-	y       uint32
-	col     uint32
-	winding int32
-}
-
-func (s strip) String() string {
-	return fmt.Sprintf("strip(x=%v, y=%v, col=%v, winding=%v)",
-		s.x, s.y, s.col, s.winding)
 }
 
 func (l loc) sameStrip(other loc) bool {
@@ -81,40 +34,33 @@ func (l loc) sameRow(other loc) bool {
 	return l.y == other.y
 }
 
+func (t tile) String() string {
+	return fmt.Sprintf("(%d, %d) = %s--%s", t.x, t.y, t.p0, t.p1)
+}
+
+type strip struct {
+	_ structs.HostLayout
+
+	x       int32
+	y       uint16
+	col     uint32
+	winding int32
+}
+
+func (s *strip) stripY() uint16 {
+	return s.y / stripHeight
+}
+
+func (s strip) String() string {
+	return fmt.Sprintf("strip(x=%v, y=%v, col=%v, winding=%v)",
+		s.x, s.y, s.col, s.winding)
+}
+
 func (t tile) loc() loc {
 	return loc{
 		x: t.x,
 		y: t.y,
 	}
-}
-
-func (t tile) footprint() footprint {
-	x0 := float64(t.p0.x) * (1.0 / tileScale)
-	x1 := float64(t.p1.x) * (1.0 / tileScale)
-	xmin := math.Floor(min(x0, x1))
-	xmax := math.Ceil(max(x0, x1))
-	// TODO: On CPU, might be better to do this as fixed point
-	start_i := uint32(xmin)
-	end_i := min(max((start_i+1), uint32(xmax)), tileWidth)
-	return (1 << end_i) - (1 << start_i)
-}
-
-func (t tile) delta() int {
-	var a, b int
-	if t.p1.y == 0 {
-		a = 1
-	}
-	if t.p0.y == 0 {
-		b = 1
-	}
-	return a - b
-}
-
-func (t tile) cmp(b tile) int {
-	if n := cmp.Compare(t.y, b.y); n != 0 {
-		return n
-	}
-	return cmp.Compare(t.x, b.x)
 }
 
 func clamp[T float32 | int32](v, low, high T) T {
@@ -143,56 +89,83 @@ func renderStripsScalar(
 	fp := prevTile.footprint()
 	segStart := 0
 	delta := 0
+
 	// Note: the input should contain a sentinel tile, to avoid having
 	// logic here to process the final strip.
 	for i := 1; i < len(tiles); i++ {
-		tile := &tiles[i]
-		if prevTile.loc() != tile.loc() {
+		curTile := &tiles[i]
+
+		if !prevTile.sameLoc(curTile) {
 			startDelta := delta
-			sameStrip := prevTile.loc().sameStrip(tile.loc())
+			sameStrip := prevTile.prevLoc(curTile)
+
 			if sameStrip {
-				fp |= 8
+				fp = fp.extend(3)
 			}
-			x0 := uint32(bits.TrailingZeros32(fp))
-			x1 := uint32(32 - bits.LeadingZeros32(fp))
-			area := [4]float32{
-				float32(startDelta),
-				float32(startDelta),
-				float32(startDelta),
-				float32(startDelta),
+
+			x0 := fp.x0()
+			x1 := fp.x1()
+			var area [tileWidth]float32
+			for i := range area {
+				area[i] = float32(startDelta)
 			}
-			areas := [4][4]float32{area, area, area, area}
+			var areas [tileHeight][tileWidth]float32
+			for i := range areas {
+				areas[i] = area
+			}
 
 			for j := segStart; j < i; j++ {
 				tile := &tiles[j]
+
 				delta += tile.delta()
-				p0 := tile.p0.float32()
-				p1 := tile.p1.float32()
-				slope := (p1.x - p0.x) / (p1.y - p0.y)
+
+				p0 := tile.p0
+				p1 := tile.p1
+				invSlope := (p1.x - p0.x) / (p1.y - p0.y)
+
 				if x0 >= x1 {
 					continue
 				}
 				_ = areas[x0]
 				_ = areas[x1-1]
 				for x := x0; x < x1; x++ {
-					startx := p0.x - float32(x)
-					for y := range 4 {
-						starty := p0.y - float32(y)
-						y0 := clamp(starty, 0, 1)
+					// Relative x offset of the start point from the current
+					// column.
+					relX := p0.x - float32(x)
+					for y := range stripHeight {
+						// Relative y offset of the start point from the current
+						// row.
+						relY := p0.y - float32(y)
+						// y values will be 1 if the point is below the current
+						// row, 0 if the point is above the current row, and
+						// between 0-1 if it is on the same row.
+						y0 := clamp(relY, 0, 1)
 						y1 := clamp(p1.y-float32(y), 0, 1)
+						// If != 0, the line intersects the current row in the
+						// current tile.
 						dy := y0 - y1
+
 						if dy != 0.0 {
-							xx0 := startx + (y0-starty)*slope
-							xx1 := startx + (y1-starty)*slope
+							// x intersection points in the current tile.
+							xx0 := relX + (y0-relY)*invSlope
+							xx1 := relX + (y1-relY)*invSlope
 							xmin0 := min(xx0, xx1)
 							xmax := max(xx0, xx1)
+							// Subtract a small delta to prevent a division by zero
+							// below.
 							xmin := min(xmin0, 1.0) - 1e-6
+							// Clip xmax to the right side of the pixel.
 							b := min(xmax, 1.0)
+							// Clip xmax to the left side of the pixel.
 							c := max(b, 0.0)
+							// Clip xmin to the left side of the pixel.
 							d := max(xmin, 0.0)
+							// Calculate the covered area.
 							a := (b + 0.5*(d*d-c*c) - xmin) / (xmax - xmin)
+
 							areas[x][y] += a * dy
 						}
+
 						if p0.x == 0.0 {
 							areas[x][y] += clamp(float32(y)-p0.y+1.0, 0.0, 1.0)
 						} else if p1.x == 0.0 {
@@ -201,59 +174,57 @@ func renderStripsScalar(
 					}
 				}
 			}
-			for x := x0; x < x1; x++ {
-				var alphas [stripHeight]uint8
-				for y := range stripHeight {
-					area := areas[x][y]
-					var areaU8 uint8
-					switch fillRule {
-					case NonZero:
-						areaU8 = satConv[uint8](math.Round(min(math.Abs(float64(area)), 1.0) * 255.0))
-					case EvenOdd:
-						even := int32(area) % 2
-						// If we have for example 2.68, then opacity is 68%, while for
-						// 1.68 it would be (1 - 0.68) = 32%
-						addVal := float32(even)
-						// 1 for even, -1 for odd
-						sign := float32(-2*even + 1)
-						_, areaFrac := math.Modf(float64(area))
-						areaU8 = satConv[uint8]((addVal+sign*float32(areaFrac))*255.0 + 0.5)
-					default:
-						panic(fmt.Sprintf("invalid fill rule %v", fillRule))
+
+			switch fillRule {
+			case NonZero:
+				for x := x0; x < x1; x++ {
+					var alphas [stripHeight]uint8
+					for y := range stripHeight {
+						area := areas[x][y]
+						coverage := min(abs32(area), 1.0)
+						areaU8 := satConv[uint8](coverage*255.0 + 0.5)
+						alphas[y] = areaU8
 					}
-					alphas[y] = areaU8
+					alphaBuf = append(alphaBuf, alphas)
 				}
-				alphaBuf = append(alphaBuf, alphas)
+			case EvenOdd:
+				for x := x0; x < x1; x++ {
+					var alphas [stripHeight]uint8
+					for y := range stripHeight {
+						area := areas[x][y]
+						coverage := abs32(area - 2.0*floor32((0.5*area)+0.5))
+						areaU8 := satConv[uint8](coverage*255.0 + 0.5)
+						alphas[y] = areaU8
+					}
+					alphaBuf = append(alphaBuf, alphas)
+				}
 			}
 
 			if stripStart {
 				strip := strip{
 					x:       4*prevTile.x + int32(x0),
-					y:       uint32(4 * prevTile.y),
+					y:       4 * prevTile.y,
 					col:     cols,
 					winding: int32(startDelta),
 				}
 				stripBuf = append(stripBuf, strip)
 			}
+
 			cols += x1 - x0
 			if sameStrip {
-				fp = 1
+				fp = footprintFromIndex(0)
 			} else {
 				fp = 0
 			}
 			stripStart = !sameStrip
 			segStart = i
-			if !prevTile.loc().sameRow(tile.loc()) {
+			if !prevTile.sameRow(curTile) {
 				delta = 0
 			}
 		}
-		fp |= tile.footprint()
-		prevTile = tile
+		fp = fp.merge(curTile.footprint())
+		prevTile = curTile
 	}
 
 	return stripBuf, alphaBuf
-}
-
-func (s *strip) stripY() uint32 {
-	return uint32(s.y) / stripHeight
 }

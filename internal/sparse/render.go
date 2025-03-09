@@ -119,7 +119,7 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap []Color) {
 
 func (ctx *CsRenderCtx) renderPathCommon(path iter.Seq[flatLine], fillRule FillRule) {
 	ctx.tileBuf = makeTiles(path, ctx.tileBuf)
-	slices.SortFunc(ctx.tileBuf, tile.cmp)
+	slices.SortFunc(ctx.tileBuf, func(a, b tile) int { return a.cmp(&b) })
 	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.stripBuf, ctx.alphas)
 }
 
@@ -133,11 +133,13 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 	for i := range len(ctx.stripBuf) - 1 {
 		strip := &ctx.stripBuf[i]
 
-		// Don't render strips that are outside the viewport.
-		if int(strip.x) >= ctx.width || strip.y < 0 {
+		if int(strip.x) >= ctx.width {
+			// Don't render strips that are outside the viewport.
 			continue
 		}
 		if int(strip.y) >= ctx.height {
+			// Since strips are sorted by location, any subsequent strips will also be
+			// outside the viewport, so we can abort entirely.
 			break
 		}
 
@@ -151,11 +153,11 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 			x0_adjustment = uint32(-strip.x)
 		}
 		x0 := uint32(strip.x + int32(x0_adjustment))
-		y := int(strip.stripY())
-		if y < bbox[1] {
+		stripY := strip.stripY()
+		if int(stripY) < bbox[1] {
 			continue
 		}
-		if y >= bbox[3] {
+		if int(stripY) >= bbox[3] {
 			break
 		}
 		col := strip.col + x0_adjustment
@@ -191,9 +193,20 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 			}
 			x += width
 			col += width
-			ctx.tiles[y][xtile].strip(cmd)
+			ctx.tiles[stripY][xtile].strip(cmd)
 		}
-		if nextStrip.winding != 0 && y == int(nextStrip.stripY()) && nextStrip.x >= 0 {
+
+		var activeFill bool
+		switch fillRule {
+		case NonZero:
+			activeFill = nextStrip.winding != 0
+		case EvenOdd:
+			activeFill = nextStrip.winding%2 != 0
+		default:
+			panic(fmt.Sprintf("unexpected sparse.FillRule: %#v", fillRule))
+		}
+
+		if activeFill && stripY == nextStrip.stripY() && nextStrip.x >= 0 {
 			x = x1
 			x2 := uint32(nextStrip.x)
 			fxt0 := max(int(x1)/wideTileWidth, bbox[0])
@@ -202,7 +215,7 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 				xTileRel := x % wideTileWidth
 				width := min(x2, uint32((xtile+1)*wideTileWidth)) - x
 				x += width
-				ctx.tiles[y][xtile].fill(xTileRel, width, color)
+				ctx.tiles[stripY][xtile].fill(xTileRel, width, color)
 			}
 		}
 	}

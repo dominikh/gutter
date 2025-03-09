@@ -15,6 +15,40 @@ import (
 
 const flattenTolerance = 0.25
 
+type flatLine struct {
+	p0 vec2
+	p1 vec2
+}
+
+type vec2 struct {
+	x, y float32
+}
+
+func (v vec2) String() string {
+	return fmt.Sprintf("(%g, %g)", v.x, v.y)
+}
+
+func (v vec2) add(o vec2) vec2 {
+	return vec2{
+		x: v.x + o.x,
+		y: v.y + o.y,
+	}
+}
+
+func (v vec2) sub(o vec2) vec2 {
+	return vec2{
+		x: v.x - o.x,
+		y: v.y - o.y,
+	}
+}
+
+func (v vec2) mul(f float32) vec2 {
+	return vec2{
+		x: v.x * f,
+		y: v.y * f,
+	}
+}
+
 func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLine] {
 	return func(yield func(flatLine) bool) {
 		var start, p0 curve.Point
