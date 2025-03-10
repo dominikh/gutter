@@ -10,6 +10,7 @@ import (
 	"iter"
 	"log"
 	"slices"
+	"time"
 
 	"honnef.co/go/curve"
 )
@@ -114,13 +115,17 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap []Color) {
 			fine.pack(x, y)
 		}
 	}
-	log.Println(&fine.stats)
+	if false {
+		log.Println(&fine.stats)
+	}
 }
 
 func (ctx *CsRenderCtx) renderPathCommon(path iter.Seq[flatLine], fillRule FillRule) {
 	ctx.tileBuf = makeTiles(path, ctx.tileBuf)
 	slices.SortFunc(ctx.tileBuf, func(a, b tile) int { return a.cmp(&b) })
+	t := time.Now()
 	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.stripBuf, ctx.alphas)
+	log.Println("renderPathCommon:", time.Since(t))
 }
 
 func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, color Color) {

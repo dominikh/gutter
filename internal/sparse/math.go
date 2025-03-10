@@ -23,6 +23,10 @@ func abs32(f float32) float32 {
 }
 
 func sign32(f float32) float32 {
+	if f != f {
+		return f
+	}
+
 	if math.Signbit(float64(f)) {
 		// f is -0.0 or negative
 		return -1

@@ -287,15 +287,6 @@ func makeTiles(lines iter.Seq[flatLine], tileBuf []tile) []tile {
 			pushTile(xi, yi, lastPacked, packed1)
 		}
 	}
-	// This particular choice of sentinel tiles generates a sentinel strip.
-	tileBuf = append(tileBuf, tile{
-		x: 0x3ffd,
-		y: 0x3fff,
-	})
-	tileBuf = append(tileBuf, tile{
-		x: 0x3fff,
-		y: 0x3fff,
-	})
 	return tileBuf
 }
 
@@ -322,7 +313,7 @@ func (t *tile) sameLoc(o *tile) bool {
 }
 
 func (t *tile) prevLoc(o *tile) bool {
-	return t.sameRow(o) && t.x+1 == o.x
+	return t.sameRow(o) && t.x+1 > t.x && t.x+1 == o.x
 }
 
 func (t *tile) sameRow(o *tile) bool {
