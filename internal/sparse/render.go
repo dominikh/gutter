@@ -49,6 +49,7 @@ type CsRenderCtx struct {
 	// Scratch buffers
 	tileBuf  []tile
 	stripBuf []strip
+	lineBuf  []flatLine
 }
 
 func NewCsRenderCtx(width, height int) *CsRenderCtx {
@@ -120,18 +121,18 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap []Color) {
 	}
 }
 
-func (ctx *CsRenderCtx) renderPathCommon(path iter.Seq[flatLine], fillRule FillRule) {
-	ctx.tileBuf = makeTiles(path, ctx.tileBuf)
+func (ctx *CsRenderCtx) renderPathCommon(lineBuf []flatLine, fillRule FillRule) {
+	ctx.tileBuf = makeTiles(lineBuf, ctx.tileBuf, uint16(ctx.width), uint16(ctx.height))
 	slices.SortFunc(ctx.tileBuf, func(a, b tile) int { return a.cmp(&b) })
 	t := time.Now()
-	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.stripBuf, ctx.alphas)
+	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.lineBuf, ctx.stripBuf, ctx.alphas)
 	log.Println("renderPathCommon:", time.Since(t))
 }
 
-func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, color Color) {
+func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color Color) {
 	// XXX support a brush
 
-	ctx.renderPathCommon(path, fillRule)
+	ctx.renderPathCommon(lineBuf, fillRule)
 
 	widthTiles := divCeil(ctx.width, wideTileWidth)
 	bbox := ctx.bbox()
@@ -213,7 +214,8 @@ func (ctx *CsRenderCtx) renderPath(path iter.Seq[flatLine], fillRule FillRule, c
 
 		if activeFill && stripY == nextStrip.stripY() && nextStrip.x >= 0 {
 			x = x1
-			x2 := uint32(nextStrip.x)
+			uproundedWidth := divCeil(ctx.width, wideTileWidth) * wideTileWidth
+			x2 := min(uint32(nextStrip.x), uint32(uproundedWidth))
 			fxt0 := max(int(x1)/wideTileWidth, bbox[0])
 			fxt1 := min(divCeil(int(x2), wideTileWidth), widthTiles, bbox[2])
 			for xtile := fxt0; xtile < fxt1; xtile++ {
@@ -376,21 +378,21 @@ func (ctx *CsRenderCtx) getAffine() curve.Affine {
 func (ctx *CsRenderCtx) Fill(path iter.Seq[curve.PathElement], fillRule FillRule, color Color) {
 	// XXX support brushes
 	affine := ctx.getAffine()
-	it := fill(path, affine)
-	ctx.renderPath(it, fillRule, color)
+	ctx.lineBuf = fill(path, affine, ctx.lineBuf)
+	ctx.renderPath(ctx.lineBuf, fillRule, color)
 }
 
 func (ctx *CsRenderCtx) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color Color) {
 	// XXX support brushes
 	affine := ctx.getAffine()
-	it := stroke(path, stroke_, affine)
-	ctx.renderPath(it, NonZero, color)
+	ctx.lineBuf = stroke(path, stroke_, affine, ctx.lineBuf)
+	ctx.renderPath(ctx.lineBuf, NonZero, color)
 }
 
 func (ctx *CsRenderCtx) Clip(path iter.Seq[curve.PathElement], fillRule FillRule) {
 	affine := ctx.getAffine()
-	it := fill(path, affine)
-	ctx.renderPathCommon(it, fillRule)
+	ctx.lineBuf = fill(path, affine, ctx.lineBuf)
+	ctx.renderPathCommon(ctx.lineBuf, fillRule)
 	strips := ctx.stripBuf
 	ctx.stripBuf = nil
 	var pathBbox [4]int

@@ -16,10 +16,6 @@ import (
 // Requirement: stripHeight >= widest vectorized load we use
 const stripHeight = 4
 
-func (t tile) String() string {
-	return fmt.Sprintf("(%d, %d) = %s--%s", t.x, t.y, t.p0, t.p1)
-}
-
 type strip struct {
 	_ structs.HostLayout
 
@@ -74,6 +70,7 @@ func max32(a, b float32) float32 {
 func renderStripsScalar(
 	tiles []tile,
 	fillRule FillRule,
+	lines []flatLine,
 	stripBuf []strip,
 	alphaBuf [][stripHeight]uint8,
 ) ([]strip, [][stripHeight]uint8) {
@@ -115,6 +112,14 @@ func renderStripsScalar(
 			}
 		}
 
+		line := lines[tile_.lineIdx]
+		tileLeftX := float32(tile_.x) * tileWidth
+		tileTopY := float32(tile_.y) * tileHeight
+		p0_x := line.p0.x - tileLeftX
+		p0_y := line.p0.y - tileTopY
+		p1_x := line.p1.x - tileLeftX
+		p1_y := line.p1.y - tileTopY
+
 		// Push out the winding as an alpha mask when we move to the next location (i.e., a tile
 		// without the same location).
 		if !prevTile.sameLoc(&tile_) {
@@ -124,7 +129,7 @@ func renderStripsScalar(
 					var alphas [stripHeight]uint8
 					for y := range tileHeight {
 						area := locationWinding[x][y]
-						coverage := min(abs32(area), 1.0)
+						coverage := min32(abs32(area), 1.0)
 						areaU8 := satConv[uint8](coverage*255.0 + 0.5)
 						alphas[y] = areaU8
 					}
@@ -159,14 +164,26 @@ func renderStripsScalar(
 			}
 			stripBuf = append(stripBuf, strip_)
 
-			// Once we've reached the sentinel tile, emit a final strip.
-			if i == len(tiles) {
-				stripBuf = append(stripBuf, strip{
-					x:       math.MaxInt32,
-					y:       math.MaxUint16,
-					col:     uint32(len(alphaBuf)),
-					winding: 0,
-				})
+			isSentinel := i == len(tiles)
+			if !prevTile.sameRow(&tile_) {
+				// Emit a final strip in the row if there is non-zero winding
+				// for the sparse fill, or unconditionally if we've reached the
+				// sentinel tile to end the path (the col field is used for
+				// width calculations).
+				if windingDelta != 0 || isSentinel {
+					stripBuf = append(stripBuf, strip{
+						x:       math.MaxInt32,
+						y:       prevTile.y * tileHeight,
+						col:     uint32(len(alphaBuf)),
+						winding: windingDelta,
+					})
+				}
+
+				windingDelta = 0
+				clear(accumulatedWinding[:])
+				clear(locationWinding[:])
+			}
+			if isSentinel {
 				break
 			}
 
@@ -184,14 +201,6 @@ func renderStripsScalar(
 			}
 		}
 		prevTile = tile_
-
-		// TODO: lines are currently still packed into tiles. This will probably change, in which
-		// case we will have to translate the lines to have the tile's top-left corner as origin.
-		// let line = lines[tile.line_idx as usize];
-		p0_x := tile_.p0.x // - tile_left_x;
-		p0_y := tile_.p0.y // - tile_top_y;
-		p1_x := tile_.p1.x // - tile_left_x;
-		p1_y := tile_.p1.y // - tile_top_y;
 
 		// TODO: horizontal geometry has no impact on winding. This branch will be removed when
 		// horizontal geometry is culled at the tile-generation stage.
@@ -240,20 +249,57 @@ func renderStripsScalar(
 			line_top_y, line_top_x, line_bottom_y, line_bottom_x = p1_y, p1_x, p0_y, p0_x
 		}
 
+		var lineLeftX, lineLeftY, lineRightX float32
+		if p0_x < p1_x {
+			lineLeftX = p0_x
+			lineLeftY = p0_y
+			lineRightX = p1_x
+		} else {
+			lineLeftX = p1_x
+			lineLeftY = p1_y
+			lineRightX = p0_x
+		}
+
 		y_slope := (line_bottom_y - line_top_y) / (line_bottom_x - line_top_x)
 		x_slope := 1.0 / y_slope
 
-		{
-			// The y-coordinate of the intersections between line and the tile's left and right
-			// edges respectively.
-			//
-			// There's some subtety going on here, see the note on `line_px_left_y` below.
-			line_tile_left_y := min32(max32(line_top_y-line_top_x*y_slope, line_top_y), line_bottom_y)
-			line_tile_right_y := min32(max32(line_top_y+(tileWidth-line_top_x)*y_slope, line_top_y), line_bottom_y)
+		if tile_.winding {
+			windingDelta += int32(sign)
+		}
 
-			// OPT(dh): make this branchless
-			if (line_tile_left_y <= 0.0) != (line_tile_right_y <= 0.0) {
-				windingDelta += int32(sign)
+		// TODO: this should be removed when out-of-viewport tiles are culled at the
+		// tile-generation stage. That requires calculating and forwarding winding to strip
+		// generation.
+		if tile_.x == 0 && lineLeftX < 0.0 {
+			var ymin, ymax float32
+			if line.p0.x == line.p1.x {
+				ymin = line_top_y
+				ymax = line_bottom_y
+			} else {
+				lineViewportLeftY := min32(max32(line_top_y-line_top_x*y_slope, line_top_y), line_bottom_y)
+
+				ymin = min32(lineLeftY, lineViewportLeftY)
+				ymax = max32(lineLeftY, lineViewportLeftY)
+			}
+
+			for yIdx := range tileHeight {
+				px_top_y := float32(yIdx)
+				px_bottom_y := 1.0 + float32(yIdx)
+
+				ymin := max32(ymin, px_top_y)
+				ymax := min32(ymax, px_bottom_y)
+
+				h := max32(ymax-ymin, 0)
+				accumulatedWinding[yIdx] += sign * h
+
+				for xIdx := range tileWidth { // XXX
+					locationWinding[xIdx][yIdx] += sign * h
+				}
+			}
+
+			if lineRightX < 0. {
+				// Early exit, as no part of the line is inside the tile.
+				continue
 			}
 		}
 
@@ -280,6 +326,12 @@ func renderStripsScalar(
 				// (from the viewport's coordinate system perspective). The `min` and `max`
 				// y-clamping logic generalizes nicely, as a pixel edge to the left of the line is
 				// clamped to `ymin`, and a pixel edge to the right is clamped to `ymax`.
+				//
+				// In the special case where a vertical line and pixel edge are at the exact same
+				// x-position (collinear), the line belongs to the pixel on whose _left_ edge it is
+				// situated. The resulting slope calculation for the edge the line is situated on
+				// will be NaN, as `0 * inf` results in NaN. This is true for both the left and
+				// right edge. In both cases, the call to `f32::max` will set this to `ymin`.
 				line_px_left_y := min32(max32(line_top_y+(px_left_x-line_top_x)*y_slope, ymin), ymax)
 				line_px_right_y := min32(max32(line_top_y+(px_right_x-line_top_x)*y_slope, ymin), ymax)
 

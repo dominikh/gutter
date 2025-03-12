@@ -49,65 +49,58 @@ func (v vec2) mul(f float32) vec2 {
 	}
 }
 
-func fill(path iter.Seq[curve.PathElement], affine curve.Affine) iter.Seq[flatLine] {
-	return func(yield func(flatLine) bool) {
-		var start, p0 curve.Point
-		iter := func(yield func(el curve.PathElement) bool) {
-			for el := range path {
-				if !yield(el.Transform(affine)) {
-					return
-				}
-			}
-		}
-		yieldClosePath := func(start, p0 curve.Point) bool {
-			pt0 := vec2{float32(p0.X), float32(p0.Y)}
-			pt1 := vec2{float32(start.X), float32(start.Y)}
-			if pt0 != pt1 {
-				return yield(flatLine{pt0, pt1})
-			}
-			return true
-		}
+func fill(path iter.Seq[curve.PathElement], affine curve.Affine, lineBuf []flatLine) []flatLine {
+	lineBuf = lineBuf[:0]
 
-		closed := true
-		for el := range curve.Flatten(iter, flattenTolerance) {
-			switch el.Kind {
-			case curve.MoveToKind:
-				if !closed && p0 != start {
-					if !yieldClosePath(start, p0) {
-						return
-					}
-				}
-				closed = false
-				start = el.P0
-				p0 = el.P0
-			case curve.LineToKind:
-				p := el.P0
-				pt0 := vec2{float32(p0.X), float32(p0.Y)}
-				pt1 := vec2{float32(p.X), float32(p.Y)}
-				if !yield(flatLine{pt0, pt1}) {
-					return
-				}
-				p0 = p
-			case curve.ClosePathKind:
-				closed = true
-				if !yieldClosePath(start, p0) {
-					return
-				}
-
-			default:
-				panic(fmt.Sprintf("unreachable: %v", el.Kind))
-			}
-		}
-
-		if !closed {
-			if !yieldClosePath(start, p0) {
+	var start, p0 curve.Point
+	iter := func(yield func(el curve.PathElement) bool) {
+		for el := range path {
+			if !yield(el.Transform(affine)) {
 				return
 			}
 		}
 	}
+	closePath := func(start, p0 curve.Point) {
+		pt0 := vec2{float32(p0.X), float32(p0.Y)}
+		pt1 := vec2{float32(start.X), float32(start.Y)}
+		if pt0 != pt1 {
+			lineBuf = append(lineBuf, flatLine{pt0, pt1})
+		}
+	}
+
+	closed := true
+	for el := range curve.Flatten(iter, flattenTolerance) {
+		switch el.Kind {
+		case curve.MoveToKind:
+			if !closed && p0 != start {
+				closePath(start, p0)
+			}
+			closed = false
+			start = el.P0
+			p0 = el.P0
+		case curve.LineToKind:
+			p := el.P0
+			pt0 := vec2{float32(p0.X), float32(p0.Y)}
+			pt1 := vec2{float32(p.X), float32(p.Y)}
+			lineBuf = append(lineBuf, flatLine{pt0, pt1})
+			p0 = p
+		case curve.ClosePathKind:
+			closed = true
+			closePath(start, p0)
+
+		default:
+			panic(fmt.Sprintf("unreachable: %v", el.Kind))
+		}
+	}
+
+	if !closed {
+		closePath(start, p0)
+	}
+
+	return lineBuf
 }
 
-func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.Affine) iter.Seq[flatLine] {
+func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.Affine, lineBuf []flatLine) []flatLine {
 	iter := func(yield func(el curve.PathElement) bool) {
 		for el := range path {
 			if !yield(el.Transform(affine)) {
@@ -116,5 +109,5 @@ func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.A
 		}
 	}
 	stroked := curve.StrokePath(iter, style, curve.StrokeOpts{}, flattenTolerance)
-	return fill(slices.Values(stroked), curve.Identity)
+	return fill(slices.Values(stroked), curve.Identity, lineBuf)
 }

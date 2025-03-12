@@ -33,6 +33,6 @@ func satConvI32(x float32) int32 {
 	}
 }
 
-func divCeil[T int | uint32](a, b T) T {
+func divCeil[T int | uint16 | uint32](a, b T) T {
 	return (a + b - 1) / b
 }
