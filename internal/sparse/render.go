@@ -30,14 +30,14 @@ type gfxState struct {
 
 type clip struct {
 	// The intersected bounding box after clip
-	bbox [4]int
+	bbox [4]uint16
 	// The rendered path in sparse strip representation
 	strips []strip
 }
 
 type CsRenderCtx struct {
-	width  int
-	height int
+	width  uint16
+	height uint16
 	// [y][x]wideTile
 	tiles [][]wideTile
 	// [sparse column][y]uint8
@@ -52,7 +52,7 @@ type CsRenderCtx struct {
 	lineBuf  []flatLine
 }
 
-func NewCsRenderCtx(width, height int) *CsRenderCtx {
+func NewCsRenderCtx(width, height uint16) *CsRenderCtx {
 	widthTiles := divCeil(width, wideTileWidth)
 	heightTiles := divCeil(height, stripHeight)
 	tiles := make([][]wideTile, heightTiles)
@@ -90,7 +90,7 @@ func (ctx *CsRenderCtx) finish() {
 	ctx.popClips()
 }
 
-func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap []Color) {
+func (ctx *CsRenderCtx) RenderToPixmap(width, height uint16, pixmap []Color) {
 	ctx.finish()
 	fine := newFine(width, height, pixmap)
 	for y, row := range ctx.tiles {
@@ -113,7 +113,7 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height int, pixmap []Color) {
 			if len(fine.layers) != 1 {
 				panic("internal error: left with more than one layer")
 			}
-			fine.pack(x, y)
+			fine.pack(uint16(x), uint16(y))
 		}
 	}
 	if false {
@@ -139,53 +139,40 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 	for i := range len(ctx.stripBuf) - 1 {
 		strip := &ctx.stripBuf[i]
 
-		if int(strip.x) >= ctx.width {
+		if strip.x >= ctx.width {
 			// Don't render strips that are outside the viewport.
 			continue
 		}
-		if int(strip.y) >= ctx.height {
-			// Since strips are sorted by location, any subsequent strips will also be
-			// outside the viewport, so we can abort entirely.
-			break
-		}
 
 		nextStrip := &ctx.stripBuf[i+1]
-		// Currently, strips can also start at a negative x position, since we don't
-		// support viewport culling yet. However, when generating the commands
-		// we only want to emit strips >= 0, so we calculate the adjustment
-		// and then only include the alpha indices for columns where x >= 0.
-		var x0Adjustment uint32
-		if strip.x < 0 {
-			x0Adjustment = uint32(-strip.x)
-		}
-		x0 := uint32(strip.x + int32(x0Adjustment))
+		x0 := strip.x
 		stripY := strip.stripY()
-		if int(stripY) < bbox[1] {
+		if stripY < bbox[1] {
 			continue
 		}
-		if int(stripY) >= bbox[3] {
+		if stripY >= bbox[3] {
 			break
 		}
-		col := strip.col + x0Adjustment
+		col := strip.col
 		// Can potentially be 0, if the next strip's x values is also < 0.
-		stripWidth := nextStrip.col - col
-		if stripWidth > nextStrip.col {
-			stripWidth = 0
+		var stripWidth uint16
+		if v := nextStrip.col - col; v <= nextStrip.col {
+			stripWidth = uint16(v)
 		}
 		x1 := x0 + stripWidth
-		xtile0 := max(int(x0)/wideTileWidth, bbox[0])
+		xtile0 := max(x0/wideTileWidth, bbox[0])
 		// TODO: we are limiting xtile1 to widthTiles because strips aren't
 		// being clipped to the viewport yet. Evaluate removing this once we
 		// clip higher up the stack.
-		xtile1 := min(divCeil(int(x1), wideTileWidth), widthTiles, bbox[2])
+		xtile1 := min(divCeil(x1, wideTileWidth), widthTiles, bbox[2])
 		x := x0
-		if uint32(bbox[0]*wideTileWidth) > x {
-			col += uint32(bbox[0]*wideTileWidth) - x
-			x = uint32(bbox[0] * wideTileWidth)
+		if bbox[0]*wideTileWidth > x {
+			col += uint32(bbox[0]*wideTileWidth - x)
+			x = bbox[0] * wideTileWidth
 		}
 		for xtile := xtile0; xtile < xtile1; xtile++ {
 			xTileRel := x % wideTileWidth
-			lhs := min(x1, uint32((xtile+1)*wideTileWidth))
+			lhs := min(x1, (uint16(xtile+1) * wideTileWidth))
 			if lhs < x {
 				panic(fmt.Sprintf("internal error: %v < %v", lhs, x))
 			}
@@ -198,7 +185,7 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 				color:    color,
 			}
 			x += width
-			col += width
+			col += uint32(width)
 			ctx.tiles[stripY][xtile].strip(cmd)
 		}
 
@@ -215,12 +202,12 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 		if activeFill && stripY == nextStrip.stripY() && nextStrip.x >= 0 {
 			x = x1
 			uproundedWidth := divCeil(ctx.width, wideTileWidth) * wideTileWidth
-			x2 := min(uint32(nextStrip.x), uint32(uproundedWidth))
-			fxt0 := max(int(x1)/wideTileWidth, bbox[0])
-			fxt1 := min(divCeil(int(x2), wideTileWidth), widthTiles, bbox[2])
+			x2 := min(nextStrip.x, uproundedWidth)
+			fxt0 := max(x1/wideTileWidth, bbox[0])
+			fxt1 := min(divCeil(x2, wideTileWidth), widthTiles, bbox[2])
 			for xtile := fxt0; xtile < fxt1; xtile++ {
 				xTileRel := x % wideTileWidth
-				width := min(x2, uint32((xtile+1)*wideTileWidth)) - x
+				width := min(x2, (xtile+1)*wideTileWidth) - x
 				x += width
 				ctx.tiles[stripY][xtile].fill(xTileRel, width, color)
 			}
@@ -228,13 +215,13 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 	}
 }
 
-func (ctx *CsRenderCtx) bbox() [4]int {
+func (ctx *CsRenderCtx) bbox() [4]uint16 {
 	if len(ctx.clipStack) > 0 {
 		return ctx.clipStack[len(ctx.clipStack)-1].bbox
 	} else {
 		widthTiles := divCeil(ctx.width, wideTileWidth)
 		heightTiles := divCeil(ctx.height, stripHeight)
-		return [4]int{
+		return [4]uint16{
 			0,
 			0,
 			widthTiles,
@@ -263,7 +250,7 @@ func (ctx *CsRenderCtx) popClip() {
 	popPending := false
 	for i := range len(strips) - 1 {
 		strip := &strips[i]
-		y := int(strip.stripY())
+		y := strip.stripY()
 		if y < tileY {
 			continue
 		}
@@ -282,7 +269,7 @@ func (ctx *CsRenderCtx) popClip() {
 		if tileY == clipBbox[3] {
 			break
 		}
-		x0 := int(strip.x)
+		x0 := strip.x
 		xClamped := min(x0/wideTileWidth, clipBbox[2])
 		if tileX < xClamped {
 			if popPending {
@@ -300,14 +287,14 @@ func (ctx *CsRenderCtx) popClip() {
 			tileX = xClamped
 		}
 		nextStrip := &strips[i+1]
-		stripWidth := int(nextStrip.col - strip.col)
+		stripWidth := uint16(nextStrip.col - strip.col)
 		x1 := x0 + stripWidth
 		xtile0 := max(x0/wideTileWidth, clipBbox[0])
 		xtile1 := min(divCeil(x1, wideTileWidth), clipBbox[2])
 		x := x0
 		alphaIdx := int(strip.col)
 		if clipBbox[0]*wideTileWidth > x {
-			alphaIdx += clipBbox[0]*wideTileWidth - x
+			alphaIdx += int(clipBbox[0]*wideTileWidth - x)
 			x = clipBbox[0] * wideTileWidth
 		}
 		for xtile := xtile0; xtile < xtile1; xtile++ {
@@ -315,34 +302,34 @@ func (ctx *CsRenderCtx) popClip() {
 				popPending = false
 				ctx.tiles[tileY][tileX].popClip()
 			}
-			xTileRel := uint32(x % wideTileWidth)
+			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
 			cmd := cmd{
 				typ:      cmdClipStrip,
 				x:        xTileRel,
-				width:    uint32(width),
+				width:    width,
 				alphaIdx: alphaIdx,
 			}
 			x += width
-			alphaIdx += width
+			alphaIdx += int(width)
 			ctx.tiles[tileY][xtile].clipStrip(cmd)
 			tileX = xtile
 			popPending = true
 		}
-		if nextStrip.winding != 0 && y == int(nextStrip.stripY()) {
-			x2 := int(nextStrip.x)
+		if nextStrip.winding != 0 && y == nextStrip.stripY() {
+			x2 := nextStrip.x
 			tileX2 := min(x2, (tileX+1)*wideTileWidth)
 			width := tileX2 - x1
 			if width > 0 {
-				xTileRel := uint32(x1 % wideTileWidth)
-				ctx.tiles[tileY][tileX].clipFill(xTileRel, uint32(width))
+				xTileRel := x1 % wideTileWidth
+				ctx.tiles[tileY][tileX].clipFill(xTileRel, width)
 			}
 			if x2 > (tileX+1)*wideTileWidth && x2 < ctx.width {
 				ctx.tiles[tileY][tileX].popClip()
 				width2 := x2 % wideTileWidth
 				tileX = x2 / wideTileWidth
 				if width2 > 0 {
-					ctx.tiles[tileY][tileX].clipFill(0, uint32(width2))
+					ctx.tiles[tileY][tileX].clipFill(0, width2)
 				}
 			}
 		}
@@ -395,25 +382,25 @@ func (ctx *CsRenderCtx) Clip(path iter.Seq[curve.PathElement], fillRule FillRule
 	ctx.renderPathCommon(ctx.lineBuf, fillRule)
 	strips := ctx.stripBuf
 	ctx.stripBuf = nil
-	var pathBbox [4]int
+	var pathBbox [4]uint16
 	if len(strips) > 1 {
-		y0 := int(strips[0].stripY())
-		y1 := int(strips[len(strips)-1].stripY()) + 1
-		x0 := int(strips[0].x) / wideTileWidth
+		y0 := strips[0].stripY()
+		y1 := strips[len(strips)-1].stripY() + 1
+		x0 := strips[0].x / wideTileWidth
 		x1 := x0
 		for i := range len(strips) - 1 {
 			strip := &strips[i]
 			nextStrip := &strips[i+1]
-			width := nextStrip.col - strip.col
-			x := int(strip.x)
+			width := uint16(nextStrip.col - strip.col)
+			x := strip.x
 			x0 = min(x0, x/wideTileWidth)
-			x1 = max(x1, divCeil(x+int(width), wideTileWidth))
+			x1 = max(x1, divCeil(x+width, wideTileWidth))
 		}
-		pathBbox = [4]int{x0, y0, x1, y1}
+		pathBbox = [4]uint16{x0, y0, x1, y1}
 	}
 	parentBbox := ctx.bbox()
 	// intersect clip bounding box
-	clipBbox := [4]int{
+	clipBbox := [4]uint16{
 		max(parentBbox[0], pathBbox[0]),
 		max(parentBbox[1], pathBbox[1]),
 		min(parentBbox[2], pathBbox[2]),
@@ -429,7 +416,7 @@ func (ctx *CsRenderCtx) Clip(path iter.Seq[curve.PathElement], fillRule FillRule
 	tileY := clipBbox[1]
 	for i := range len(strips) - 1 {
 		strip := &strips[i]
-		y := int(strip.stripY())
+		y := strip.stripY()
 		if y < tileY {
 			continue
 		}
@@ -443,7 +430,7 @@ func (ctx *CsRenderCtx) Clip(path iter.Seq[curve.PathElement], fillRule FillRule
 		if tileY == clipBbox[3] {
 			break
 		}
-		xPixels := int(strip.x)
+		xPixels := strip.x
 		xClamped := min(xPixels/wideTileWidth, clipBbox[2])
 		if tileX < xClamped {
 			if strip.winding == 0 {
@@ -456,7 +443,7 @@ func (ctx *CsRenderCtx) Clip(path iter.Seq[curve.PathElement], fillRule FillRule
 			tileX = xClamped
 		}
 		nextStrip := &strips[i+1]
-		width := int(nextStrip.col - strip.col)
+		width := uint16(nextStrip.col - strip.col)
 		x1 := min(divCeil(xPixels+width, wideTileWidth), clipBbox[2])
 		if tileX < x1 {
 			for x := tileX; x < x1; x++ {

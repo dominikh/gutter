@@ -19,7 +19,7 @@ const stripHeight = 4
 type strip struct {
 	_ structs.HostLayout
 
-	x       int32
+	x       uint16
 	y       uint16
 	col     uint32
 	winding int32
@@ -107,7 +107,7 @@ func renderStripsScalar(
 			tile_ = tiles[i]
 		} else {
 			tile_ = tile{
-				x: math.MaxInt32,
+				x: math.MaxUint16,
 				y: math.MaxUint16,
 			}
 		}
@@ -159,7 +159,7 @@ func renderStripsScalar(
 				windingDelta = 0
 			}
 
-			if a, b := (prevTile.x+1)*tileWidth-strip_.x, int32(len(alphaBuf))-int32(strip_.col); a != b {
+			if a, b := int((prevTile.x+1)*tileWidth-strip_.x), len(alphaBuf)-int(strip_.col); a != b {
 				panic(fmt.Sprintf("%d != %d", a, b))
 			}
 			stripBuf = append(stripBuf, strip_)
@@ -172,7 +172,7 @@ func renderStripsScalar(
 				// width calculations).
 				if windingDelta != 0 || isSentinel {
 					stripBuf = append(stripBuf, strip{
-						x:       math.MaxInt32,
+						x:       math.MaxUint16,
 						y:       prevTile.y * tileHeight,
 						col:     uint32(len(alphaBuf)),
 						winding: windingDelta,

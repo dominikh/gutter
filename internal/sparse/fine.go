@@ -83,7 +83,7 @@ func (s *fineStats) String() string {
 
 type fine struct {
 	// the width and height of the output image, in pixels
-	width, height int
+	width, height uint16
 	outBuf        []Color
 	layers        []fineLayer
 
@@ -101,7 +101,7 @@ type fineLayer struct {
 	complex bool
 }
 
-func newFine(width, height int, out []Color) *fine {
+func newFine(width, height uint16, out []Color) *fine {
 	f := &fine{
 		width:  width,
 		height: height,
@@ -133,7 +133,7 @@ func (l *fineLayer) clear(c Color) {
 }
 
 // pack writes the tile at (tileX, tileY) to the output buffer.
-func (f *fine) pack(tileX, tileY int) {
+func (f *fine) pack(tileX, tileY uint16) {
 	l := f.topLayer()
 	if l.complex {
 		f.packComplex(l, tileX, tileY)
@@ -142,15 +142,15 @@ func (f *fine) pack(tileX, tileY int) {
 	}
 }
 
-func (f *fine) packSimple(l *fineLayer, tileX, tileY int) {
+func (f *fine) packSimple(l *fineLayer, tileX, tileY uint16) {
 	f.stats.simplePacks++
 	outWidth := max(0, min(wideTileWidth, f.width-tileX*wideTileWidth))
 	outHeight := max(0, min(stripHeight, f.height-tileY*stripHeight))
 
-	baseIdx := (tileY*stripHeight*f.width + tileX*wideTileWidth)
+	baseIdx := (int(tileY*stripHeight)*int(f.width) + int(tileX*wideTileWidth))
 	out := f.outBuf[baseIdx:]
 	for range outHeight {
-		row := out[:min(len(out), outWidth)]
+		row := out[:min(len(out), int(outWidth))]
 
 		// We're writing the same color to every pixel, so even though
 		// memsetColumns operates on columns, we can just pretend that a
@@ -164,18 +164,18 @@ func (f *fine) packSimple(l *fineLayer, tileX, tileY int) {
 	}
 }
 
-func (f *fine) packComplex(l *fineLayer, tileX, tileY int) {
+func (f *fine) packComplex(l *fineLayer, tileX, tileY uint16) {
 	// OPT add SIMD implementation
 
 	f.stats.complexPacks++
 	outWidth := max(0, min(wideTileWidth, f.width-tileX*wideTileWidth))
 	outHeight := max(0, min(stripHeight, f.height-tileY*stripHeight))
 
-	baseIdx := (tileY*stripHeight*f.width + tileX*wideTileWidth)
+	baseIdx := (int(tileY*stripHeight)*int(f.width) + int(tileX*wideTileWidth))
 	out := f.outBuf[baseIdx:]
 	scratch := l.scratch[:outWidth]
 	for y := range outHeight {
-		row := out[:min(len(out), outWidth)]
+		row := out[:min(len(out), int(outWidth))]
 		for x := range row {
 			row[x] = scratch[x][y]
 		}

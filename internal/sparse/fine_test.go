@@ -100,8 +100,8 @@ func Benchmark_memsetColumnsNative(b *testing.B) {
 func benchmarkFinePack(b *testing.B, complex bool) {
 	tests := []struct {
 		label  string
-		width  int
-		height int
+		width  uint16
+		height uint16
 	}{
 		// 256*4 uses 16 KiB, which fits into L1 on somewhat modern CPUs.
 		{"L1", 256, 4},
@@ -122,7 +122,7 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 				b.Fatalf("height %d isn't multiple of stripHeight", tt.height)
 			}
 
-			pixmap := make([]Color, tt.width*tt.height)
+			pixmap := make([]Color, int(tt.width)*int(tt.height))
 			f := newFine(tt.width, tt.height, pixmap)
 			clear(pixmap)
 			if complex {
@@ -138,7 +138,7 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 				}
 			}
 
-			px := float64(tt.width * tt.height * b.N)
+			px := float64(int(tt.width) * int(tt.height) * b.N)
 			d := float64(b.Elapsed()) / px
 			bytes := px * 4 * 4
 			r := bytes / float64(b.Elapsed().Seconds())

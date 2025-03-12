@@ -30,8 +30,8 @@ const (
 
 type cmd struct {
 	alphaIdx int        // strip, clipStrip
-	x        uint32     // fill, strip, clipFill, clipStrip
-	width    uint32     // fill, strip, clipFill, clipStrip
+	x        uint16     // fill, strip, clipFill, clipStrip
+	width    uint16     // fill, strip, clipFill, clipStrip
 	color    [4]float32 // fill, strip
 	typ      cmdType
 }
@@ -58,7 +58,7 @@ func (cmd *cmd) String() string {
 	}
 }
 
-func (wt *wideTile) fill(x, width uint32, c [4]float32) {
+func (wt *wideTile) fill(x, width uint16, c [4]float32) {
 	if wt.isZeroClip() {
 		return
 	}
@@ -129,7 +129,7 @@ func (wt *wideTile) clipStrip(c cmd) {
 	wt.cmds = append(wt.cmds, c)
 }
 
-func (wt *wideTile) clipFill(x, width uint32) {
+func (wt *wideTile) clipFill(x, width uint16) {
 	if wt.isZeroClip() {
 		return
 	}

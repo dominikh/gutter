@@ -15,7 +15,7 @@ const (
 )
 
 type tile struct {
-	x int32
+	x uint16
 	y uint16
 	// The index of the line this tile belongs to in the line buffer.
 	lineIdx uint32
@@ -80,7 +80,7 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 				y := float32(yIdx)
 
 				tile_ := tile{
-					x:       int32(x),
+					x:       x,
 					y:       yIdx,
 					lineIdx: uint32(lineIdx),
 					winding: y >= lineTopY,
@@ -119,7 +119,7 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 
 				for xIdx := satConv[uint16](lineRowLeftX); xIdx <= min(satConv[uint16](lineRowRightX), tileColumns-1); xIdx++ {
 					tile_ := tile{
-						x:       int32(xIdx),
+						x:       xIdx,
 						y:       yIdx,
 						lineIdx: uint32(lineIdx),
 						winding: y >= lineTopY && xIdx == windingX,
