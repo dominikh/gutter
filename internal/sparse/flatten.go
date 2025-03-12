@@ -28,27 +28,6 @@ func (v vec2) String() string {
 	return fmt.Sprintf("(%g, %g)", v.x, v.y)
 }
 
-func (v vec2) add(o vec2) vec2 {
-	return vec2{
-		x: v.x + o.x,
-		y: v.y + o.y,
-	}
-}
-
-func (v vec2) sub(o vec2) vec2 {
-	return vec2{
-		x: v.x - o.x,
-		y: v.y - o.y,
-	}
-}
-
-func (v vec2) mul(f float32) vec2 {
-	return vec2{
-		x: v.x * f,
-		y: v.y * f,
-	}
-}
-
 func fill(path iter.Seq[curve.PathElement], affine curve.Affine, lineBuf []flatLine) []flatLine {
 	lineBuf = lineBuf[:0]
 

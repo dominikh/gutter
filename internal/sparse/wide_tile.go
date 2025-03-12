@@ -87,10 +87,6 @@ func (wt *wideTile) strip(c cmd) {
 	wt.cmds = append(wt.cmds, c)
 }
 
-func (wt *wideTile) push(cmd cmd) {
-	wt.cmds = append(wt.cmds, cmd)
-}
-
 func (wt *wideTile) pushClip() {
 	if wt.isZeroClip() {
 		return

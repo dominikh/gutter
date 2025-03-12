@@ -6,10 +6,6 @@ package sparse
 
 import "math"
 
-func round32(f float32) float32 {
-	return float32(math.Floor(float64(f)))
-}
-
 func floor32(f float32) float32 {
 	return float32(math.Floor(float64(f)))
 }
@@ -33,9 +29,4 @@ func sign32(f float32) float32 {
 	} else {
 		return 1
 	}
-}
-
-func copysign32(f, sign float32) float32 {
-	const signBit = 1 << 31
-	return math.Float32frombits(math.Float32bits(f)&^signBit | math.Float32bits(sign)&signBit)
 }
