@@ -154,11 +154,11 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 		// support viewport culling yet. However, when generating the commands
 		// we only want to emit strips >= 0, so we calculate the adjustment
 		// and then only include the alpha indices for columns where x >= 0.
-		var x0_adjustment uint32
+		var x0Adjustment uint32
 		if strip.x < 0 {
-			x0_adjustment = uint32(-strip.x)
+			x0Adjustment = uint32(-strip.x)
 		}
-		x0 := uint32(strip.x + int32(x0_adjustment))
+		x0 := uint32(strip.x + int32(x0Adjustment))
 		stripY := strip.stripY()
 		if int(stripY) < bbox[1] {
 			continue
@@ -166,7 +166,7 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 		if int(stripY) >= bbox[3] {
 			break
 		}
-		col := strip.col + x0_adjustment
+		col := strip.col + x0Adjustment
 		// Can potentially be 0, if the next strip's x values is also < 0.
 		stripWidth := nextStrip.col - col
 		if stripWidth > nextStrip.col {

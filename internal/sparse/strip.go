@@ -115,10 +115,10 @@ func renderStripsScalar(
 		line := lines[tile_.lineIdx]
 		tileLeftX := float32(tile_.x) * tileWidth
 		tileTopY := float32(tile_.y) * tileHeight
-		p0_x := line.p0.x - tileLeftX
-		p0_y := line.p0.y - tileTopY
-		p1_x := line.p1.x - tileLeftX
-		p1_y := line.p1.y - tileTopY
+		p0x := line.p0.x - tileLeftX
+		p0y := line.p0.y - tileTopY
+		p1x := line.p1.x - tileLeftX
+		p1y := line.p1.y - tileTopY
 
 		// Push out the winding as an alpha mask when we move to the next location (i.e., a tile
 		// without the same location).
@@ -204,13 +204,13 @@ func renderStripsScalar(
 
 		// TODO: horizontal geometry has no impact on winding. This branch will be removed when
 		// horizontal geometry is culled at the tile-generation stage.
-		if p0_y == p1_y {
+		if p0y == p1y {
 			continue
 		}
 
 		// Lines moving upwards (in a y-down coordinate system) add to winding; lines moving
 		// downwards subtract from winding.
-		sign := sign32(p0_y - p1_y)
+		sign := sign32(p0y - p1y)
 
 		// Calculate winding / pixel area coverage.
 		//
@@ -242,26 +242,26 @@ func renderStripsScalar(
 		//     *
 		//    *
 
-		var line_top_y, line_top_x, line_bottom_y, line_bottom_x float32
-		if p0_y < p1_y {
-			line_top_y, line_top_x, line_bottom_y, line_bottom_x = p0_y, p0_x, p1_y, p1_x
+		var lineTopY, lineTopX, lineBottomY, lineBottomX float32
+		if p0y < p1y {
+			lineTopY, lineTopX, lineBottomY, lineBottomX = p0y, p0x, p1y, p1x
 		} else {
-			line_top_y, line_top_x, line_bottom_y, line_bottom_x = p1_y, p1_x, p0_y, p0_x
+			lineTopY, lineTopX, lineBottomY, lineBottomX = p1y, p1x, p0y, p0x
 		}
 
 		var lineLeftX, lineLeftY, lineRightX float32
-		if p0_x < p1_x {
-			lineLeftX = p0_x
-			lineLeftY = p0_y
-			lineRightX = p1_x
+		if p0x < p1x {
+			lineLeftX = p0x
+			lineLeftY = p0y
+			lineRightX = p1x
 		} else {
-			lineLeftX = p1_x
-			lineLeftY = p1_y
-			lineRightX = p0_x
+			lineLeftX = p1x
+			lineLeftY = p1y
+			lineRightX = p0x
 		}
 
-		y_slope := (line_bottom_y - line_top_y) / (line_bottom_x - line_top_x)
-		x_slope := 1.0 / y_slope
+		ySlope := (lineBottomY - lineTopY) / (lineBottomX - lineTopX)
+		xSlope := 1.0 / ySlope
 
 		if tile_.winding {
 			windingDelta += int32(sign)
@@ -273,47 +273,47 @@ func renderStripsScalar(
 		if tile_.x == 0 && lineLeftX < 0.0 {
 			var ymin, ymax float32
 			if line.p0.x == line.p1.x {
-				ymin = line_top_y
-				ymax = line_bottom_y
+				ymin = lineTopY
+				ymax = lineBottomY
 			} else {
-				lineViewportLeftY := min32(max32(line_top_y-line_top_x*y_slope, line_top_y), line_bottom_y)
+				lineViewportLeftY := min32(max32(lineTopY-lineTopX*ySlope, lineTopY), lineBottomY)
 
 				ymin = min32(lineLeftY, lineViewportLeftY)
 				ymax = max32(lineLeftY, lineViewportLeftY)
 			}
 
 			for yIdx := range tileHeight {
-				px_top_y := float32(yIdx)
-				px_bottom_y := 1.0 + float32(yIdx)
+				pxTopY := float32(yIdx)
+				pxBottomY := 1.0 + float32(yIdx)
 
-				ymin := max32(ymin, px_top_y)
-				ymax := min32(ymax, px_bottom_y)
+				ymin := max32(ymin, pxTopY)
+				ymax := min32(ymax, pxBottomY)
 
 				h := max32(ymax-ymin, 0)
 				accumulatedWinding[yIdx] += sign * h
 
-				for xIdx := range tileWidth { // XXX
+				for xIdx := range tileWidth {
 					locationWinding[xIdx][yIdx] += sign * h
 				}
 			}
 
-			if lineRightX < 0. {
+			if lineRightX < 0.0 {
 				// Early exit, as no part of the line is inside the tile.
 				continue
 			}
 		}
 
-		for y_idx := range tileHeight {
-			px_top_y := float32(y_idx)
-			px_bottom_y := 1.0 + float32(y_idx)
+		for yIdx := range tileHeight {
+			pxTopY := float32(yIdx)
+			pxBottomY := 1.0 + float32(yIdx)
 
-			ymin := max32(line_top_y, px_top_y)
-			ymax := min32(line_bottom_y, px_bottom_y)
+			ymin := max32(lineTopY, pxTopY)
+			ymax := min32(lineBottomY, pxBottomY)
 
 			acc := float32(0)
-			for x_idx := range tileWidth {
-				px_left_x := float32(x_idx)
-				px_right_x := 1.0 + float32(x_idx)
+			for xIdx := range tileWidth {
+				pxLeftX := float32(xIdx)
+				pxRightX := 1.0 + float32(xIdx)
 
 				// The y-coordinate of the intersections between line and the pixel's left and
 				// right edges respectively.
@@ -332,21 +332,21 @@ func renderStripsScalar(
 				// situated. The resulting slope calculation for the edge the line is situated on
 				// will be NaN, as `0 * inf` results in NaN. This is true for both the left and
 				// right edge. In both cases, the call to `f32::max` will set this to `ymin`.
-				line_px_left_y := min32(max32(line_top_y+(px_left_x-line_top_x)*y_slope, ymin), ymax)
-				line_px_right_y := min32(max32(line_top_y+(px_right_x-line_top_x)*y_slope, ymin), ymax)
+				linePxLeftY := min32(max32(lineTopY+(pxLeftX-lineTopX)*ySlope, ymin), ymax)
+				linePxRightY := min32(max32(lineTopY+(pxRightX-lineTopX)*ySlope, ymin), ymax)
 
 				// `x_slope` is always finite, as horizontal geometry is elided.
-				line_px_left_yx := line_top_x + (line_px_left_y-line_top_y)*x_slope
-				line_px_right_yx := line_top_x + (line_px_right_y-line_top_y)*x_slope
-				h := abs32(line_px_right_y - line_px_left_y)
+				linePxLeftYX := lineTopX + (linePxLeftY-lineTopY)*xSlope
+				linePxRightYX := lineTopX + (linePxRightY-lineTopY)*xSlope
+				h := abs32(linePxRightY - linePxLeftY)
 
 				// The trapezoidal area enclosed between the line and the right edge of the pixel
 				// square.
-				area := 0.5 * h * (2.*px_right_x - line_px_right_yx - line_px_left_yx)
-				locationWinding[x_idx][y_idx] += acc + sign*area
+				area := 0.5 * h * (2.0*pxRightX - linePxRightYX - linePxLeftYX)
+				locationWinding[xIdx][yIdx] += acc + sign*area
 				acc += sign * h
 			}
-			accumulatedWinding[y_idx] += acc
+			accumulatedWinding[yIdx] += acc
 		}
 	}
 
