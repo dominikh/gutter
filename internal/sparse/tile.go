@@ -17,13 +17,20 @@ const (
 type tile struct {
 	x uint16
 	y uint16
-	// The index of the line this tile belongs to in the line buffer.
-	lineIdx uint32
-	// Whether the line crosses the top edge of the tile.
+
+	// The index is the unsigned number in the 31 least significant bits of this value.
 	//
-	// Lines making this crossing increment or decrement the coarse tile
-	// winding, depending on the line direction.
-	winding bool
+	// The last bit is 1 if and only if the line crosses the tile's top edge. Lines making this
+	// crossing increment or decrement the coarse tile winding, depending on the line direction.
+	packed_winding_line_idx uint32
+}
+
+func newTile(x, y uint16, lineIdx uint32, winding bool) tile {
+	packed := lineIdx
+	if winding {
+		packed |= 1 << 31
+	}
+	return tile{x, y, packed}
 }
 
 // Populate the tiles' container with a buffer of lines.
@@ -77,15 +84,7 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 
 			x := satConv[uint16](lineLeftX)
 			for yIdx := yTopTiles; yIdx < yBottomTiles; yIdx++ {
-				y := float32(yIdx)
-
-				tile_ := tile{
-					x:       x,
-					y:       yIdx,
-					lineIdx: uint32(lineIdx),
-					winding: y >= lineTopY,
-				}
-				tileBuf = append(tileBuf, tile_)
+				tileBuf = append(tileBuf, newTile(x, yIdx, uint32(lineIdx), float32(yIdx) >= lineTopY))
 			}
 		} else {
 			xSlope := (p1x - p0x) / (p1y - p0y)
@@ -118,13 +117,7 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 				}
 
 				for xIdx := satConv[uint16](lineRowLeftX); xIdx <= min(satConv[uint16](lineRowRightX), tileColumns-1); xIdx++ {
-					tile_ := tile{
-						x:       xIdx,
-						y:       yIdx,
-						lineIdx: uint32(lineIdx),
-						winding: y >= lineTopY && xIdx == windingX,
-					}
-					tileBuf = append(tileBuf, tile_)
+					tileBuf = append(tileBuf, newTile(xIdx, yIdx, uint32(lineIdx), y >= lineTopY && xIdx == windingX))
 				}
 			}
 		}
@@ -134,10 +127,18 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 }
 
 func (t *tile) cmp(b *tile) int {
-	if n := cmp.Compare(t.y, b.y); n != 0 {
-		return n
-	}
-	return cmp.Compare(t.x, b.x)
+	return cmp.Compare(
+		uint32(t.y)<<16|uint32(t.x),
+		uint32(b.y)<<16|uint32(b.x),
+	)
+}
+
+func (t *tile) winding() bool {
+	return t.packed_winding_line_idx&(1<<31) != 0
+}
+
+func (t *tile) lineIdx() uint32 {
+	return t.packed_winding_line_idx & (1<<31 - 1)
 }
 
 func (t *tile) sameLoc(o *tile) bool {

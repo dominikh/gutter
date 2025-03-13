@@ -112,7 +112,7 @@ func renderStripsScalar(
 			}
 		}
 
-		line := lines[tile_.lineIdx]
+		line := lines[tile_.lineIdx()]
 		tileLeftX := float32(tile_.x) * tileWidth
 		tileTopY := float32(tile_.y) * tileHeight
 		p0x := line.p0.x - tileLeftX
@@ -263,7 +263,7 @@ func renderStripsScalar(
 		ySlope := (lineBottomY - lineTopY) / (lineBottomX - lineTopX)
 		xSlope := 1.0 / ySlope
 
-		if tile_.winding {
+		if tile_.winding() {
 			windingDelta += int32(sign)
 		}
 
