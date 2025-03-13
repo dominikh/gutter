@@ -152,10 +152,6 @@ func renderStripsScalar(
 
 		// Push out the strip if we're moving to a next strip.
 		if !prevTile.sameLoc(tile_) && !prevTile.prevLoc(tile_) {
-			if !prevTile.sameRow(tile_) {
-				windingDelta = 0
-			}
-
 			if a, b := int((prevTile.x()+1)*tileWidth-strip_.x), len(alphaBuf)-int(strip_.col); a != b {
 				panic(fmt.Sprintf("%d != %d", a, b))
 			}
