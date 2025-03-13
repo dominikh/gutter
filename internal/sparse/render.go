@@ -123,7 +123,7 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height uint16, pixmap []Color) {
 
 func (ctx *CsRenderCtx) renderPathCommon(lineBuf []flatLine, fillRule FillRule) {
 	ctx.tileBuf = makeTiles(lineBuf, ctx.tileBuf, uint16(ctx.width), uint16(ctx.height))
-	slices.SortFunc(ctx.tileBuf, func(a, b tile) int { return a.cmp(&b) })
+	slices.SortFunc(ctx.tileBuf, tile.cmp)
 	t := time.Now()
 	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.lineBuf, ctx.stripBuf, ctx.alphas)
 	if false {

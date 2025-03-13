@@ -95,8 +95,8 @@ func renderStripsScalar(
 	var accumulatedWinding [tileHeight]float32
 
 	strip_ := strip{
-		x:       prevTile.x * tileWidth,
-		y:       prevTile.y * tileHeight,
+		x:       prevTile.x() * tileWidth,
+		y:       prevTile.y() * tileHeight,
 		col:     uint32(len(alphaBuf)),
 		winding: 0,
 	}
@@ -106,15 +106,12 @@ func renderStripsScalar(
 		if i < len(tiles) {
 			tile_ = tiles[i]
 		} else {
-			tile_ = tile{
-				x: math.MaxUint16,
-				y: math.MaxUint16,
-			}
+			tile_ = newTile(math.MaxUint16, math.MaxUint16, 0, false)
 		}
 
 		line := lines[tile_.lineIdx()]
-		tileLeftX := float32(tile_.x) * tileWidth
-		tileTopY := float32(tile_.y) * tileHeight
+		tileLeftX := float32(tile_.x()) * tileWidth
+		tileTopY := float32(tile_.y()) * tileHeight
 		p0x := line.p0.x - tileLeftX
 		p0y := line.p0.y - tileTopY
 		p1x := line.p1.x - tileLeftX
@@ -122,7 +119,7 @@ func renderStripsScalar(
 
 		// Push out the winding as an alpha mask when we move to the next location (i.e., a tile
 		// without the same location).
-		if !prevTile.sameLoc(&tile_) {
+		if !prevTile.sameLoc(tile_) {
 			switch fillRule {
 			case NonZero:
 				for x := range tileWidth {
@@ -154,18 +151,18 @@ func renderStripsScalar(
 		}
 
 		// Push out the strip if we're moving to a next strip.
-		if !prevTile.sameLoc(&tile_) && !prevTile.prevLoc(&tile_) {
-			if !prevTile.sameRow(&tile_) {
+		if !prevTile.sameLoc(tile_) && !prevTile.prevLoc(tile_) {
+			if !prevTile.sameRow(tile_) {
 				windingDelta = 0
 			}
 
-			if a, b := int((prevTile.x+1)*tileWidth-strip_.x), len(alphaBuf)-int(strip_.col); a != b {
+			if a, b := int((prevTile.x()+1)*tileWidth-strip_.x), len(alphaBuf)-int(strip_.col); a != b {
 				panic(fmt.Sprintf("%d != %d", a, b))
 			}
 			stripBuf = append(stripBuf, strip_)
 
 			isSentinel := i == len(tiles)
-			if !prevTile.sameRow(&tile_) {
+			if !prevTile.sameRow(tile_) {
 				// Emit a final strip in the row if there is non-zero winding
 				// for the sparse fill, or unconditionally if we've reached the
 				// sentinel tile to end the path (the col field is used for
@@ -173,7 +170,7 @@ func renderStripsScalar(
 				if windingDelta != 0 || isSentinel {
 					stripBuf = append(stripBuf, strip{
 						x:       math.MaxUint16,
-						y:       prevTile.y * tileHeight,
+						y:       prevTile.y() * tileHeight,
 						col:     uint32(len(alphaBuf)),
 						winding: windingDelta,
 					})
@@ -188,8 +185,8 @@ func renderStripsScalar(
 			}
 
 			strip_ = strip{
-				x:       tile_.x * tileWidth,
-				y:       tile_.y * tileHeight,
+				x:       tile_.x() * tileWidth,
+				y:       tile_.y() * tileHeight,
 				col:     uint32(len(alphaBuf)),
 				winding: windingDelta,
 			}
@@ -270,7 +267,7 @@ func renderStripsScalar(
 		// TODO: this should be removed when out-of-viewport tiles are culled at the
 		// tile-generation stage. That requires calculating and forwarding winding to strip
 		// generation.
-		if tile_.x == 0 && lineLeftX < 0.0 {
+		if tile_.x() == 0 && lineLeftX < 0.0 {
 			var ymin, ymax float32
 			if line.p0.x == line.p1.x {
 				ymin = lineTopY

@@ -15,22 +15,27 @@ const (
 )
 
 type tile struct {
-	x uint16
-	y uint16
-
-	// The index is the unsigned number in the 31 least significant bits of this value.
+	// The packed tile data.
 	//
-	// The last bit is 1 if and only if the line crosses the tile's top edge. Lines making this
-	// crossing increment or decrement the coarse tile winding, depending on the line direction.
-	packed_winding_line_idx uint32
+	// The layout is as follows, with the bit indices from least to most significant.
+	//
+	// [ 0, 31): The 31-bit index of the line this tile belongs to into the line buffer;
+	// [31, 32): The 1-bit coarse winding of the tile. This is `1` if and only if the lines
+	// crosses the tile's top edge. Lines making this crossing increment or decrement the coarse
+	// tile winding, depending on the line direction;
+	// [32, 48): The 16-bit x-coordinate; and
+	// [48, 64): The 16-bit y-coordinate.
+	//
+	// Note the byte layout in memory depends on the endianness of the compilation target.
+	data uint64
 }
 
 func newTile(x, y uint16, lineIdx uint32, winding bool) tile {
-	packed := lineIdx
+	var windingb uint64
 	if winding {
-		packed |= 1 << 31
+		windingb = 1
 	}
-	return tile{x, y, packed}
+	return tile{uint64(y)<<48 | uint64(x)<<32 | windingb<<31 | uint64(lineIdx)}
 }
 
 // Populate the tiles' container with a buffer of lines.
@@ -126,29 +131,34 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 	return tileBuf
 }
 
-func (t *tile) cmp(b *tile) int {
-	return cmp.Compare(
-		uint32(t.y)<<16|uint32(t.x),
-		uint32(b.y)<<16|uint32(b.x),
-	)
+func (t tile) x() uint16 {
+	return uint16(t.data >> 32)
+}
+
+func (t tile) y() uint16 {
+	return uint16(t.data >> 48)
+}
+
+func (t tile) cmp(b tile) int {
+	return cmp.Compare(t.data, b.data)
 }
 
 func (t *tile) winding() bool {
-	return t.packed_winding_line_idx&(1<<31) != 0
+	return t.data&(1<<31) != 0
 }
 
-func (t *tile) lineIdx() uint32 {
-	return t.packed_winding_line_idx & (1<<31 - 1)
+func (t tile) lineIdx() uint32 {
+	return uint32(t.data & (1<<31 - 1))
 }
 
-func (t *tile) sameLoc(o *tile) bool {
-	return t.sameRow(o) && t.x == o.x
+func (t tile) sameLoc(o tile) bool {
+	return t.sameRow(o) && t.x() == o.x()
 }
 
-func (t *tile) prevLoc(o *tile) bool {
-	return t.sameRow(o) && t.x+1 > t.x && t.x+1 == o.x
+func (t tile) prevLoc(o tile) bool {
+	return t.sameRow(o) && t.x()+1 > t.x() && t.x()+1 == o.x()
 }
 
-func (t *tile) sameRow(o *tile) bool {
-	return t.y == o.y
+func (t tile) sameRow(o tile) bool {
+	return t.y() == o.y()
 }
