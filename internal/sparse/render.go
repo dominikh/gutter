@@ -126,7 +126,9 @@ func (ctx *CsRenderCtx) renderPathCommon(lineBuf []flatLine, fillRule FillRule) 
 	slices.SortFunc(ctx.tileBuf, func(a, b tile) int { return a.cmp(&b) })
 	t := time.Now()
 	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.lineBuf, ctx.stripBuf, ctx.alphas)
-	log.Println("renderPathCommon:", time.Since(t))
+	if false {
+		log.Println("renderPathCommon:", time.Since(t))
+	}
 }
 
 func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color Color) {
