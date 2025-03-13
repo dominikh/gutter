@@ -32,8 +32,8 @@ type fineStats struct {
 	simpleFills                    uint64
 	complexFills                   uint64
 
-	simpleStrips  uint64
-	complexStrips uint64
+	simpleAlphaFills  uint64
+	complexAlphaFills uint64
 
 	nostosSimpleClipFills         uint64
 	nosSimpleClipFills            uint64
@@ -41,7 +41,7 @@ type fineStats struct {
 	tosSimpleTranslucentClipFills uint64
 	complexClipFills              uint64
 
-	clipStrips uint64
+	clipAlphaFills uint64
 
 	materializedLayers uint64
 	materializedPixels uint64
@@ -57,8 +57,8 @@ func (s *fineStats) String() string {
 		fmt.Sprintf("Partial simple fills: %d", s.simpleFills),
 		fmt.Sprintf("Partial complex fills: %d", s.complexFills),
 
-		fmt.Sprintf("Simple strips: %d", s.simpleStrips),
-		fmt.Sprintf("Complex strips: %d", s.complexStrips),
+		fmt.Sprintf("Simple alpha fills: %d", s.simpleAlphaFills),
+		fmt.Sprintf("Complex alpha fills: %d", s.complexAlphaFills),
 
 		fmt.Sprintf("PushClips: %d", s.pushClips),
 		fmt.Sprintf("PopClips: %d", s.popClips),
@@ -69,7 +69,7 @@ func (s *fineStats) String() string {
 		fmt.Sprintf("tos simple translucent clip fills: %d", s.tosSimpleTranslucentClipFills),
 		fmt.Sprintf("Complex clip fills: %d", s.complexClipFills),
 
-		fmt.Sprintf("Clip strips: %d", s.clipStrips),
+		fmt.Sprintf("Clip alpha fills: %d", s.clipAlphaFills),
 
 		fmt.Sprintf("Materialized pixels: %d", s.materializedPixels),
 		fmt.Sprintf("Materialized layers: %d", s.materializedLayers),
@@ -208,9 +208,9 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 	switch cmd.typ {
 	case cmdFill:
 		f.fill(int(cmd.x), int(cmd.width), cmd.color)
-	case cmdStrip:
+	case cmdAlphaFill:
 		aslice := alphas[cmd.alphaIdx:]
-		f.strip(int(cmd.x), int(cmd.width), aslice, cmd.color)
+		f.alphaFill(int(cmd.x), int(cmd.width), aslice, cmd.color)
 	case cmdPushClip:
 		f.stats.pushClips++
 		var scratch *fineScratch
@@ -229,9 +229,9 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 		f.layers = f.layers[:len(f.layers)-1]
 	case cmdClipFill:
 		f.clipFill(int(cmd.x), int(cmd.width))
-	case cmdClipStrip:
+	case cmdClipAlphaFill:
 		aslice := alphas[cmd.alphaIdx:]
-		f.clipStrip(int(cmd.x), int(cmd.width), aslice)
+		f.clipAlphaFill(int(cmd.x), int(cmd.width), aslice)
 	default:
 		panic(fmt.Sprintf("unreachable: %T", cmd))
 	}
@@ -355,10 +355,10 @@ func (f *fine) clipFill(x, width int) {
 	}
 }
 
-func (f *fine) clipStrip(x, width int, alphas [][stripHeight]uint8) {
+func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8) {
 	// OPT implement SIMD versions
 
-	f.stats.clipStrips++
+	f.stats.clipAlphaFills++
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
 
@@ -397,7 +397,7 @@ func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
 	}
 }
 
-func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
+func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, color Color) {
 	// OPT implement SIMD versions
 
 	if len(alphas) < width {
@@ -413,7 +413,7 @@ func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
 	dst := l.scratch[x : x+width]
 
 	if l.complex {
-		f.stats.complexStrips++
+		f.stats.complexAlphaFills++
 		for x := range dst {
 			col := &dst[x]
 			a := &alphas[x]
@@ -427,7 +427,7 @@ func (f *fine) strip(x, width int, alphas [][stripHeight]uint8, color Color) {
 			}
 		}
 	} else {
-		f.stats.simpleStrips++
+		f.stats.simpleAlphaFills++
 		bg := l.singleColor
 		f.materialize(l, 0, x)
 		f.materialize(l, x+width, wideTileWidth)

@@ -21,18 +21,18 @@ type cmdType uint8
 
 const (
 	cmdFill cmdType = iota
-	cmdStrip
+	cmdAlphaFill
 	cmdPushClip
 	cmdPopClip
 	cmdClipFill
-	cmdClipStrip
+	cmdClipAlphaFill
 )
 
 type cmd struct {
-	alphaIdx int        // strip, clipStrip
-	x        uint16     // fill, strip, clipFill, clipStrip
-	width    uint16     // fill, strip, clipFill, clipStrip
-	color    [4]float32 // fill, strip
+	alphaIdx int        // alphaFill, clipAlphaFill
+	x        uint16     // fill, alphaFill, clipFill, clipAlphaFill
+	width    uint16     // fill, alphaFill, clipFill, clipAlphaFill
+	color    [4]float32 // fill, alphaFill
 	typ      cmdType
 }
 
@@ -41,8 +41,8 @@ func (cmd *cmd) String() string {
 	case cmdFill:
 		return fmt.Sprintf("Fill(x=%v, width=%v, color=%v",
 			cmd.x, cmd.width, cmd.color)
-	case cmdStrip:
-		return fmt.Sprintf("Strip(x=%v, width=%v, color=%v, alphaIdx=%v)",
+	case cmdAlphaFill:
+		return fmt.Sprintf("AlphaFill(x=%v, width=%v, color=%v, alphaIdx=%v)",
 			cmd.x, cmd.width, cmd.color, cmd.alphaIdx)
 	case cmdPushClip:
 		return "PushClip()"
@@ -50,8 +50,8 @@ func (cmd *cmd) String() string {
 		return "PopClip()"
 	case cmdClipFill:
 		return fmt.Sprintf("ClipFill(x=%v, width=%v)", cmd.x, cmd.width)
-	case cmdClipStrip:
-		return fmt.Sprintf("ClipStrip(x=%v, width=%v, alphaIdx=%v)",
+	case cmdClipAlphaFill:
+		return fmt.Sprintf("ClipAlphaFill(x=%v, width=%v, alphaIdx=%v)",
 			cmd.x, cmd.width, cmd.alphaIdx)
 	default:
 		panic(fmt.Sprintf("invalid command type %v", cmd.typ))
@@ -66,8 +66,8 @@ func (wt *wideTile) fill(x, width uint16, c [4]float32) {
 	// even with a clip stack. It would be valid to elide all drawing commands from
 	// the enclosing clip push up to the fill. Further, we could extend the clip
 	// push command to include a background color, rather than always starting with
-	// a transparent buffer. Lastly, a sequence of push(bg); strip/fill; pop could
-	// be replaced with strip/fill with the color (the latter is true even with a
+	// a transparent buffer. Lastly, a sequence of push(bg); alphaFill/fill; pop could
+	// be replaced with alphaFill/fill with the color (the latter is true even with a
 	// non-opaque color).
 	//
 	// However, the extra cost of tracking such optimizations may outweigh the
@@ -80,7 +80,7 @@ func (wt *wideTile) fill(x, width uint16, c [4]float32) {
 	}
 }
 
-func (wt *wideTile) strip(c cmd) {
+func (wt *wideTile) alphaFill(c cmd) {
 	if wt.isZeroClip() {
 		return
 	}
@@ -119,7 +119,7 @@ func (wt *wideTile) isZeroClip() bool {
 	return wt.numZeroClips > 0
 }
 
-func (wt *wideTile) clipStrip(c cmd) {
+func (wt *wideTile) clipAlphaFill(c cmd) {
 	if wt.isZeroClip() {
 		return
 	}

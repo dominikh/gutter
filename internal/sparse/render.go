@@ -180,7 +180,7 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 			}
 			width := lhs - x
 			cmd := cmd{
-				typ:      cmdStrip,
+				typ:      cmdAlphaFill,
 				x:        xTileRel,
 				width:    width,
 				alphaIdx: int(col),
@@ -188,7 +188,7 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 			}
 			x += width
 			col += uint32(width)
-			ctx.tiles[stripY][xtile].strip(cmd)
+			ctx.tiles[stripY][xtile].alphaFill(cmd)
 		}
 
 		var activeFill bool
@@ -307,14 +307,14 @@ func (ctx *CsRenderCtx) popClip() {
 			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
 			cmd := cmd{
-				typ:      cmdClipStrip,
+				typ:      cmdClipAlphaFill,
 				x:        xTileRel,
 				width:    width,
 				alphaIdx: alphaIdx,
 			}
 			x += width
 			alphaIdx += int(width)
-			ctx.tiles[tileY][xtile].clipStrip(cmd)
+			ctx.tiles[tileY][xtile].clipAlphaFill(cmd)
 			tileX = xtile
 			popPending = true
 		}
