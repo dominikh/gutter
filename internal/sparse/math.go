@@ -4,7 +4,11 @@
 
 package sparse
 
-import "math"
+import (
+	"math"
+
+	"golang.org/x/exp/constraints"
+)
 
 func floor32(f float32) float32 {
 	return float32(math.Floor(float64(f)))
@@ -29,4 +33,19 @@ func sign32(f float32) float32 {
 	} else {
 		return 1
 	}
+}
+
+func satConv[D constraints.Unsigned, S ~float32 | ~float64](x S) D {
+	max := ^D(0)
+	if x != x || x < 0 {
+		return 0
+	} else if x > S(max) {
+		return max
+	} else {
+		return D(x)
+	}
+}
+
+func divCeil[T int | uint16 | uint32](a, b T) T {
+	return (a + b - 1) / b
 }
