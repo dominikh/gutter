@@ -35,7 +35,7 @@ type clip struct {
 	strips []strip
 }
 
-type CsRenderCtx struct {
+type Renderer struct {
 	width  uint16
 	height uint16
 	// [y][x]wideTile
@@ -52,7 +52,7 @@ type CsRenderCtx struct {
 	lineBuf  []flatLine
 }
 
-func NewCsRenderCtx(width, height uint16) *CsRenderCtx {
+func NewRenderer(width, height uint16) *Renderer {
 	widthTiles := divCeil(width, wideTileWidth)
 	heightTiles := divCeil(height, stripHeight)
 	tiles := make([][]wideTile, heightTiles)
@@ -60,7 +60,7 @@ func NewCsRenderCtx(width, height uint16) *CsRenderCtx {
 		tiles[i] = make([]wideTile, widthTiles)
 	}
 
-	return &CsRenderCtx{
+	return &Renderer{
 		width:      width,
 		height:     height,
 		tiles:      tiles,
@@ -69,7 +69,7 @@ func NewCsRenderCtx(width, height uint16) *CsRenderCtx {
 	}
 }
 
-func (ctx *CsRenderCtx) Reset() {
+func (ctx *Renderer) Reset() {
 	for _, row := range ctx.tiles {
 		for x := range row {
 			tile := &row[x]
@@ -86,11 +86,11 @@ func (ctx *CsRenderCtx) Reset() {
 //
 // At the moment, this mostly involves resolving any open clips, but
 // might extend to other things.
-func (ctx *CsRenderCtx) finish() {
+func (ctx *Renderer) finish() {
 	ctx.popClips()
 }
 
-func (ctx *CsRenderCtx) RenderToPixmap(width, height uint16, pixmap []Color) {
+func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
 	ctx.finish()
 	fine := newFine(width, height, pixmap)
 	for y, row := range ctx.tiles {
@@ -121,7 +121,7 @@ func (ctx *CsRenderCtx) RenderToPixmap(width, height uint16, pixmap []Color) {
 	}
 }
 
-func (ctx *CsRenderCtx) renderPathCommon(lineBuf []flatLine, fillRule FillRule) {
+func (ctx *Renderer) renderPathCommon(lineBuf []flatLine, fillRule FillRule) {
 	ctx.tileBuf = makeTiles(lineBuf, ctx.tileBuf, uint16(ctx.width), uint16(ctx.height))
 	slices.SortFunc(ctx.tileBuf, tile.cmp)
 	t := time.Now()
@@ -131,7 +131,7 @@ func (ctx *CsRenderCtx) renderPathCommon(lineBuf []flatLine, fillRule FillRule) 
 	}
 }
 
-func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color Color) {
+func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Color) {
 	// XXX support a brush
 
 	ctx.renderPathCommon(lineBuf, fillRule)
@@ -217,7 +217,7 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 	}
 }
 
-func (ctx *CsRenderCtx) bbox() [4]uint16 {
+func (ctx *Renderer) bbox() [4]uint16 {
 	if len(ctx.clipStack) > 0 {
 		return ctx.clipStack[len(ctx.clipStack)-1].bbox
 	} else {
@@ -232,7 +232,7 @@ func (ctx *CsRenderCtx) bbox() [4]uint16 {
 	}
 }
 
-func (ctx *CsRenderCtx) popClip() {
+func (ctx *Renderer) popClip() {
 	ctx.stateStack[len(ctx.stateStack)-1].numClips--
 	lastClip := ctx.clipStack[len(ctx.clipStack)-1]
 	ctx.clipStack = ctx.clipStack[:len(ctx.clipStack)-1]
@@ -350,35 +350,35 @@ func (ctx *CsRenderCtx) popClip() {
 	}
 }
 
-func (ctx *CsRenderCtx) popClips() {
+func (ctx *Renderer) popClips() {
 	for ctx.stateStack[len(ctx.stateStack)-1].numClips > 0 {
 		ctx.popClip()
 	}
 }
 
-func (ctx *CsRenderCtx) SetAffine(aff curve.Affine) {
+func (ctx *Renderer) SetAffine(aff curve.Affine) {
 	ctx.transform = aff
 }
 
-func (ctx *CsRenderCtx) getAffine() curve.Affine {
+func (ctx *Renderer) getAffine() curve.Affine {
 	return ctx.transform
 }
 
-func (ctx *CsRenderCtx) Fill(path iter.Seq[curve.PathElement], fillRule FillRule, color Color) {
+func (ctx *Renderer) Fill(path iter.Seq[curve.PathElement], fillRule FillRule, color Color) {
 	// XXX support brushes
 	affine := ctx.getAffine()
 	ctx.lineBuf = fill(path, affine, ctx.lineBuf)
 	ctx.renderPath(ctx.lineBuf, fillRule, color)
 }
 
-func (ctx *CsRenderCtx) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color Color) {
+func (ctx *Renderer) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color Color) {
 	// XXX support brushes
 	affine := ctx.getAffine()
 	ctx.lineBuf = stroke(path, stroke_, affine, ctx.lineBuf)
 	ctx.renderPath(ctx.lineBuf, NonZero, color)
 }
 
-func (ctx *CsRenderCtx) Clip(path iter.Seq[curve.PathElement], fillRule FillRule) {
+func (ctx *Renderer) Clip(path iter.Seq[curve.PathElement], fillRule FillRule) {
 	affine := ctx.getAffine()
 	ctx.lineBuf = fill(path, affine, ctx.lineBuf)
 	ctx.renderPathCommon(ctx.lineBuf, fillRule)
@@ -469,11 +469,11 @@ func (ctx *CsRenderCtx) Clip(path iter.Seq[curve.PathElement], fillRule FillRule
 	ctx.stateStack[len(ctx.stateStack)-1].numClips++
 }
 
-func (ctx *CsRenderCtx) Save() {
+func (ctx *Renderer) Save() {
 	ctx.stateStack = append(ctx.stateStack, gfxState{0})
 }
 
-func (ctx *CsRenderCtx) Restore() {
+func (ctx *Renderer) Restore() {
 	ctx.popClips()
 	ctx.stateStack = ctx.stateStack[:len(ctx.stateStack)-1]
 }
