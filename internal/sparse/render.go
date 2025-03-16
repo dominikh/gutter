@@ -201,7 +201,7 @@ func (ctx *CsRenderCtx) renderPath(lineBuf []flatLine, fillRule FillRule, color 
 			panic(fmt.Sprintf("unexpected sparse.FillRule: %#v", fillRule))
 		}
 
-		if activeFill && stripY == nextStrip.stripY() && nextStrip.x >= 0 {
+		if activeFill && stripY == nextStrip.stripY() {
 			x = x1
 			uproundedWidth := divCeil(ctx.width, wideTileWidth) * wideTileWidth
 			x2 := min(nextStrip.x, uproundedWidth)
