@@ -10,7 +10,6 @@ import (
 	"iter"
 	"log"
 	"slices"
-	"time"
 
 	"honnef.co/go/curve"
 )
@@ -25,14 +24,16 @@ const (
 type Color [4]float32
 
 type gfxState struct {
-	numClips int
+	numLayers int
 }
 
-type clip struct {
+type layer struct {
 	// The intersected bounding box after clip
 	bbox [4]uint16
 	// The rendered path in sparse strip representation
-	strips []strip
+	strips  []strip
+	opacity float32
+	blend   BlendMode
 }
 
 type Renderer struct {
@@ -44,7 +45,7 @@ type Renderer struct {
 	alphas     [][stripHeight]uint8
 	transform  curve.Affine
 	stateStack []gfxState
-	clipStack  []clip
+	layerStack []layer
 
 	// Scratch buffers
 	tileBuf  []tile
@@ -84,10 +85,10 @@ func (ctx *Renderer) Reset() {
 
 // Finish the coarse rasterization prior to fine rendering.
 //
-// At the moment, this mostly involves resolving any open clips, but
+// At the moment, this mostly involves resolving any open layers, but
 // might extend to other things.
 func (ctx *Renderer) finish() {
-	ctx.popClips()
+	ctx.popLayers()
 }
 
 func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
@@ -110,7 +111,11 @@ func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
 				cmd := tile.cmds[i]
 				fine.runCmd(cmd, ctx.alphas)
 			}
-			if len(fine.layers) != 1 {
+			switch len(fine.layers) {
+			case 0:
+				panic("internal error: left with no layers")
+			case 1:
+			default:
 				panic("internal error: left with more than one layer")
 			}
 			fine.pack(uint16(x), uint16(y))
@@ -124,11 +129,7 @@ func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
 func (ctx *Renderer) renderPathCommon(lineBuf []flatLine, fillRule FillRule) {
 	ctx.tileBuf = makeTiles(lineBuf, ctx.tileBuf, uint16(ctx.width), uint16(ctx.height))
 	slices.SortFunc(ctx.tileBuf, tile.cmp)
-	t := time.Now()
 	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.lineBuf, ctx.stripBuf, ctx.alphas)
-	if false {
-		log.Println("renderPathCommon:", time.Since(t))
-	}
 }
 
 func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Color) {
@@ -136,7 +137,6 @@ func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Col
 
 	ctx.renderPathCommon(lineBuf, fillRule)
 
-	widthTiles := divCeil(ctx.width, wideTileWidth)
 	bbox := ctx.bbox()
 	for i := range len(ctx.stripBuf) - 1 {
 		strip := &ctx.stripBuf[i]
@@ -163,10 +163,7 @@ func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Col
 		}
 		x1 := x0 + stripWidth
 		xtile0 := max(x0/wideTileWidth, bbox[0])
-		// TODO: we are limiting xtile1 to widthTiles because strips aren't
-		// being clipped to the viewport yet. Evaluate removing this once we
-		// clip higher up the stack.
-		xtile1 := min(divCeil(x1, wideTileWidth), widthTiles, bbox[2])
+		xtile1 := min(divCeil(x1, wideTileWidth), bbox[2])
 		x := x0
 		if bbox[0]*wideTileWidth > x {
 			col += uint32(bbox[0]*wideTileWidth - x)
@@ -174,11 +171,7 @@ func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Col
 		}
 		for xtile := xtile0; xtile < xtile1; xtile++ {
 			xTileRel := x % wideTileWidth
-			lhs := min(x1, (uint16(xtile+1) * wideTileWidth))
-			if lhs < x {
-				panic(fmt.Sprintf("internal error: %v < %v", lhs, x))
-			}
-			width := lhs - x
+			width := min(x1, (xtile+1)*wideTileWidth) - x
 			cmd := cmd{
 				typ:      cmdAlphaFill,
 				x:        xTileRel,
@@ -202,11 +195,11 @@ func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Col
 		}
 
 		if activeFill && stripY == nextStrip.stripY() {
-			x = x1
+			x = max(x1, bbox[0]*wideTileWidth)
 			uproundedWidth := divCeil(ctx.width, wideTileWidth) * wideTileWidth
 			x2 := min(nextStrip.x, uproundedWidth)
 			fxt0 := max(x1/wideTileWidth, bbox[0])
-			fxt1 := min(divCeil(x2, wideTileWidth), widthTiles, bbox[2])
+			fxt1 := min(divCeil(x2, wideTileWidth), bbox[2])
 			for xtile := fxt0; xtile < fxt1; xtile++ {
 				xTileRel := x % wideTileWidth
 				width := min(x2, (xtile+1)*wideTileWidth) - x
@@ -218,8 +211,8 @@ func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Col
 }
 
 func (ctx *Renderer) bbox() [4]uint16 {
-	if len(ctx.clipStack) > 0 {
-		return ctx.clipStack[len(ctx.clipStack)-1].bbox
+	if len(ctx.layerStack) > 0 {
+		return ctx.layerStack[len(ctx.layerStack)-1].bbox
 	} else {
 		widthTiles := divCeil(ctx.width, wideTileWidth)
 		heightTiles := divCeil(ctx.height, stripHeight)
@@ -232,52 +225,51 @@ func (ctx *Renderer) bbox() [4]uint16 {
 	}
 }
 
-func (ctx *Renderer) popClip() {
-	ctx.stateStack[len(ctx.stateStack)-1].numClips--
-	lastClip := ctx.clipStack[len(ctx.clipStack)-1]
-	ctx.clipStack = ctx.clipStack[:len(ctx.clipStack)-1]
-	clipBbox := lastClip.bbox
-	strips := lastClip.strips
+func (ctx *Renderer) popLayer() {
+	ctx.stateStack[len(ctx.stateStack)-1].numLayers--
+	lastLayer := ctx.layerStack[len(ctx.layerStack)-1]
+	ctx.layerStack = ctx.layerStack[:len(ctx.layerStack)-1]
+	bbox := lastLayer.bbox
+	strips := lastLayer.strips
 
 	// The next bit of code accomplishes the following. For each tile in
-	// the intersected bounding box, it does one of three things depending
+	// the intersected bounding box, it does one of two things depending
 	// on the contents of the clip path in that tile.
 	// If all-zero: pop a zero_clip.
-	// If all-one: do nothing.
 	// If contains one or more strips: render strips and fills, then pop a clip.
 	// This logic is the inverse of the push logic in `clip()`, and the stack
 	// should be balanced after running both.
-	tileX := clipBbox[0]
-	tileY := clipBbox[1]
+	tileX := bbox[0]
+	tileY := bbox[1]
 	popPending := false
 	for i := range len(strips) - 1 {
 		strip := &strips[i]
-		y := strip.stripY()
-		if y < tileY {
+		stripY := strip.stripY()
+		if stripY < tileY {
 			continue
 		}
-		for tileY < min(y, clipBbox[3]) {
+		for tileY < min(stripY, bbox[3]) {
 			if popPending {
-				popPending = false
-				ctx.tiles[tileY][tileX].popClip()
+				ctx.tiles[tileY][tileX].popLayer()
 				tileX++
+				popPending = false
 			}
-			for x := tileX; x < clipBbox[2]; x++ {
+			for x := tileX; x < bbox[2]; x++ {
 				ctx.tiles[tileY][x].popZeroClip()
 			}
-			tileX = clipBbox[0]
+			tileX = bbox[0]
 			tileY++
 		}
-		if tileY == clipBbox[3] {
+		if tileY == bbox[3] {
 			break
 		}
 		x0 := strip.x
-		xClamped := min(x0/wideTileWidth, clipBbox[2])
+		xClamped := min(x0/wideTileWidth, bbox[2])
 		if tileX < xClamped {
 			if popPending {
-				popPending = false
-				ctx.tiles[tileY][tileX].popClip()
+				ctx.tiles[tileY][tileX].popLayer()
 				tileX++
+				popPending = false
 			}
 			// The winding check is probably not needed; if there was a fill,
 			// the logic below should have advanced tileX.
@@ -288,21 +280,21 @@ func (ctx *Renderer) popClip() {
 			}
 			tileX = xClamped
 		}
+
 		nextStrip := &strips[i+1]
-		stripWidth := uint16(nextStrip.col - strip.col)
-		x1 := x0 + stripWidth
-		xtile0 := max(x0/wideTileWidth, clipBbox[0])
-		xtile1 := min(divCeil(x1, wideTileWidth), clipBbox[2])
+		width := uint16(nextStrip.col - strip.col)
+		x1 := x0 + width
+		xtile1 := min(divCeil(x1, wideTileWidth), bbox[2])
 		x := x0
-		alphaIdx := int(strip.col)
-		if clipBbox[0]*wideTileWidth > x {
-			alphaIdx += int(clipBbox[0]*wideTileWidth - x)
-			x = clipBbox[0] * wideTileWidth
+		col := strip.col
+		if bbox[0]*wideTileWidth > x {
+			col += uint32(bbox[0]*wideTileWidth - x)
+			x = bbox[0] * wideTileWidth
 		}
-		for xtile := xtile0; xtile < xtile1; xtile++ {
+		for xtile := tileX; xtile < xtile1; xtile++ {
 			if xtile > tileX && popPending {
+				ctx.tiles[tileY][tileX].popLayer()
 				popPending = false
-				ctx.tiles[tileY][tileX].popClip()
 			}
 			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
@@ -310,49 +302,63 @@ func (ctx *Renderer) popClip() {
 				typ:      cmdClipAlphaFill,
 				x:        xTileRel,
 				width:    width,
-				alphaIdx: alphaIdx,
+				alphaIdx: int(col),
+				blend:    lastLayer.blend,
+				opacity:  lastLayer.opacity,
 			}
 			x += width
-			alphaIdx += int(width)
+			col += uint32(width)
 			ctx.tiles[tileY][xtile].clipAlphaFill(cmd)
 			tileX = xtile
 			popPending = true
 		}
-		if nextStrip.winding != 0 && y == nextStrip.stripY() {
-			x2 := nextStrip.x
-			tileX2 := min(x2, (tileX+1)*wideTileWidth)
-			width := tileX2 - x1
-			if width > 0 {
-				xTileRel := x1 % wideTileWidth
-				ctx.tiles[tileY][tileX].clipFill(xTileRel, width)
-			}
-			if x2 > (tileX+1)*wideTileWidth && x2 < ctx.width {
-				ctx.tiles[tileY][tileX].popClip()
-				width2 := x2 % wideTileWidth
-				tileX = x2 / wideTileWidth
-				if width2 > 0 {
-					ctx.tiles[tileY][tileX].clipFill(0, width2)
+
+		// XXX add even/odd winding rule support
+		if nextStrip.winding != 0 && stripY == nextStrip.stripY() {
+			x = max(x1, bbox[0]*wideTileWidth)
+			uproundedWidth := divCeil(ctx.width, wideTileWidth) * wideTileWidth
+			x2 := min(nextStrip.x, uproundedWidth)
+			fxt0 := tileX
+			fxt1 := min(divCeil(x2, wideTileWidth), bbox[2])
+
+			for xtile := fxt0; xtile < fxt1; xtile++ {
+				if xtile > fxt0 && popPending {
+					ctx.tiles[tileY][tileX].popLayer()
+					popPending = false
 				}
+				xTileRel := x % wideTileWidth
+				width := min(x2, (xtile+1)*wideTileWidth) - x
+				if width == 0 {
+					continue
+				}
+				x += width
+				ctx.tiles[tileY][xtile].clipFill(xTileRel, width, lastLayer.blend, lastLayer.opacity)
+				tileX = xtile
+				popPending = true
 			}
 		}
 	}
+
 	if popPending {
-		popPending = false
-		ctx.tiles[tileY][tileX].popClip()
+		ctx.tiles[tileY][tileX].popLayer()
 		tileX++
+		popPending = false
 	}
-	for tileY < clipBbox[3] {
-		for x := tileX; x < clipBbox[2]; x++ {
+
+	// TODO(dh): is this condition actually possible? For the bounding box to
+	// include bbox[3], at least one strip has to cover it, doesn't it?
+	for tileY < bbox[3] {
+		for x := tileX; x < bbox[2]; x++ {
 			ctx.tiles[tileY][x].popZeroClip()
 		}
-		tileX = clipBbox[0]
+		tileX = bbox[0]
 		tileY++
 	}
 }
 
-func (ctx *Renderer) popClips() {
-	for ctx.stateStack[len(ctx.stateStack)-1].numClips > 0 {
-		ctx.popClip()
+func (ctx *Renderer) popLayers() {
+	for ctx.stateStack[len(ctx.stateStack)-1].numLayers > 0 {
+		ctx.popLayer()
 	}
 }
 
@@ -378,10 +384,33 @@ func (ctx *Renderer) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stro
 	ctx.renderPath(ctx.lineBuf, NonZero, color)
 }
 
-func (ctx *Renderer) Clip(path iter.Seq[curve.PathElement], fillRule FillRule) {
+type Layer struct {
+	BlendMode    BlendMode
+	Opacity      float32
+	Clip         iter.Seq[curve.PathElement]
+	ClipFillRule FillRule
+}
+
+func (ctx *Renderer) PushClip(path iter.Seq[curve.PathElement], fill FillRule) {
+	ctx.PushLayer(Layer{Opacity: 1, Clip: path, ClipFillRule: fill})
+}
+
+func (ctx *Renderer) PushLayer(l Layer) {
+	clipPath := l.Clip
+	if clipPath == nil {
+		// OPT(dh): instead of going through the whole clipping logic (computing
+		// and processing strips), we should have a special case for layers
+		// without clips that just processes all tiles in the current bounding
+		// box.
+		clipPath = curve.NewRectFromOrigin(
+			curve.Pt(0, 0),
+			curve.Sz(float64(ctx.width), float64(ctx.height)),
+		).PathElements(0.1)
+	}
+
 	affine := ctx.getAffine()
-	ctx.lineBuf = fill(path, affine, ctx.lineBuf)
-	ctx.renderPathCommon(ctx.lineBuf, fillRule)
+	ctx.lineBuf = fill(clipPath, affine, ctx.lineBuf)
+	ctx.renderPathCommon(ctx.lineBuf, l.ClipFillRule)
 	strips := ctx.stripBuf
 	ctx.stripBuf = nil
 	var pathBbox [4]uint16
@@ -402,71 +431,93 @@ func (ctx *Renderer) Clip(path iter.Seq[curve.PathElement], fillRule FillRule) {
 	}
 	parentBbox := ctx.bbox()
 	// intersect clip bounding box
-	clipBbox := [4]uint16{
+	bbox := [4]uint16{
 		max(parentBbox[0], pathBbox[0]),
 		max(parentBbox[1], pathBbox[1]),
 		min(parentBbox[2], pathBbox[2]),
 		min(parentBbox[3], pathBbox[3]),
 	}
+
 	// The next bit of code accomplishes the following. For each tile in
-	// the intersected bounding box, it does one of three things depending
+	// the intersected bounding box, it does one of two things depending
 	// on the contents of the clip path in that tile.
 	// If all-zero: push a zero_clip
-	// If all-one: do nothing
+	// If all-ones: push a clip
 	// If contains one or more strips: push a clip
-	tileX := clipBbox[0]
-	tileY := clipBbox[1]
+	tileX := bbox[0]
+	tileY := bbox[1]
 	for i := range len(strips) - 1 {
 		strip := &strips[i]
-		y := strip.stripY()
-		if y < tileY {
+		stripY := strip.stripY()
+		if stripY < tileY {
 			continue
 		}
-		for tileY < min(y, clipBbox[3]) {
-			for x := tileX; x < clipBbox[2]; x++ {
+		for tileY < min(stripY, bbox[3]) {
+			for x := tileX; x < bbox[2]; x++ {
 				ctx.tiles[tileY][x].pushZeroClip()
 			}
-			tileX = clipBbox[0]
+			tileX = bbox[0]
 			tileY++
 		}
-		if tileY == clipBbox[3] {
+		if tileY == bbox[3] {
 			break
 		}
-		xPixels := strip.x
-		xClamped := min(xPixels/wideTileWidth, clipBbox[2])
+		x0 := strip.x
+		xClamped := min(x0/wideTileWidth, bbox[2])
 		if tileX < xClamped {
 			if strip.winding == 0 {
 				for x := tileX; x < xClamped; x++ {
 					ctx.tiles[tileY][x].pushZeroClip()
 				}
 			}
-			// If winding is nonzero, then wide tiles covered entirely
-			// by sparse fill are no-op (no clipping is applied).
 			tileX = xClamped
 		}
+
 		nextStrip := &strips[i+1]
+		// Push layers for all tiles covered by alpha
 		width := uint16(nextStrip.col - strip.col)
-		x1 := min(divCeil(xPixels+width, wideTileWidth), clipBbox[2])
-		if tileX < x1 {
-			for x := tileX; x < x1; x++ {
-				ctx.tiles[tileY][x].pushClip()
+		x1 := x0 + width
+		xtile1 := min(divCeil(x1, wideTileWidth), bbox[2])
+		if tileX < xtile1 {
+			for xtile := tileX; xtile < xtile1; xtile++ {
+				ctx.tiles[tileY][xtile].pushLayer()
 			}
-			tileX = x1
+			tileX = xtile1
+		}
+
+		// Push layers for all tiles covered by solid fill (except for the one
+		// already covered by alpha, if any)
+		//
+		// XXX support even/odd fill rule
+		if nextStrip.winding != 0 && tileY == nextStrip.stripY() {
+			x2 := min(divCeil(nextStrip.x, wideTileWidth), bbox[2])
+			fxt0 := tileX
+			fxt1 := x2
+			for xtile := fxt0; xtile < fxt1; xtile++ {
+				ctx.tiles[tileY][xtile].pushLayer()
+			}
+			tileX = fxt1
 		}
 	}
-	for tileY < clipBbox[3] {
-		for x := tileX; x < clipBbox[2]; x++ {
+
+	// TODO(dh): is this condition actually possible? For the bounding box to
+	// include bbox[3], at least one strip has to cover it, doesn't it?
+	for tileY < bbox[3] {
+		for x := tileX; x < bbox[2]; x++ {
 			ctx.tiles[tileY][x].pushZeroClip()
 		}
-		tileX = clipBbox[0]
+		tileX = bbox[0]
 		tileY++
 	}
-	clip := clip{
-		bbox:   clipBbox,
-		strips: strips,
+
+	clip := layer{
+		bbox:    bbox,
+		strips:  strips,
+		opacity: l.Opacity,
+		blend:   l.BlendMode,
 	}
-	ctx.clipStack = append(ctx.clipStack, clip)
-	ctx.stateStack[len(ctx.stateStack)-1].numClips++
+	ctx.layerStack = append(ctx.layerStack, clip)
+	ctx.stateStack[len(ctx.stateStack)-1].numLayers++
 }
 
 func (ctx *Renderer) Save() {
@@ -474,6 +525,6 @@ func (ctx *Renderer) Save() {
 }
 
 func (ctx *Renderer) Restore() {
-	ctx.popClips()
+	ctx.popLayers()
 	ctx.stateStack = ctx.stateStack[:len(ctx.stateStack)-1]
 }

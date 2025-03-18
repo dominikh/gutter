@@ -485,8 +485,10 @@ func TestClipping(t *testing.T) {
 			Radius: 19.0,
 		}
 
-		ctx.Clip(circle.PathElements(0.1), NonZero)
-		ctx.Clip(triangle.Elements(), NonZero)
+		ctx.Fill(curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(64, 64)).PathElements(0.1), NonZero, [4]float32{0.8 * 0.5, 0, 0, 0.5})
+
+		ctx.PushClip(circle.PathElements(0.1), NonZero)
+		ctx.PushClip(triangle.Elements(), NonZero)
 		ctx.Fill(triangle.Elements(), NonZero, [4]float32{0.5, 0.5, 0.5, 0.5})
 		ctx.Stroke(circle.PathElements(0.1), curve.DefaultStroke.WithWidth(5), [4]float32{0, 0, 1, 1})
 		ctx.Stroke(triangle.Elements(), curve.DefaultStroke.WithWidth(5), [4]float32{0, 0, 1, 1})
@@ -498,9 +500,9 @@ func writeF32AsU16(in []Color, out [][8]uint8) {
 	for i := range in {
 		px := in[i]
 
-		binary.BigEndian.PutUint16(out[i][0:], uint16((px[0]/px[3])*65535+0.5))
-		binary.BigEndian.PutUint16(out[i][2:], uint16((px[1]/px[3])*65535+0.5))
-		binary.BigEndian.PutUint16(out[i][4:], uint16((px[2]/px[3])*65535+0.5))
+		binary.BigEndian.PutUint16(out[i][0:], uint16(min(1, px[0]/px[3])*65535+0.5))
+		binary.BigEndian.PutUint16(out[i][2:], uint16(min(1, px[1]/px[3])*65535+0.5))
+		binary.BigEndian.PutUint16(out[i][4:], uint16(min(1, px[2]/px[3])*65535+0.5))
 		binary.BigEndian.PutUint16(out[i][6:], uint16(px[3]*65535+0.5))
 	}
 }
@@ -554,32 +556,6 @@ func Benchmark_fineFillComplexNative(b *testing.B) {
 	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
 		for b.Loop() {
 			fineFillComplexNative(buf, c)
-		}
-	})
-}
-
-func Benchmark_fineClipFillSimpleNosNative(b *testing.B) {
-	nos := Color{1, 1, 1, 1}
-	benchmarkClipFill(b, func(b *testing.B, dst, src [][stripHeight]Color) {
-		for b.Loop() {
-			fineClipFillSimpleNosNative(dst, nos, src)
-		}
-	})
-}
-
-func Benchmark_fineClipFillSimpleTosTranslucentNative(b *testing.B) {
-	tos := Color{0.5, 0.5, 0.5, 0.5}
-	benchmarkClipFill(b, func(b *testing.B, dst, src [][stripHeight]Color) {
-		for b.Loop() {
-			fineClipFillSimpleTosTranslucentNative(dst, tos)
-		}
-	})
-}
-
-func Benchmark_fineClipFillNative(b *testing.B) {
-	benchmarkClipFill(b, func(b *testing.B, dst, src [][stripHeight]Color) {
-		for b.Loop() {
-			fineClipFillNative(dst, src)
 		}
 	})
 }

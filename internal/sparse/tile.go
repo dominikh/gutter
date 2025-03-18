@@ -7,6 +7,7 @@ package sparse
 
 import (
 	"cmp"
+	"fmt"
 )
 
 const (
@@ -28,6 +29,11 @@ type tile struct {
 	//
 	// Note the byte layout in memory depends on the endianness of the compilation target.
 	data uint64
+}
+
+func (t tile) String() string {
+	return fmt.Sprintf("tile(lineIdx=%d, winding=%t, x=%d, y=%d)",
+		t.lineIdx(), t.winding(), t.x(), t.y())
 }
 
 func newTile(x, y uint16, lineIdx uint32, winding bool) tile {

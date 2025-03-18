@@ -5,7 +5,9 @@
 
 package sparse
 
-import "fmt"
+import (
+	"fmt"
+)
 
 const wideTileWidth = 256
 
@@ -33,13 +35,15 @@ type cmd struct {
 	x        uint16     // fill, alphaFill, clipFill, clipAlphaFill
 	width    uint16     // fill, alphaFill, clipFill, clipAlphaFill
 	color    [4]float32 // fill, alphaFill
+	blend    BlendMode  // clipAlphaFill, clipFill
+	opacity  float32    // clipAlphaFill, clipFill
 	typ      cmdType
 }
 
-func (cmd *cmd) String() string {
+func (cmd cmd) String() string {
 	switch cmd.typ {
 	case cmdFill:
-		return fmt.Sprintf("Fill(x=%v, width=%v, color=%v",
+		return fmt.Sprintf("Fill(x=%v, width=%v, color=%v)",
 			cmd.x, cmd.width, cmd.color)
 	case cmdAlphaFill:
 		return fmt.Sprintf("AlphaFill(x=%v, width=%v, color=%v, alphaIdx=%v)",
@@ -49,16 +53,19 @@ func (cmd *cmd) String() string {
 	case cmdPopClip:
 		return "PopClip()"
 	case cmdClipFill:
-		return fmt.Sprintf("ClipFill(x=%v, width=%v)", cmd.x, cmd.width)
+		return fmt.Sprintf("ClipFill(x=%v, width=%v, blend=%s)", cmd.x, cmd.width, cmd.blend)
 	case cmdClipAlphaFill:
-		return fmt.Sprintf("ClipAlphaFill(x=%v, width=%v, alphaIdx=%v)",
-			cmd.x, cmd.width, cmd.alphaIdx)
+		return fmt.Sprintf("ClipAlphaFill(x=%v, width=%v, alphaIdx=%v, blend=%s)",
+			cmd.x, cmd.width, cmd.alphaIdx, cmd.blend)
 	default:
 		panic(fmt.Sprintf("invalid command type %v", cmd.typ))
 	}
 }
 
 func (wt *wideTile) fill(x, width uint16, c [4]float32) {
+	if x+width > wideTileWidth {
+		panic(fmt.Sprintf("trying to fill from %d to %d, when a wide tile is only %d wide", x, x+width, wideTileWidth))
+	}
 	if wt.isZeroClip() {
 		return
 	}
@@ -87,14 +94,15 @@ func (wt *wideTile) alphaFill(c cmd) {
 	wt.cmds = append(wt.cmds, c)
 }
 
-func (wt *wideTile) pushClip() {
+func (wt *wideTile) pushLayer() {
 	if wt.isZeroClip() {
 		return
 	}
 	wt.cmds = append(wt.cmds, cmd{typ: cmdPushClip})
+	wt.numClips++
 }
 
-func (wt *wideTile) popClip() {
+func (wt *wideTile) popLayer() {
 	if wt.isZeroClip() {
 		return
 	}
@@ -112,6 +120,9 @@ func (wt *wideTile) pushZeroClip() {
 }
 
 func (wt *wideTile) popZeroClip() {
+	if wt.numZeroClips == 0 {
+		panic("unbalanced zero clips")
+	}
 	wt.numZeroClips--
 }
 
@@ -123,25 +134,27 @@ func (wt *wideTile) clipAlphaFill(c cmd) {
 	if wt.isZeroClip() {
 		return
 	}
-	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip {
+	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip && c.blend.Compose&composeAffectsDestRegion == 0 {
 		return
 	}
 	wt.cmds = append(wt.cmds, c)
 }
 
-func (wt *wideTile) clipFill(x, width uint16) {
+func (wt *wideTile) clipFill(x, width uint16, blend BlendMode, opacity float32) {
 	if wt.isZeroClip() {
 		return
 	}
-	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip {
+	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip && blend.Compose&composeAffectsDestRegion == 0 {
 		return
 	}
 	if len(wt.cmds) == 0 {
 		panic("internal error: called clipFill without pushing a clip")
 	}
 	wt.cmds = append(wt.cmds, cmd{
-		typ:   cmdClipFill,
-		x:     x,
-		width: width,
+		typ:     cmdClipFill,
+		x:       x,
+		width:   width,
+		blend:   blend,
+		opacity: opacity,
 	})
 }

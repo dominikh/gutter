@@ -3,7 +3,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-//go:generate go run ./gen.go
 //go:generate go run ./_asm -out sparse_amd64.s
 
 package sparse
@@ -35,11 +34,8 @@ type fineStats struct {
 	simpleAlphaFills  uint64
 	complexAlphaFills uint64
 
-	nostosSimpleClipFills         uint64
-	nosSimpleClipFills            uint64
-	tosSimpleOpaqueClipFills      uint64
-	tosSimpleTranslucentClipFills uint64
-	complexClipFills              uint64
+	simpleSimpleClipFills   uint64
+	complexComplexClipFills uint64
 
 	clipAlphaFills uint64
 
@@ -63,11 +59,8 @@ func (s *fineStats) String() string {
 		fmt.Sprintf("PushClips: %d", s.pushClips),
 		fmt.Sprintf("PopClips: %d", s.popClips),
 
-		fmt.Sprintf("nos+tos simple clip fills: %d", s.nostosSimpleClipFills),
-		fmt.Sprintf("nos simple clip fills: %d", s.nosSimpleClipFills),
-		fmt.Sprintf("tos simple opaque clip fills: %d", s.tosSimpleOpaqueClipFills),
-		fmt.Sprintf("tos simple translucent clip fills: %d", s.tosSimpleTranslucentClipFills),
-		fmt.Sprintf("Complex clip fills: %d", s.complexClipFills),
+		fmt.Sprintf("simple+simple clip fills: %d", s.simpleSimpleClipFills),
+		fmt.Sprintf("complex+complex clip fills: %d", s.complexComplexClipFills),
 
 		fmt.Sprintf("Clip alpha fills: %d", s.clipAlphaFills),
 
@@ -228,10 +221,10 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 		f.freeScratches = append(f.freeScratches, f.layers[len(f.layers)-1].scratch)
 		f.layers = f.layers[:len(f.layers)-1]
 	case cmdClipFill:
-		f.clipFill(int(cmd.x), int(cmd.width))
+		f.clipFill(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
 	case cmdClipAlphaFill:
 		aslice := alphas[cmd.alphaIdx:]
-		f.clipAlphaFill(int(cmd.x), int(cmd.width), aslice)
+		f.clipAlphaFill(int(cmd.x), int(cmd.width), aslice, cmd.blend, cmd.opacity)
 	default:
 		panic(fmt.Sprintf("unreachable: %T", cmd))
 	}
@@ -241,11 +234,6 @@ var (
 	memsetColumnsFp = memsetColumnsNative
 
 	fillComplexFp = fineFillComplexNative
-
-	// OPT add SIMD implementations
-	clipFillSimpleNosFp            = fineClipFillSimpleNosNative
-	clipFillSimpleTosTranslucentFp = fineClipFillSimpleTosTranslucentNative
-	clipFillFp                     = fineClipFillNative
 )
 
 func (f *fine) fill(x, width int, color Color) {
@@ -304,13 +292,7 @@ func (f *fine) fill(x, width int, color Color) {
 	}
 }
 
-func (f *fine) clipFill(x, width int) {
-	if x == 0 && width == wideTileWidth {
-		// This shouldn't be possible because we don't push a clip when the
-		// entire wide tile is inside the clipped area. Though this will change
-		// once we support different blend modes.
-		panic("internal error: clipFill for whole wide tile")
-	}
+func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
 	if n := len(f.layers); n < 2 {
 		panic(fmt.Sprintf("internal error: trying to clipFill but we only have %d layers", n))
 	}
@@ -325,39 +307,24 @@ func (f *fine) clipFill(x, width int) {
 
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
-	switch {
-	case !nos.complex && !tos.complex:
-		f.stats.nostosSimpleClipFills++
-		oneMinusAlpha := 1.0 - tos.singleColor[3]
-		color := Color{
-			nos.singleColor[0]*oneMinusAlpha + tos.singleColor[0],
-			nos.singleColor[1]*oneMinusAlpha + tos.singleColor[1],
-			nos.singleColor[2]*oneMinusAlpha + tos.singleColor[2],
-			nos.singleColor[3]*oneMinusAlpha + tos.singleColor[3],
-		}
-		memsetColumnsFp(dst, color)
-		nos.complex = true
-	case !nos.complex:
-		f.stats.nosSimpleClipFills++
-		clipFillSimpleNosFp(dst, nos.singleColor, src)
-		nos.complex = true
-	case !tos.complex:
-		if tos.singleColor[3] == 1 {
-			f.stats.tosSimpleOpaqueClipFills++
-			memsetColumnsFp(dst, tos.singleColor)
-		} else {
-			f.stats.tosSimpleTranslucentClipFills++
-			clipFillSimpleTosTranslucentFp(dst, tos.singleColor)
-		}
-	default:
-		f.stats.complexClipFills++
-		clipFillFp(dst, src)
+	if !nos.complex && !tos.complex {
+		f.stats.simpleSimpleClipFills++
+		c := tos.singleColor
+		c[0] *= opacity
+		c[1] *= opacity
+		c[2] *= opacity
+		c[3] *= opacity
+		blendSimpleSimple(dst, nos.singleColor, c, blend)
+	} else {
+		f.materialize(nos, x, x+width)
+		f.materialize(tos, x, x+width)
+		f.stats.complexComplexClipFills++
+		blendComplexComplex(dst, src, nil, blend, opacity)
 	}
+	nos.complex = true
 }
 
-func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8) {
-	// OPT implement SIMD versions
-
+func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend BlendMode, opacity float32) {
 	f.stats.clipAlphaFills++
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
@@ -368,20 +335,11 @@ func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8) {
 	tos.complex = true
 	nos.complex = true
 
+	// OPT(dh): instead of modifying the source in place, teach blend functions
+	// how to apply alpha values.
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
-	for x := range dst {
-		col := &dst[x]
-		a := &alphas[x]
-		for y := range col {
-			maskAlpha := float32(a[y]) * (1.0 / 255.0)
-			oneMinusAlpha := 1.0 - maskAlpha*src[x][y][3]
-			col[y][0] = col[y][0]*oneMinusAlpha + maskAlpha*src[x][y][0]
-			col[y][1] = col[y][1]*oneMinusAlpha + maskAlpha*src[x][y][1]
-			col[y][2] = col[y][2]*oneMinusAlpha + maskAlpha*src[x][y][2]
-			col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*src[x][y][3]
-		}
-	}
+	blendComplexComplex(dst, src, alphas, blend, opacity)
 }
 
 func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
