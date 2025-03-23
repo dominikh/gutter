@@ -47,5 +47,5 @@ func satConv[D constraints.Unsigned, S ~float32 | ~float64](x S) D {
 }
 
 func divCeil[T int | uint16 | uint32](a, b T) T {
-	return (a + b - 1) / b
+	return T((uint64(a) + uint64(b) - 1) / uint64(b))
 }
