@@ -819,7 +819,7 @@ func convertStops(value []float64, count int) []animation.ColorStop {
 						default:
 							alphaInterp = animation.Lerp(alphaA, alphaB, t)
 						}
-						stop.Color.Alpha = min(stop.Color.Alpha, alphaInterp)
+						stop.Color.Values[3] = min(stop.Color.Values[3], alphaInterp)
 					}
 					last = maybe.Some([2]float64{b, alphaB})
 				}

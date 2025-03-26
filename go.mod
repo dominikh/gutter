@@ -13,9 +13,9 @@ require (
 	golang.org/x/sys v0.21.0
 	golang.org/x/text v0.21.0
 	golang.org/x/tools v0.22.0
-	honnef.co/go/color v0.0.0-20240902224312-bee6d5d40ebe
-	honnef.co/go/curve v0.0.0-20240905023635-08d8c2e98b68
-	honnef.co/go/jello v0.0.0-20240903003407-5fe6a4694219
+	honnef.co/go/color v0.0.0-20250521155844-50a57575c7d3
+	honnef.co/go/curve v0.0.0-20250325031802-e021cd9ef495
+	honnef.co/go/jello v0.0.0-20250521161253-6b746b01ce5a
 	honnef.co/go/libwayland v0.0.0-20240816012442-83394039f572
 	honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2
 )

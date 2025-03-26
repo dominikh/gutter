@@ -50,7 +50,7 @@ func BrushWithAlpha(brush gfx.Brush, alpha float64) gfx.Brush {
 	switch brush := brush.(type) {
 	case gfx.SolidBrush:
 		c := brush.Color
-		c.Alpha = alpha
+		c.Values[3] = alpha
 		return gfx.SolidBrush{
 			Color: c,
 		}

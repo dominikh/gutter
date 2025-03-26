@@ -8,7 +8,6 @@ package sparse
 import (
 	"fmt"
 	"iter"
-	"slices"
 
 	"honnef.co/go/curve"
 )
@@ -88,5 +87,5 @@ func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.A
 		}
 	}
 	stroked := curve.StrokePath(iter, style, curve.StrokeOpts{}, flattenTolerance)
-	return fill(slices.Values(stroked), curve.Identity, lineBuf)
+	return fill(stroked, curve.Identity, lineBuf)
 }

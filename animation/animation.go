@@ -461,7 +461,7 @@ func (s KeyframedColorStops) Evaluate(frame float64) []gfx.ColorStop {
 		r := Lerp(v0[j].Color.Values[0], v1[j].Color.Values[0], t)
 		g := Lerp(v0[j].Color.Values[1], v1[j].Color.Values[1], t)
 		b := Lerp(v0[j].Color.Values[2], v1[j].Color.Values[2], t)
-		a := Lerp(v0[j].Color.Alpha, v1[j].Color.Alpha, t)
+		a := Lerp(v0[j].Color.Values[3], v1[j].Color.Values[3], t)
 		stops = append(stops, gfx.ColorStop{
 			Offset: float32(offset),
 			Color:  color.Make(color.SRGB, r, g, b, a),
