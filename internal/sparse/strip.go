@@ -112,7 +112,9 @@ func renderStripsScalar(
 					for y := range tileHeight {
 						area := locationWinding[x][y]
 						coverage := min32(abs32(area), 1.0)
-						areaU8 := satConv[uint8](coverage*255.0 + 0.5)
+						// We don't need to use satConv here. coverage ∈ [0, 1]
+						// and uint8(255.5) == uint8(255).
+						areaU8 := uint8(coverage*255.0 + 0.5)
 						alphas[y] = areaU8
 					}
 					alphaBuf = append(alphaBuf, alphas)
