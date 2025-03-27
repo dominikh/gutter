@@ -36,15 +36,7 @@ func (s strip) String() string {
 
 func min32(a, b float32) float32 {
 	// Unlike Go's min, this doesn't try to preserve NaN.
-
-	if a != a {
-		return b
-	}
-	if b != b {
-		return a
-	}
-
-	if a <= b {
+	if a < b {
 		return a
 	} else {
 		return b
@@ -53,14 +45,7 @@ func min32(a, b float32) float32 {
 
 func max32(a, b float32) float32 {
 	// Unlike Go's max, this doesn't try to preserve NaN.
-
-	if a != a {
-		return b
-	}
-	if b != b {
-		return a
-	}
-	if a >= b {
+	if a > b {
 		return a
 	} else {
 		return b
