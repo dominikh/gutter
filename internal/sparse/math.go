@@ -19,15 +19,11 @@ func ceil32(f float32) float32 {
 }
 
 func abs32(f float32) float32 {
-	return float32(math.Abs(float64(f)))
+	return math.Float32frombits(math.Float32bits(f) &^ (1 << 31))
 }
 
 func sign32(f float32) float32 {
-	if f != f {
-		return f
-	}
-
-	if math.Signbit(float64(f)) {
+	if math.Float32bits(f)&(1<<31) != 0 {
 		// f is -0.0 or negative
 		return -1
 	} else {
