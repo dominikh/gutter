@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"iter"
 	"log"
+	"runtime"
 	"slices"
 
 	"honnef.co/go/curve"
@@ -32,25 +33,19 @@ type layer struct {
 	bbox [4]uint16
 	// The rendered path in sparse strip representation
 	strips  []strip
+	alphas  [][stripHeight]uint8
 	opacity float32
 	blend   BlendMode
 }
 
 type Renderer struct {
-	width  uint16
-	height uint16
+	width     uint16
+	height    uint16
+	transform curve.Affine
 	// [y][x]wideTile
-	tiles [][]wideTile
-	// [sparse column][y]uint8
-	alphas     [][stripHeight]uint8
-	transform  curve.Affine
+	tiles      [][]wideTile
 	stateStack []gfxState
 	layerStack []layer
-
-	// Scratch buffers
-	tileBuf  []tile
-	stripBuf []strip
-	lineBuf  []flatLine
 }
 
 func NewRenderer(width, height uint16) *Renderer {
@@ -65,10 +60,13 @@ func NewRenderer(width, height uint16) *Renderer {
 		width:      width,
 		height:     height,
 		tiles:      tiles,
-		transform:  curve.Identity,
 		stateStack: []gfxState{{0}},
+		transform:  curve.Identity,
 	}
 }
+
+func (ctx *Renderer) Width() uint16  { return ctx.width }
+func (ctx *Renderer) Height() uint16 { return ctx.height }
 
 func (ctx *Renderer) Reset() {
 	for _, row := range ctx.tiles {
@@ -79,8 +77,6 @@ func (ctx *Renderer) Reset() {
 			tile.cmds = tile.cmds[:0]
 		}
 	}
-
-	ctx.alphas = ctx.alphas[:0]
 }
 
 // Finish the coarse rasterization prior to fine rendering.
@@ -93,60 +89,84 @@ func (ctx *Renderer) finish() {
 
 func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
 	ctx.finish()
-	fine := newFine(width, height, pixmap)
-	for y, row := range ctx.tiles {
-		for x := range row {
-			tile := &row[x]
-			fine.topLayer().clear(tile.bg)
+	distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
+		fine := newFine(width, height, pixmap)
+		for y, row := range subitems {
+			y += group * step
+			for x := range row {
+				tile := &row[x]
+				fine.topLayer().clear(tile.bg)
 
-			if false && len(tile.cmds) > 0 {
-				log.Println("tile", x, y)
-				for i := range tile.cmds {
-					log.Println(&tile.cmds[i])
+				if false && len(tile.cmds) > 0 {
+					log.Println("tile", x, y)
+					for i := range tile.cmds {
+						log.Println(&tile.cmds[i])
+					}
+					log.Println()
 				}
-				log.Println()
-			}
 
-			for i := range tile.cmds {
-				cmd := tile.cmds[i]
-				fine.runCmd(cmd, ctx.alphas)
+				for i := range tile.cmds {
+					cmd := tile.cmds[i]
+					fine.runCmd(cmd)
+				}
+				switch len(fine.layers) {
+				case 0:
+					panic("internal error: left with no layers")
+				case 1:
+				default:
+					panic("internal error: left with more than one layer")
+				}
+				fine.pack(uint16(x), uint16(y))
 			}
-			switch len(fine.layers) {
-			case 0:
-				panic("internal error: left with no layers")
-			case 1:
-			default:
-				panic("internal error: left with more than one layer")
-			}
-			fine.pack(uint16(x), uint16(y))
 		}
-	}
+		return nil
+	})
 	if false {
-		log.Println(&fine.stats)
+		// log.Println(&fine.stats)
 	}
 }
 
-func (ctx *Renderer) renderPathCommon(lineBuf []flatLine, fillRule FillRule) {
-	ctx.tileBuf = makeTiles(lineBuf, ctx.tileBuf, uint16(ctx.width), uint16(ctx.height))
-	slices.SortFunc(ctx.tileBuf, tile.cmp)
-	ctx.stripBuf, ctx.alphas = renderStripsScalar(ctx.tileBuf, fillRule, ctx.lineBuf, ctx.stripBuf, ctx.alphas)
+func renderPathCommon(lineBuf []flatLine, fillRule FillRule, width, height uint16) ([]strip, [][stripHeight]uint8) {
+	tileBuf := makeTiles(lineBuf, nil, width, height)
+	slices.SortFunc(tileBuf, tile.cmp)
+	stripBuf, alphas := renderStripsScalar(tileBuf, fillRule, lineBuf, nil, nil)
+	return stripBuf, alphas
 }
 
-func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Color) {
+type CompiledPath struct {
+	strips   []strip
+	alphas   [][stripHeight]uint8
+	fillRule FillRule
+}
+
+func CompileFillPath(path iter.Seq[curve.PathElement], fillRule FillRule, affine curve.Affine, width, height uint16) CompiledPath {
+	lines := fill(path, affine)
+	strips, alphas := renderPathCommon(lines, fillRule, width, height)
+	return CompiledPath{strips, alphas, fillRule}
+}
+
+func CompileStrokedPath(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, affine curve.Affine, width, height uint16) CompiledPath {
+	lines := stroke(path, stroke_, affine)
+	strips, alphas := renderPathCommon(lines, NonZero, width, height)
+	return CompiledPath{strips, alphas, NonZero}
+}
+
+func (ctx *Renderer) renderPath(p CompiledPath, color Color) {
 	// XXX support a brush
 
-	ctx.renderPathCommon(lineBuf, fillRule)
+	stripBuf := p.strips
+	alphas := p.alphas
 
 	bbox := ctx.bbox()
-	for i := range len(ctx.stripBuf) - 1 {
-		strip := &ctx.stripBuf[i]
+	for i := range len(stripBuf) - 1 {
+		strip := &stripBuf[i]
 
 		if strip.x >= ctx.width {
 			// Don't render strips that are outside the viewport.
 			continue
 		}
 
-		nextStrip := &ctx.stripBuf[i+1]
+		nextStrip := &stripBuf[i+1]
 		x0 := strip.x
 		stripY := strip.stripY()
 		if stripY < bbox[1] {
@@ -178,6 +198,7 @@ func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Col
 				width:    width,
 				alphaIdx: int(col),
 				color:    color,
+				alphas:   alphas,
 			}
 			x += width
 			col += uint32(width)
@@ -185,13 +206,13 @@ func (ctx *Renderer) renderPath(lineBuf []flatLine, fillRule FillRule, color Col
 		}
 
 		var activeFill bool
-		switch fillRule {
+		switch p.fillRule {
 		case NonZero:
 			activeFill = nextStrip.winding != 0
 		case EvenOdd:
 			activeFill = nextStrip.winding%2 != 0
 		default:
-			panic(fmt.Sprintf("unexpected sparse.FillRule: %#v", fillRule))
+			panic(fmt.Sprintf("unexpected sparse.FillRule: %#v", p.fillRule))
 		}
 
 		if activeFill && stripY == nextStrip.stripY() {
@@ -231,6 +252,7 @@ func (ctx *Renderer) popLayer() {
 	ctx.layerStack = ctx.layerStack[:len(ctx.layerStack)-1]
 	bbox := lastLayer.bbox
 	strips := lastLayer.strips
+	alphas := lastLayer.alphas
 
 	// The next bit of code accomplishes the following. For each tile in
 	// the intersected bounding box, it does one of two things depending
@@ -305,6 +327,7 @@ func (ctx *Renderer) popLayer() {
 				alphaIdx: int(col),
 				blend:    lastLayer.blend,
 				opacity:  lastLayer.opacity,
+				alphas:   alphas,
 			}
 			x += width
 			col += uint32(width)
@@ -370,18 +393,29 @@ func (ctx *Renderer) getAffine() curve.Affine {
 	return ctx.transform
 }
 
-func (ctx *Renderer) Fill(path iter.Seq[curve.PathElement], fillRule FillRule, color Color) {
+func (ctx *Renderer) FillCompiled(p CompiledPath, color Color) {
 	// XXX support brushes
-	affine := ctx.getAffine()
-	ctx.lineBuf = fill(path, affine, ctx.lineBuf)
-	ctx.renderPath(ctx.lineBuf, fillRule, color)
+	ctx.renderPath(p, color)
 }
 
-func (ctx *Renderer) Stroke(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, color Color) {
+func (ctx *Renderer) Fill(
+	path iter.Seq[curve.PathElement],
+	fillRule FillRule,
+	color Color,
+) {
+	p := CompileFillPath(path, fillRule, ctx.transform, ctx.width, ctx.height)
 	// XXX support brushes
-	affine := ctx.getAffine()
-	ctx.lineBuf = stroke(path, stroke_, affine, ctx.lineBuf)
-	ctx.renderPath(ctx.lineBuf, NonZero, color)
+	ctx.renderPath(p, color)
+}
+
+func (ctx *Renderer) Stroke(
+	path iter.Seq[curve.PathElement],
+	stroke_ curve.Stroke,
+	color Color,
+) {
+	// XXX support brushes
+	p := CompileStrokedPath(path, stroke_, ctx.transform, ctx.width, ctx.height)
+	ctx.renderPath(p, color)
 }
 
 type Layer struct {
@@ -391,28 +425,22 @@ type Layer struct {
 	ClipFillRule FillRule
 }
 
+type LayerCompiled struct {
+	BlendMode BlendMode
+	Opacity   float32
+	Clip      CompiledPath
+}
+
 func (ctx *Renderer) PushClip(path iter.Seq[curve.PathElement], fill FillRule) {
 	ctx.PushLayer(Layer{Opacity: 1, Clip: path, ClipFillRule: fill})
 }
 
-func (ctx *Renderer) PushLayer(l Layer) {
-	clipPath := l.Clip
-	if clipPath == nil {
-		// OPT(dh): instead of going through the whole clipping logic (computing
-		// and processing strips), we should have a special case for layers
-		// without clips that just processes all tiles in the current bounding
-		// box.
-		clipPath = curve.NewRectFromOrigin(
-			curve.Pt(0, 0),
-			curve.Sz(float64(ctx.width), float64(ctx.height)),
-		).PathElements(0.1)
-	}
+func (ctx *Renderer) PushClipCompiled(p CompiledPath) {
+	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: p})
+}
 
-	affine := ctx.getAffine()
-	ctx.lineBuf = fill(clipPath, affine, ctx.lineBuf)
-	ctx.renderPathCommon(ctx.lineBuf, l.ClipFillRule)
-	strips := ctx.stripBuf
-	ctx.stripBuf = nil
+func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
+	strips := l.Clip.strips
 	var pathBbox [4]uint16
 	if len(strips) > 1 {
 		y0 := strips[0].stripY()
@@ -515,9 +543,32 @@ func (ctx *Renderer) PushLayer(l Layer) {
 		strips:  strips,
 		opacity: l.Opacity,
 		blend:   l.BlendMode,
+		alphas:  l.Clip.alphas,
 	}
 	ctx.layerStack = append(ctx.layerStack, clip)
 	ctx.stateStack[len(ctx.stateStack)-1].numLayers++
+}
+
+func (ctx *Renderer) PushLayer(l Layer) {
+	clipPath := l.Clip
+	if clipPath == nil {
+		// OPT(dh): instead of going through the whole clipping logic (computing
+		// and processing strips), we should have a special case for layers
+		// without clips that just processes all tiles in the current bounding
+		// box.
+		clipPath = curve.NewRectFromOrigin(
+			curve.Pt(0, 0),
+			curve.Sz(float64(ctx.width), float64(ctx.height)),
+		).PathElements(0.1)
+	}
+
+	p := CompileFillPath(clipPath, l.ClipFillRule, ctx.transform, ctx.width, ctx.height)
+	ctx.PushLayerCompiled(LayerCompiled{
+		BlendMode: l.BlendMode,
+		Opacity:   l.Opacity,
+		Clip:      p,
+	})
+
 }
 
 func (ctx *Renderer) Save() {

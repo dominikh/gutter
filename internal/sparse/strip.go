@@ -60,6 +60,7 @@ func renderStripsScalar(
 	alphaBuf [][stripHeight]uint8,
 ) ([]strip, [][stripHeight]uint8) {
 	stripBuf = stripBuf[:0]
+	alphaBuf = alphaBuf[:0]
 
 	if len(tiles) == 0 {
 		return stripBuf, alphaBuf
@@ -82,7 +83,7 @@ func renderStripsScalar(
 	strip_ := strip{
 		x:       prevTile.x() * tileWidth,
 		y:       prevTile.y() * tileHeight,
-		col:     uint32(len(alphaBuf)),
+		col:     0,
 		winding: 0,
 	}
 

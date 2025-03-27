@@ -27,8 +27,8 @@ func (v vec2) String() string {
 	return fmt.Sprintf("(%g, %g)", v.x, v.y)
 }
 
-func fill(path iter.Seq[curve.PathElement], affine curve.Affine, lineBuf []flatLine) []flatLine {
-	lineBuf = lineBuf[:0]
+func fill(path iter.Seq[curve.PathElement], affine curve.Affine) []flatLine {
+	var lineBuf []flatLine
 
 	var start, p0 curve.Point
 	iter := func(yield func(el curve.PathElement) bool) {
@@ -78,7 +78,7 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine, lineBuf []flatL
 	return lineBuf
 }
 
-func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.Affine, lineBuf []flatLine) []flatLine {
+func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.Affine) []flatLine {
 	iter := func(yield func(el curve.PathElement) bool) {
 		for el := range path {
 			if !yield(el.Transform(affine)) {
@@ -87,5 +87,5 @@ func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.A
 		}
 	}
 	stroked := curve.StrokePath(iter, style, curve.StrokeOpts{}, flattenTolerance)
-	return fill(stroked, curve.Identity, lineBuf)
+	return fill(stroked, curve.Identity)
 }

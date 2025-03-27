@@ -31,12 +31,13 @@ const (
 )
 
 type cmd struct {
-	alphaIdx int        // alphaFill, clipAlphaFill
-	x        uint16     // fill, alphaFill, clipFill, clipAlphaFill
-	width    uint16     // fill, alphaFill, clipFill, clipAlphaFill
-	color    [4]float32 // fill, alphaFill
-	blend    BlendMode  // clipAlphaFill, clipFill
-	opacity  float32    // clipAlphaFill, clipFill
+	alphaIdx int                  // alphaFill, clipAlphaFill
+	color    [4]float32           // fill, alphaFill
+	opacity  float32              // clipAlphaFill, clipFill
+	alphas   [][stripHeight]uint8 // alphaFill, clipAlphaFill
+	x        uint16               // fill, alphaFill, clipFill, clipAlphaFill
+	width    uint16               // fill, alphaFill, clipFill, clipAlphaFill
+	blend    BlendMode            // clipAlphaFill, clipFill
 	typ      cmdType
 }
 

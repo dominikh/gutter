@@ -197,12 +197,12 @@ func (f *fine) materialize(l *fineLayer, start, end int) {
 	memsetColumnsFp(l.scratch[start:end], l.singleColor)
 }
 
-func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
+func (f *fine) runCmd(cmd cmd) {
 	switch cmd.typ {
 	case cmdFill:
 		f.fill(int(cmd.x), int(cmd.width), cmd.color)
 	case cmdAlphaFill:
-		aslice := alphas[cmd.alphaIdx:]
+		aslice := cmd.alphas[cmd.alphaIdx:]
 		f.alphaFill(int(cmd.x), int(cmd.width), aslice, cmd.color)
 	case cmdPushClip:
 		f.stats.pushClips++
@@ -223,7 +223,7 @@ func (f *fine) runCmd(cmd cmd, alphas [][stripHeight]uint8) {
 	case cmdClipFill:
 		f.clipFill(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
 	case cmdClipAlphaFill:
-		aslice := alphas[cmd.alphaIdx:]
+		aslice := cmd.alphas[cmd.alphaIdx:]
 		f.clipAlphaFill(int(cmd.x), int(cmd.width), aslice, cmd.blend, cmd.opacity)
 	default:
 		panic(fmt.Sprintf("unreachable: %T", cmd))
