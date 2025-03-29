@@ -230,12 +230,6 @@ func (f *fine) runCmd(cmd cmd) {
 	}
 }
 
-var (
-	memsetColumnsFp = memsetColumnsNative
-
-	fillComplexFp = fineFillComplexNative
-)
-
 func (f *fine) fill(x, width int, color Color) {
 	l := f.topLayer()
 	buf := l.scratch[x : x+width]

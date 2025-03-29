@@ -8,6 +8,7 @@ package sparse
 import (
 	"fmt"
 	"math"
+	"slices"
 	"structs"
 )
 
@@ -108,18 +109,9 @@ func renderStripsScalar(
 		if !prevTile.sameLoc(tile_) {
 			switch fillRule {
 			case NonZero:
-				for x := range tileWidth {
-					var alphas [stripHeight]uint8
-					for y := range tileHeight {
-						area := locationWinding[x][y]
-						coverage := min32(abs32(area), 1.0)
-						// We don't need to use satConv here. coverage ∈ [0, 1]
-						// and uint8(255.5) == uint8(255).
-						areaU8 := uint8(coverage*255.0 + 0.5)
-						alphas[y] = areaU8
-					}
-					alphaBuf = append(alphaBuf, alphas)
-				}
+				alphaBuf = slices.Grow(alphaBuf, tileWidth)[:len(alphaBuf)+4]
+				tail := alphaBuf[len(alphaBuf)-4:][:tileWidth]
+				computeAlphasNonZeroFp((*[4][4]uint8)(tail), &locationWinding)
 			case EvenOdd:
 				for x := range tileWidth {
 					var alphas [stripHeight]uint8
@@ -263,20 +255,7 @@ func renderStripsScalar(
 				ymax = max32(lineLeftY, lineViewportLeftY)
 			}
 
-			for yIdx := range tileHeight {
-				pxTopY := float32(yIdx)
-				pxBottomY := 1.0 + float32(yIdx)
-
-				ymin := max32(ymin, pxTopY)
-				ymax := min32(ymax, pxBottomY)
-
-				h := max32(ymax-ymin, 0)
-				accumulatedWinding[yIdx] += sign * h
-
-				for xIdx := range tileWidth {
-					locationWinding[xIdx][yIdx] += sign * h
-				}
-			}
+			processOutOfBoundsWindingFp(ymin, ymax, sign, &locationWinding, &accumulatedWinding)
 
 			if lineRightX < 0.0 {
 				// Early exit, as no part of the line is inside the tile.
@@ -284,52 +263,109 @@ func renderStripsScalar(
 			}
 		}
 
-		for yIdx := range tileHeight {
-			pxTopY := float32(yIdx)
-			pxBottomY := 1.0 + float32(yIdx)
-
-			ymin := max32(lineTopY, pxTopY)
-			ymax := min32(lineBottomY, pxBottomY)
-
-			acc := float32(0)
-			for xIdx := range tileWidth {
-				pxLeftX := float32(xIdx)
-				pxRightX := 1.0 + float32(xIdx)
-
-				// The y-coordinate of the intersections between line and the pixel's left and
-				// right edges respectively.
-				//
-				// There is some subtlety going on here: `y_slope` will usually be finite, but will
-				// be `inf` for purely vertical lines (`p0_x == p1_x`).
-				//
-				// In the case of `inf`, the resulting slope calculation will be `-inf` or `inf`
-				// depending on whether the pixel edge is left or right of the line, respectively
-				// (from the viewport's coordinate system perspective). The `min` and `max`
-				// y-clamping logic generalizes nicely, as a pixel edge to the left of the line is
-				// clamped to `ymin`, and a pixel edge to the right is clamped to `ymax`.
-				//
-				// In the special case where a vertical line and pixel edge are at the exact same
-				// x-position (collinear), the line belongs to the pixel on whose _left_ edge it is
-				// situated. The resulting slope calculation for the edge the line is situated on
-				// will be NaN, as `0 * inf` results in NaN. This is true for both the left and
-				// right edge. In both cases, the call to `f32::max` will set this to `ymin`.
-				linePxLeftY := min32(max32(lineTopY+(pxLeftX-lineTopX)*ySlope, ymin), ymax)
-				linePxRightY := min32(max32(lineTopY+(pxRightX-lineTopX)*ySlope, ymin), ymax)
-
-				// `x_slope` is always finite, as horizontal geometry is elided.
-				linePxLeftYX := lineTopX + (linePxLeftY-lineTopY)*xSlope
-				linePxRightYX := lineTopX + (linePxRightY-lineTopY)*xSlope
-				h := abs32(linePxRightY - linePxLeftY)
-
-				// The trapezoidal area enclosed between the line and the right edge of the pixel
-				// square.
-				area := 0.5 * h * (2.0*pxRightX - linePxRightYX - linePxLeftYX)
-				locationWinding[xIdx][yIdx] += acc + sign*area
-				acc += sign * h
-			}
-			accumulatedWinding[yIdx] += acc
-		}
+		computeWindingFp(
+			lineTopY,
+			lineTopX,
+			lineBottomY,
+			sign,
+			xSlope,
+			ySlope,
+			&locationWinding,
+			&accumulatedWinding,
+		)
 	}
 
 	return stripBuf, alphaBuf
+}
+
+func computeAlphasNonZeroNative(tail *[4][4]uint8, locationWinding *[4][4]float32) {
+	for x := range tileWidth {
+		for y := range tileHeight {
+			area := locationWinding[x][y]
+			coverage := min32(abs32(area), 1.0)
+			// We don't need to use satConv here. coverage ∈ [0, 1]
+			// and uint8(255.5) == uint8(255).
+			tail[x][y] = uint8(coverage*255.0 + 0.5)
+		}
+	}
+}
+
+func processOutOfBoundsWindingNative(
+	ymin float32,
+	ymax float32,
+	sign float32,
+	locationWinding *[4][4]float32,
+	accumulatedWinding *[4]float32,
+) {
+	for yIdx := range tileHeight {
+		pxTopY := float32(yIdx)
+		pxBottomY := 1.0 + float32(yIdx)
+
+		ymin := max32(ymin, pxTopY)
+		ymax := min32(ymax, pxBottomY)
+
+		h := max32(ymax-ymin, 0)
+		accumulatedWinding[yIdx] += sign * h
+
+		for xIdx := range tileWidth {
+			locationWinding[xIdx][yIdx] += sign * h
+		}
+	}
+}
+
+func computeWindingNative(
+	lineTopY float32,
+	lineTopX float32,
+	lineBottomY float32,
+	sign float32,
+	xSlope float32,
+	ySlope float32,
+	locationWinding *[4][4]float32,
+	accumulatedWinding *[4]float32,
+) {
+	for yIdx := range tileHeight {
+		pxTopY := float32(yIdx)
+		pxBottomY := 1.0 + float32(yIdx)
+
+		ymin := max32(lineTopY, pxTopY)
+		ymax := min32(lineBottomY, pxBottomY)
+
+		acc := float32(0)
+		for xIdx := range tileWidth {
+			pxLeftX := float32(xIdx)
+			pxRightX := 1.0 + float32(xIdx)
+
+			// The y-coordinate of the intersections between line and the pixel's left and
+			// right edges respectively.
+			//
+			// There is some subtlety going on here: `y_slope` will usually be finite, but will
+			// be `inf` for purely vertical lines (`p0_x == p1_x`).
+			//
+			// In the case of `inf`, the resulting slope calculation will be `-inf` or `inf`
+			// depending on whether the pixel edge is left or right of the line, respectively
+			// (from the viewport's coordinate system perspective). The `min` and `max`
+			// y-clamping logic generalizes nicely, as a pixel edge to the left of the line is
+			// clamped to `ymin`, and a pixel edge to the right is clamped to `ymax`.
+			//
+			// In the special case where a vertical line and pixel edge are at the exact same
+			// x-position (collinear), the line belongs to the pixel on whose _left_ edge it is
+			// situated. The resulting slope calculation for the edge the line is situated on
+			// will be NaN, as `0 * inf` results in NaN. This is true for both the left and
+			// right edge. In both cases, the call to `f32::max` will set this to `ymin`.
+			linePxLeftY := min32(max32(lineTopY+(pxLeftX-lineTopX)*ySlope, ymin), ymax)
+			linePxRightY := min32(max32(lineTopY+(pxRightX-lineTopX)*ySlope, ymin), ymax)
+
+			// `x_slope` is always finite, as horizontal geometry is elided.
+			linePxLeftYX := lineTopX + (linePxLeftY-lineTopY)*xSlope
+			linePxRightYX := lineTopX + (linePxRightY-lineTopY)*xSlope
+			h := abs32(linePxRightY - linePxLeftY)
+
+			// The trapezoidal area enclosed between the line and the right edge of the pixel
+			// square.
+			area := 0.5 * h * (2.0*pxRightX - linePxRightYX - linePxLeftYX)
+			locationWinding[xIdx][yIdx] += acc + sign*area
+			acc += sign * h
+		}
+		accumulatedWinding[yIdx] += acc
+	}
 }

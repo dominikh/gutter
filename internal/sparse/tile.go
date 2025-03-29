@@ -127,7 +127,9 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 					windingX = satConv[uint16](lineRowRightX)
 				}
 
-				for xIdx := satConv[uint16](lineRowLeftX); xIdx <= min(satConv[uint16](lineRowRightX), tileColumns-1); xIdx++ {
+				start := satConv[uint16](lineRowLeftX)
+				end := min(satConv[uint16](lineRowRightX), tileColumns-1)
+				for xIdx := start; xIdx <= end; xIdx++ {
 					tileBuf = append(tileBuf, newTile(xIdx, yIdx, uint32(lineIdx), y >= lineTopY && xIdx == windingX))
 				}
 			}
