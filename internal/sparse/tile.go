@@ -6,7 +6,6 @@
 package sparse
 
 import (
-	"cmp"
 	"fmt"
 )
 
@@ -15,21 +14,19 @@ const (
 	tileHeight = 4
 )
 
-type tile struct {
-	// The packed tile data.
-	//
-	// The layout is as follows, with the bit indices from least to most significant.
-	//
-	// [ 0, 31): The 31-bit index of the line this tile belongs to into the line buffer;
-	// [31, 32): The 1-bit coarse winding of the tile. This is `1` if and only if the lines
-	// crosses the tile's top edge. Lines making this crossing increment or decrement the coarse
-	// tile winding, depending on the line direction;
-	// [32, 48): The 16-bit x-coordinate; and
-	// [48, 64): The 16-bit y-coordinate.
-	//
-	// Note the byte layout in memory depends on the endianness of the compilation target.
-	data uint64
-}
+// The packed tile data.
+//
+// The layout is as follows, with the bit indices from least to most significant.
+//
+// [ 0, 31): The 31-bit index of the line this tile belongs to into the line buffer;
+// [31, 32): The 1-bit coarse winding of the tile. This is `1` if and only if the lines
+// crosses the tile's top edge. Lines making this crossing increment or decrement the coarse
+// tile winding, depending on the line direction;
+// [32, 48): The 16-bit x-coordinate; and
+// [48, 64): The 16-bit y-coordinate.
+//
+// Note the byte layout in memory depends on the endianness of the compilation target.
+type tile uint64
 
 func (t tile) String() string {
 	return fmt.Sprintf("tile(lineIdx=%d, winding=%t, x=%d, y=%d)",
@@ -41,7 +38,7 @@ func newTile(x, y uint16, lineIdx uint32, winding bool) tile {
 	if winding {
 		windingb = 1
 	}
-	return tile{uint64(y)<<48 | uint64(x)<<32 | windingb<<31 | uint64(lineIdx)}
+	return tile(uint64(y)<<48 | uint64(x)<<32 | windingb<<31 | uint64(lineIdx))
 }
 
 // Populate the tiles' container with a buffer of lines.
@@ -140,23 +137,19 @@ func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile 
 }
 
 func (t tile) x() uint16 {
-	return uint16(t.data >> 32)
+	return uint16(t >> 32)
 }
 
 func (t tile) y() uint16 {
-	return uint16(t.data >> 48)
+	return uint16(t >> 48)
 }
 
-func (t tile) cmp(b tile) int {
-	return cmp.Compare(t.data, b.data)
-}
-
-func (t *tile) winding() bool {
-	return t.data&(1<<31) != 0
+func (t tile) winding() bool {
+	return t&(1<<31) != 0
 }
 
 func (t tile) lineIdx() uint32 {
-	return uint32(t.data & (1<<31 - 1))
+	return uint32(t & (1<<31 - 1))
 }
 
 func (t tile) sameLoc(o tile) bool {

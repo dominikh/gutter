@@ -128,7 +128,7 @@ func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
 
 func renderPathCommon(lineBuf []flatLine, fillRule FillRule, width, height uint16) ([]strip, [][stripHeight]uint8) {
 	tileBuf := makeTiles(lineBuf, nil, width, height)
-	slices.SortFunc(tileBuf, tile.cmp)
+	slices.Sort(tileBuf)
 	stripBuf, alphas := renderStripsScalar(tileBuf, fillRule, lineBuf, nil, nil)
 	return stripBuf, alphas
 }
