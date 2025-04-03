@@ -7,55 +7,58 @@
 package sparse
 
 import (
+	"fmt"
 	"testing"
 
 	"golang.org/x/sys/cpu"
 )
 
-func Benchmark_fineFillComplexAVX(b *testing.B) {
-	if !cpu.X86.HasAVX {
-		b.Skip()
+func Benchmark_fineFillComplexAMD64(b *testing.B) {
+	fns := []struct {
+		fp      func(buf [][stripHeight]Color, color Color)
+		desc    string
+		enabled bool
+	}{
+		{fineFillComplexNative, "purego", true},
+		{fineFillComplexSSE, "SSE", true},
+		{fineFillComplexAVX, "AVX", cpu.X86.HasAVX},
 	}
-	c := Color{0.5, 0.5, 0.5, 0.5}
-	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
-		for b.Loop() {
-			fineFillComplexAVX(buf, c)
-		}
-	})
+	for _, fn := range fns {
+		b.Run(fmt.Sprintf("instr=%s", fn.desc), func(b *testing.B) {
+			if !fn.enabled {
+				b.Skip()
+			}
+			c := Color{0.5, 0.5, 0.5, 0.5}
+			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
+				for b.Loop() {
+					fn.fp(buf, c)
+				}
+			})
+		})
+	}
 }
 
-func Benchmark_memsetColumnsAVX(b *testing.B) {
-	if !cpu.X86.HasAVX {
-		b.Skip()
+func Benchmark_memsetColumnsAMD64(b *testing.B) {
+	fns := []struct {
+		fp      func(buf [][stripHeight]Color, color Color)
+		desc    string
+		enabled bool
+	}{
+		{memsetColumnsNative, "purego", true},
+		{memsetColumnsSSE, "SSE", true},
+		{memsetColumnsAVX, "AVX", cpu.X86.HasAVX},
 	}
-	c := Color{1, 1, 1, 1}
-	benchmarkFill(b, func(b *testing.B, buf [][4]Color) {
-		for b.Loop() {
-			memsetColumnsAVX(buf, c)
-		}
-	})
-}
-
-func Benchmark_fineFillComplexSSE(b *testing.B) {
-	if !cpu.X86.HasSSE2 {
-		b.Skip()
+	for _, fn := range fns {
+		b.Run(fmt.Sprintf("instr=%s", fn.desc), func(b *testing.B) {
+			if !fn.enabled {
+				b.Skip()
+			}
+			c := Color{1, 1, 1, 1}
+			benchmarkFill(b, func(b *testing.B, buf [][4]Color) {
+				for b.Loop() {
+					fn.fp(buf, c)
+				}
+			})
+		})
 	}
-	c := Color{0.5, 0.5, 0.5, 0.5}
-	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
-		for b.Loop() {
-			fineFillComplexSSE(buf, c)
-		}
-	})
-}
-
-func Benchmark_memsetColumnsSSE(b *testing.B) {
-	if !cpu.X86.HasSSE2 {
-		b.Skip()
-	}
-	c := Color{1, 1, 1, 1}
-	benchmarkFill(b, func(b *testing.B, buf [][4]Color) {
-		for b.Loop() {
-			memsetColumnsSSE(buf, c)
-		}
-	})
 }
