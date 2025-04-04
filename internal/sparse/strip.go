@@ -109,8 +109,9 @@ func renderStripsScalar(
 		if !prevTile.sameLoc(tile_) {
 			switch fillRule {
 			case NonZero:
-				alphaBuf = slices.Grow(alphaBuf, tileWidth)[:len(alphaBuf)+4]
-				tail := alphaBuf[len(alphaBuf)-4:][:tileWidth]
+				// OPT(dh): slicing alphaBuf and tail introduces unnecessary bounds checks
+				alphaBuf = slices.Grow(alphaBuf, tileWidth)[:len(alphaBuf)+tileWidth]
+				tail := alphaBuf[len(alphaBuf)-tileWidth:][:tileWidth]
 				computeAlphasNonZeroFp((*[4][4]uint8)(tail), &locationWinding)
 			case EvenOdd:
 				for x := range tileWidth {

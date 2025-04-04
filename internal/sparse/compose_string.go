@@ -9,16 +9,16 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[ComposeSrcOver-0]
-	_ = x[ComposeCopy-257]
-	_ = x[ComposeDest-258]
-	_ = x[ComposeClear-259]
+	_ = x[ComposeCopy-129]
+	_ = x[ComposeDest-130]
+	_ = x[ComposeClear-131]
 	_ = x[ComposeDestOver-4]
-	_ = x[ComposeSrcIn-261]
-	_ = x[ComposeDestIn-262]
-	_ = x[ComposeSrcOut-263]
-	_ = x[ComposeDestOut-264]
+	_ = x[ComposeSrcIn-133]
+	_ = x[ComposeDestIn-134]
+	_ = x[ComposeSrcOut-135]
+	_ = x[ComposeDestOut-136]
 	_ = x[ComposeSrcAtop-9]
-	_ = x[ComposeDestAtop-266]
+	_ = x[ComposeDestAtop-138]
 	_ = x[ComposeXor-11]
 	_ = x[ComposePlus-12]
 }
@@ -50,13 +50,13 @@ func (i Compose) String() string {
 	case 11 <= i && i <= 12:
 		i -= 11
 		return _Compose_name_3[_Compose_index_3[i]:_Compose_index_3[i+1]]
-	case 257 <= i && i <= 259:
-		i -= 257
+	case 129 <= i && i <= 131:
+		i -= 129
 		return _Compose_name_4[_Compose_index_4[i]:_Compose_index_4[i+1]]
-	case 261 <= i && i <= 264:
-		i -= 261
+	case 133 <= i && i <= 136:
+		i -= 133
 		return _Compose_name_5[_Compose_index_5[i]:_Compose_index_5[i+1]]
-	case i == 266:
+	case i == 138:
 		return _Compose_name_6
 	default:
 		return "Compose(" + strconv.FormatInt(int64(i), 10) + ")"

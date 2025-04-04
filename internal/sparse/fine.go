@@ -202,8 +202,7 @@ func (f *fine) runCmd(cmd cmd) {
 	case cmdFill:
 		f.fill(int(cmd.x), int(cmd.width), cmd.color)
 	case cmdAlphaFill:
-		aslice := cmd.alphas[cmd.alphaIdx:]
-		f.alphaFill(int(cmd.x), int(cmd.width), aslice, cmd.color)
+		f.alphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.color)
 	case cmdPushClip:
 		f.stats.pushClips++
 		var scratch *fineScratch
@@ -223,8 +222,7 @@ func (f *fine) runCmd(cmd cmd) {
 	case cmdClipFill:
 		f.clipFill(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
 	case cmdClipAlphaFill:
-		aslice := cmd.alphas[cmd.alphaIdx:]
-		f.clipAlphaFill(int(cmd.x), int(cmd.width), aslice, cmd.blend, cmd.opacity)
+		f.clipAlphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.blend, cmd.opacity)
 	default:
 		panic(fmt.Sprintf("unreachable: %T", cmd))
 	}

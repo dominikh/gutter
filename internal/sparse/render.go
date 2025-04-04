@@ -192,17 +192,19 @@ func (ctx *Renderer) renderPath(p CompiledPath, color Color) {
 		for xtile := xtile0; xtile < xtile1; xtile++ {
 			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
-			cmd := cmd{
-				typ:      cmdAlphaFill,
-				x:        xTileRel,
-				width:    width,
-				alphaIdx: int(col),
-				color:    color,
-				alphas:   alphas,
+			c := cmd{
+				typ:    cmdAlphaFill,
+				x:      xTileRel,
+				width:  width,
+				color:  color,
+				alphas: alphas[col:],
 			}
 			x += width
 			col += uint32(width)
-			ctx.tiles[stripY][xtile].alphaFill(cmd)
+			wt := &ctx.tiles[stripY][xtile]
+			if !wt.isZeroClip() {
+				wt.cmds = append(wt.cmds, c)
+			}
 		}
 
 		var activeFill bool
@@ -321,13 +323,12 @@ func (ctx *Renderer) popLayer() {
 			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
 			cmd := cmd{
-				typ:      cmdClipAlphaFill,
-				x:        xTileRel,
-				width:    width,
-				alphaIdx: int(col),
-				blend:    lastLayer.blend,
-				opacity:  lastLayer.opacity,
-				alphas:   alphas,
+				typ:     cmdClipAlphaFill,
+				x:       xTileRel,
+				width:   width,
+				blend:   lastLayer.blend,
+				opacity: lastLayer.opacity,
+				alphas:  alphas[col:],
 			}
 			x += width
 			col += uint32(width)

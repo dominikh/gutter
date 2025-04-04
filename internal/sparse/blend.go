@@ -14,7 +14,7 @@ import (
 	"honnef.co/go/safeish"
 )
 
-type Compose uint16
+type Compose uint8
 
 // ComposeOps is the list of all supported composition operators.
 var ComposeOps = []Compose{
@@ -30,7 +30,7 @@ var MixOps = []Mix{
 	MixDifference, MixExclusion,
 }
 
-const composeAffectsDestRegion = 1 << 8
+const composeAffectsDestRegion = 1 << 7
 
 const (
 	// The source is placed over the destination.

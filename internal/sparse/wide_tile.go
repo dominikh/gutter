@@ -31,14 +31,13 @@ const (
 )
 
 type cmd struct {
-	alphaIdx int                  // alphaFill, clipAlphaFill
-	color    [4]float32           // fill, alphaFill
-	opacity  float32              // clipAlphaFill, clipFill
-	alphas   [][stripHeight]uint8 // alphaFill, clipAlphaFill
-	x        uint16               // fill, alphaFill, clipFill, clipAlphaFill
-	width    uint16               // fill, alphaFill, clipFill, clipAlphaFill
-	blend    BlendMode            // clipAlphaFill, clipFill
-	typ      cmdType
+	color   [4]float32           // fill, alphaFill
+	opacity float32              // clipAlphaFill, clipFill
+	alphas  [][stripHeight]uint8 // alphaFill, clipAlphaFill
+	x       uint16               // fill, alphaFill, clipFill, clipAlphaFill
+	width   uint16               // fill, alphaFill, clipFill, clipAlphaFill
+	blend   BlendMode            // clipAlphaFill, clipFill
+	typ     cmdType
 }
 
 func (cmd cmd) String() string {
@@ -47,8 +46,8 @@ func (cmd cmd) String() string {
 		return fmt.Sprintf("Fill(x=%v, width=%v, color=%v)",
 			cmd.x, cmd.width, cmd.color)
 	case cmdAlphaFill:
-		return fmt.Sprintf("AlphaFill(x=%v, width=%v, color=%v, alphaIdx=%v)",
-			cmd.x, cmd.width, cmd.color, cmd.alphaIdx)
+		return fmt.Sprintf("AlphaFill(x=%v, width=%v, color=%v)",
+			cmd.x, cmd.width, cmd.color)
 	case cmdPushClip:
 		return "PushClip()"
 	case cmdPopClip:
@@ -56,17 +55,14 @@ func (cmd cmd) String() string {
 	case cmdClipFill:
 		return fmt.Sprintf("ClipFill(x=%v, width=%v, blend=%s)", cmd.x, cmd.width, cmd.blend)
 	case cmdClipAlphaFill:
-		return fmt.Sprintf("ClipAlphaFill(x=%v, width=%v, alphaIdx=%v, blend=%s)",
-			cmd.x, cmd.width, cmd.alphaIdx, cmd.blend)
+		return fmt.Sprintf("ClipAlphaFill(x=%v, width=%v, blend=%s)",
+			cmd.x, cmd.width, cmd.blend)
 	default:
 		panic(fmt.Sprintf("invalid command type %v", cmd.typ))
 	}
 }
 
 func (wt *wideTile) fill(x, width uint16, c [4]float32) {
-	if x+width > wideTileWidth {
-		panic(fmt.Sprintf("trying to fill from %d to %d, when a wide tile is only %d wide", x, x+width, wideTileWidth))
-	}
 	if wt.isZeroClip() {
 		return
 	}
