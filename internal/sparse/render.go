@@ -39,9 +39,8 @@ type layer struct {
 }
 
 type Renderer struct {
-	width     uint16
-	height    uint16
-	transform curve.Affine
+	width  uint16
+	height uint16
 	// [y][x]wideTile
 	tiles      [][]wideTile
 	stateStack []gfxState
@@ -61,7 +60,6 @@ func NewRenderer(width, height uint16) *Renderer {
 		height:     height,
 		tiles:      tiles,
 		stateStack: []gfxState{{0}},
-		transform:  curve.Identity,
 	}
 }
 
@@ -139,13 +137,13 @@ type CompiledPath struct {
 	fillRule FillRule
 }
 
-func CompileFillPath(path iter.Seq[curve.PathElement], fillRule FillRule, affine curve.Affine, width, height uint16) CompiledPath {
+func CompileFillPath(path iter.Seq[curve.PathElement], affine curve.Affine, fillRule FillRule, width, height uint16) CompiledPath {
 	lines := fill(path, affine)
 	strips, alphas := renderPathCommon(lines, fillRule, width, height)
 	return CompiledPath{strips, alphas, fillRule}
 }
 
-func CompileStrokedPath(path iter.Seq[curve.PathElement], stroke_ curve.Stroke, affine curve.Affine, width, height uint16) CompiledPath {
+func CompileStrokedPath(path iter.Seq[curve.PathElement], affine curve.Affine, stroke_ curve.Stroke, width, height uint16) CompiledPath {
 	lines := stroke(path, stroke_, affine)
 	strips, alphas := renderPathCommon(lines, NonZero, width, height)
 	return CompiledPath{strips, alphas, NonZero}
@@ -386,14 +384,6 @@ func (ctx *Renderer) popLayers() {
 	}
 }
 
-func (ctx *Renderer) SetAffine(aff curve.Affine) {
-	ctx.transform = aff
-}
-
-func (ctx *Renderer) getAffine() curve.Affine {
-	return ctx.transform
-}
-
 func (ctx *Renderer) FillCompiled(p CompiledPath, color Color) {
 	// XXX support brushes
 	ctx.renderPath(p, color)
@@ -401,29 +391,32 @@ func (ctx *Renderer) FillCompiled(p CompiledPath, color Color) {
 
 func (ctx *Renderer) Fill(
 	path iter.Seq[curve.PathElement],
+	transform curve.Affine,
 	fillRule FillRule,
 	color Color,
 ) {
-	p := CompileFillPath(path, fillRule, ctx.transform, ctx.width, ctx.height)
+	p := CompileFillPath(path, transform, fillRule, ctx.width, ctx.height)
 	// XXX support brushes
 	ctx.renderPath(p, color)
 }
 
 func (ctx *Renderer) Stroke(
 	path iter.Seq[curve.PathElement],
+	transform curve.Affine,
 	stroke_ curve.Stroke,
 	color Color,
 ) {
 	// XXX support brushes
-	p := CompileStrokedPath(path, stroke_, ctx.transform, ctx.width, ctx.height)
+	p := CompileStrokedPath(path, transform, stroke_, ctx.width, ctx.height)
 	ctx.renderPath(p, color)
 }
 
 type Layer struct {
-	BlendMode    BlendMode
-	Opacity      float32
-	Clip         iter.Seq[curve.PathElement]
-	ClipFillRule FillRule
+	BlendMode     BlendMode
+	Opacity       float32
+	Clip          iter.Seq[curve.PathElement]
+	ClipTransform curve.Affine
+	ClipFillRule  FillRule
 }
 
 type LayerCompiled struct {
@@ -432,8 +425,8 @@ type LayerCompiled struct {
 	Clip      CompiledPath
 }
 
-func (ctx *Renderer) PushClip(path iter.Seq[curve.PathElement], fill FillRule) {
-	ctx.PushLayer(Layer{Opacity: 1, Clip: path, ClipFillRule: fill})
+func (ctx *Renderer) PushClip(path iter.Seq[curve.PathElement], transform curve.Affine, fill FillRule) {
+	ctx.PushLayer(Layer{Opacity: 1, Clip: path, ClipFillRule: fill, ClipTransform: transform})
 }
 
 func (ctx *Renderer) PushClipCompiled(p CompiledPath) {
@@ -551,19 +544,19 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 }
 
 func (ctx *Renderer) PushLayer(l Layer) {
-	clipPath := l.Clip
-	if clipPath == nil {
+	if l.Clip == nil {
 		// OPT(dh): instead of going through the whole clipping logic (computing
 		// and processing strips), we should have a special case for layers
 		// without clips that just processes all tiles in the current bounding
 		// box.
-		clipPath = curve.NewRectFromOrigin(
+		l.Clip = curve.NewRectFromOrigin(
 			curve.Pt(0, 0),
 			curve.Sz(float64(ctx.width), float64(ctx.height)),
 		).PathElements(0.1)
+		l.ClipTransform = curve.Identity
 	}
 
-	p := CompileFillPath(clipPath, l.ClipFillRule, ctx.transform, ctx.width, ctx.height)
+	p := CompileFillPath(l.Clip, l.ClipTransform, l.ClipFillRule, ctx.width, ctx.height)
 	ctx.PushLayerCompiled(LayerCompiled{
 		BlendMode: l.BlendMode,
 		Opacity:   l.Opacity,

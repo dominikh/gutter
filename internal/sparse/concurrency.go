@@ -62,10 +62,9 @@ func NewConcurrentRenderer(width, height uint16, parallelism int) *ConcurrentRen
 	return r
 }
 
-func (r *ConcurrentRenderer) Width() uint16              { return r.r.Width() }
-func (r *ConcurrentRenderer) Height() uint16             { return r.r.Height() }
-func (r *ConcurrentRenderer) Reset()                     { r.r.Reset() }
-func (r *ConcurrentRenderer) SetAffine(aff curve.Affine) { r.r.transform = aff }
+func (r *ConcurrentRenderer) Width() uint16  { return r.r.Width() }
+func (r *ConcurrentRenderer) Height() uint16 { return r.r.Height() }
+func (r *ConcurrentRenderer) Reset()         { r.r.Reset() }
 
 func (r *ConcurrentRenderer) Stop() {
 	close(r.tasks)
@@ -79,6 +78,7 @@ func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, pixmap []Color
 
 func (r *ConcurrentRenderer) Fill(
 	path iter.Seq[curve.PathElement],
+	transform curve.Affine,
 	fillRule FillRule,
 	color Color,
 ) {
@@ -88,13 +88,14 @@ func (r *ConcurrentRenderer) Fill(
 		color: color,
 	}
 	r.tasks <- t
-	go func(width, height uint16, affine curve.Affine) {
-		t.path <- CompileFillPath(path, fillRule, affine, width, height)
-	}(r.Width(), r.Height(), r.r.transform)
+	go func(width, height uint16) {
+		t.path <- CompileFillPath(path, transform, fillRule, width, height)
+	}(r.Width(), r.Height())
 }
 
 func (r *ConcurrentRenderer) Stroke(
 	path iter.Seq[curve.PathElement],
+	transform curve.Affine,
 	stroke_ curve.Stroke,
 	color Color,
 ) {
@@ -104,13 +105,14 @@ func (r *ConcurrentRenderer) Stroke(
 		color: color,
 	}
 	r.tasks <- t
-	go func(width, height uint16, affine curve.Affine) {
-		t.path <- CompileStrokedPath(path, stroke_, affine, width, height)
-	}(r.Width(), r.Height(), r.r.transform)
+	go func(width, height uint16) {
+		t.path <- CompileStrokedPath(path, transform, stroke_, width, height)
+	}(r.Width(), r.Height())
 }
 
 func (r *ConcurrentRenderer) PushClip(
 	path iter.Seq[curve.PathElement],
+	transform curve.Affine,
 	fill FillRule,
 ) {
 	t := renderTask{
@@ -118,9 +120,9 @@ func (r *ConcurrentRenderer) PushClip(
 		kind: clipRenderTask,
 	}
 	r.tasks <- t
-	go func(width, height uint16, affine curve.Affine) {
-		t.path <- CompileFillPath(path, fill, affine, width, height)
-	}(r.Width(), r.Height(), r.r.transform)
+	go func(width, height uint16) {
+		t.path <- CompileFillPath(path, transform, fill, width, height)
+	}(r.Width(), r.Height())
 }
 
 func (r *ConcurrentRenderer) PushLayer(l Layer) {
