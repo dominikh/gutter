@@ -77,6 +77,8 @@ func (s *fineStats) String() string {
 type fine struct {
 	// the width and height of the output image, in pixels
 	width, height uint16
+	tileX         uint16
+	tileY         uint16
 	outBuf        []Color
 	layers        []fineLayer
 
@@ -104,6 +106,11 @@ func newFine(width, height uint16, out []Color) *fine {
 	return f
 }
 
+func (f *fine) setTile(x, y uint16) {
+	f.tileX = x
+	f.tileY = y
+}
+
 func (f *fine) topLayer() *fineLayer {
 	return &f.layers[len(f.layers)-1]
 }
@@ -126,12 +133,12 @@ func (l *fineLayer) clear(c Color) {
 }
 
 // pack writes the tile at (tileX, tileY) to the output buffer.
-func (f *fine) pack(tileX, tileY uint16) {
+func (f *fine) pack() {
 	l := f.topLayer()
 	if l.complex {
-		f.packComplex(l, tileX, tileY)
+		f.packComplex(l, f.tileX, f.tileY)
 	} else {
-		f.packSimple(l, tileX, tileY)
+		f.packSimple(l, f.tileX, f.tileY)
 	}
 }
 
@@ -200,9 +207,9 @@ func (f *fine) materialize(l *fineLayer, start, end int) {
 func (f *fine) runCmd(cmd cmd) {
 	switch cmd.typ {
 	case cmdFill:
-		f.fill(int(cmd.x), int(cmd.width), cmd.color)
+		f.fill(int(cmd.x), int(cmd.width), cmd.paint)
 	case cmdAlphaFill:
-		f.alphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.color)
+		f.alphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.paint)
 	case cmdPushClip:
 		f.stats.pushClips++
 		var scratch *fineScratch
@@ -228,59 +235,95 @@ func (f *fine) runCmd(cmd cmd) {
 	}
 }
 
-func (f *fine) fill(x, width int, color Color) {
+// TODO(dh): change types of x and width to uint16.
+func (f *fine) fill(x, width int, paint encodedPaint) {
 	l := f.topLayer()
 	buf := l.scratch[x : x+width]
 
-	if x == 0 && width == wideTileWidth {
-		if color[3] == 1.0 {
-			f.stats.fullWidthOpaqueClearFills++
-			l.clear(color)
-		} else if l.complex {
-			f.stats.fullWidthComplexFills++
-			fillComplexFp(buf, color)
-		} else {
-			f.stats.fullWidthTranslucentClearFills++
-			oneMinusAlpha := 1.0 - color[3]
-			color = Color{
-				0: l.singleColor[0]*oneMinusAlpha + color[0],
-				1: l.singleColor[1]*oneMinusAlpha + color[1],
-				2: l.singleColor[2]*oneMinusAlpha + color[2],
-				3: l.singleColor[3]*oneMinusAlpha + color[3],
+	switch paint := paint.(type) {
+	case Color:
+		color := Color(paint)
+		if x == 0 && width == wideTileWidth {
+			if color[3] == 1.0 {
+				f.stats.fullWidthOpaqueClearFills++
+				l.clear(color)
+			} else if l.complex {
+				f.stats.fullWidthComplexFills++
+				fillComplexFp(buf, color)
+			} else {
+				f.stats.fullWidthTranslucentClearFills++
+				oneMinusAlpha := 1.0 - color[3]
+				color = Color{
+					0: l.singleColor[0]*oneMinusAlpha + color[0],
+					1: l.singleColor[1]*oneMinusAlpha + color[1],
+					2: l.singleColor[2]*oneMinusAlpha + color[2],
+					3: l.singleColor[3]*oneMinusAlpha + color[3],
+				}
+				l.clear(color)
 			}
-			l.clear(color)
-		}
-	} else {
-		// If the tile isn't complex yet, it will be after we've processed this
-		// fill. Materialize all the pixels that this fill isn't going to
-		// overwrite.
-		f.materialize(l, 0, x)
-		f.materialize(l, x+width, wideTileWidth)
+		} else {
+			// If the tile isn't complex yet, it will be after we've processed this
+			// fill. Materialize all the pixels that this fill isn't going to
+			// overwrite.
+			f.materialize(l, 0, x)
+			f.materialize(l, x+width, wideTileWidth)
 
-		if color[3] == 1.0 {
-			f.stats.opaqueFills++
-			// The fill color is opaque, so we use a fill function that doesn't care
-			// about the background color.
-			memsetColumnsFp(buf, color)
-			l.complex = true
-		} else if !l.complex {
-			f.stats.simpleFills++
-			// The tile is simple, which means the fill only has to blend colors
-			// once, not for every pixel.
-			oneMinusAlpha := 1.0 - color[3]
-			color = Color{
-				0: l.singleColor[0]*oneMinusAlpha + color[0],
-				1: l.singleColor[1]*oneMinusAlpha + color[1],
-				2: l.singleColor[2]*oneMinusAlpha + color[2],
-				3: l.singleColor[3]*oneMinusAlpha + color[3],
+			if color[3] == 1.0 {
+				f.stats.opaqueFills++
+				// The fill color is opaque, so we use a fill function that doesn't care
+				// about the background color.
+				memsetColumnsFp(buf, color)
+				l.complex = true
+			} else if !l.complex {
+				f.stats.simpleFills++
+				// The tile is simple, which means the fill only has to blend colors
+				// once, not for every pixel.
+				oneMinusAlpha := 1.0 - color[3]
+				color = Color{
+					0: l.singleColor[0]*oneMinusAlpha + color[0],
+					1: l.singleColor[1]*oneMinusAlpha + color[1],
+					2: l.singleColor[2]*oneMinusAlpha + color[2],
+					3: l.singleColor[3]*oneMinusAlpha + color[3],
+				}
+				memsetColumnsFp(buf, color)
+				l.complex = true
+			} else {
+				f.stats.complexFills++
+				// Do the general, per-pixel fill.
+				fillComplexFp(buf, color)
 			}
-			memsetColumnsFp(buf, color)
-			l.complex = true
-		} else {
-			f.stats.complexFills++
-			// Do the general, per-pixel fill.
-			fillComplexFp(buf, color)
 		}
+
+	case *encodedGradient:
+		startX := f.tileX*wideTileWidth + uint16(x)
+		startY := f.tileY * tileHeight
+		gf := newGradientFiller(paint, startX, startY)
+		if !paint.hasOpacities {
+			// The gradient is opaque, so we don't have to blend.
+			if x == 0 && width == wideTileWidth {
+				// We're going to overwrite the entire tile, so the old contents
+				// don't matter.
+				gf.run(buf)
+			} else {
+				f.materialize(l, 0, x)
+				f.materialize(l, x+width, wideTileWidth)
+				gf.run(buf)
+			}
+		} else {
+			// OPT(dh): when the layer is simple, we don't have to read pixels
+			// from memory to blend with the gradient, so only materialize the
+			// parts we're not overwriting and blend with a single color.
+			f.materialize(l, 0, wideTileWidth)
+			// OPT(dh): reuse memory
+			colors := make([][tileHeight]Color, width)
+			gf.run(colors)
+			blendComplexComplex(buf, colors, nil, BlendMode{}, 1)
+		}
+
+		l.complex = true
+
+	default:
+		panic(fmt.Sprintf("internal error: unhandled type %T", paint))
 	}
 }
 
@@ -347,54 +390,91 @@ func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
 	}
 }
 
-func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, color Color) {
+func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encodedPaint) {
 	// OPT implement SIMD versions
 
 	if len(alphas) < width {
 		panic(fmt.Sprintf("internal error: got %d alphas for a width of %d",
 			len(alphas), width))
 	}
-	color[0] *= (1.0 / 255.0)
-	color[1] *= (1.0 / 255.0)
-	color[2] *= (1.0 / 255.0)
-	color[3] *= (1.0 / 255.0)
 
 	l := f.topLayer()
 	dst := l.scratch[x : x+width]
 
-	if l.complex {
-		f.stats.complexAlphaFills++
-		for x := range dst {
-			col := &dst[x]
-			a := &alphas[x]
-			for y := range col {
-				maskAlpha := float32(a[y])
-				oneMinusAlpha := 1.0 - maskAlpha*color[3]
-				col[y][0] = col[y][0]*oneMinusAlpha + maskAlpha*color[0]
-				col[y][1] = col[y][1]*oneMinusAlpha + maskAlpha*color[1]
-				col[y][2] = col[y][2]*oneMinusAlpha + maskAlpha*color[2]
-				col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*color[3]
-			}
+	alphaFillInner := func(colors []Color) {
+		colorIdx := 0
+		nextColor := func() Color {
+			c := colors[colorIdx]
+			colorIdx = (colorIdx + 1) % len(colors)
+			return c
 		}
-	} else {
-		f.stats.simpleAlphaFills++
-		bg := l.singleColor
-		f.materialize(l, 0, x)
-		f.materialize(l, x+width, wideTileWidth)
-		l.complex = true
 
-		for x := range dst {
-			col := &dst[x]
-			a := &alphas[x]
-			for y := range col {
-				maskAlpha := float32(a[y])
-				oneMinusAlpha := 1.0 - maskAlpha*color[3]
-				col[y][0] = bg[0]*oneMinusAlpha + maskAlpha*color[0]
-				col[y][1] = bg[1]*oneMinusAlpha + maskAlpha*color[1]
-				col[y][2] = bg[2]*oneMinusAlpha + maskAlpha*color[2]
-				col[y][3] = bg[3]*oneMinusAlpha + maskAlpha*color[3]
+		if l.complex {
+			f.stats.complexAlphaFills++
+			for x := range dst {
+				col := &dst[x]
+				a := &alphas[x]
+				for y := range col {
+					color := nextColor()
+					// OPT(dh): optimize for alphaFill with solid color, where
+					// we only have to scale by 1/255 once.
+					color[0] *= (1.0 / 255.0)
+					color[1] *= (1.0 / 255.0)
+					color[2] *= (1.0 / 255.0)
+					color[3] *= (1.0 / 255.0)
+					maskAlpha := float32(a[y])
+					oneMinusAlpha := 1.0 - maskAlpha*color[3]
+					col[y][0] = col[y][0]*oneMinusAlpha + maskAlpha*color[0]
+					col[y][1] = col[y][1]*oneMinusAlpha + maskAlpha*color[1]
+					col[y][2] = col[y][2]*oneMinusAlpha + maskAlpha*color[2]
+					col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*color[3]
+				}
+			}
+		} else {
+			f.stats.simpleAlphaFills++
+			bg := l.singleColor
+			f.materialize(l, 0, x)
+			f.materialize(l, x+width, wideTileWidth)
+			l.complex = true
+
+			for x := range dst {
+				col := &dst[x]
+				a := &alphas[x]
+				for y := range col {
+					color := nextColor()
+					color[0] *= (1.0 / 255.0)
+					color[1] *= (1.0 / 255.0)
+					color[2] *= (1.0 / 255.0)
+					color[3] *= (1.0 / 255.0)
+					maskAlpha := float32(a[y])
+					oneMinusAlpha := 1.0 - maskAlpha*color[3]
+					col[y][0] = bg[0]*oneMinusAlpha + maskAlpha*color[0]
+					col[y][1] = bg[1]*oneMinusAlpha + maskAlpha*color[1]
+					col[y][2] = bg[2]*oneMinusAlpha + maskAlpha*color[2]
+					col[y][3] = bg[3]*oneMinusAlpha + maskAlpha*color[3]
+				}
 			}
 		}
 	}
 
+	switch paint := paint.(type) {
+	case Color:
+		// OPT(dh): make sure the slice doesn't escape
+		alphaFillInner([]Color{paint})
+
+	case *encodedGradient:
+		startX := f.tileX*wideTileWidth + uint16(x)
+		startY := f.tileY * tileHeight
+		gf := newGradientFiller(paint, startX, startY)
+
+		// OPT(dh): reuse memory
+		//
+		// OPT(dh): it's silly to write the whole gradient to memory, only to
+		// read it again pixel by pixel. we could instead generate the colors
+		// one at a time. this is currently only complicated by the way
+		// undefined colors are handled when drawing gradients.
+		colors := make([][tileHeight]Color, width)
+		gf.run(colors)
+		alphaFillInner(safeish.SliceCast[[]Color](colors))
+	}
 }

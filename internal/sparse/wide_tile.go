@@ -31,7 +31,7 @@ const (
 )
 
 type cmd struct {
-	color   [4]float32           // fill, alphaFill
+	paint   encodedPaint         // fill, alphaFill
 	opacity float32              // clipAlphaFill, clipFill
 	alphas  [][stripHeight]uint8 // alphaFill, clipAlphaFill
 	x       uint16               // fill, alphaFill, clipFill, clipAlphaFill
@@ -43,11 +43,11 @@ type cmd struct {
 func (cmd cmd) String() string {
 	switch cmd.typ {
 	case cmdFill:
-		return fmt.Sprintf("Fill(x=%v, width=%v, color=%v)",
-			cmd.x, cmd.width, cmd.color)
+		return fmt.Sprintf("Fill(x=%v, width=%v, paint=%v)",
+			cmd.x, cmd.width, cmd.paint)
 	case cmdAlphaFill:
-		return fmt.Sprintf("AlphaFill(x=%v, width=%v, color=%v)",
-			cmd.x, cmd.width, cmd.color)
+		return fmt.Sprintf("AlphaFill(x=%v, width=%v, paint=%v)",
+			cmd.x, cmd.width, cmd.paint)
 	case cmdPushClip:
 		return "PushClip()"
 	case cmdPopClip:
@@ -62,26 +62,28 @@ func (cmd cmd) String() string {
 	}
 }
 
-func (wt *wideTile) fill(x, width uint16, c [4]float32) {
+func (wt *wideTile) fill(x, width uint16, paint encodedPaint) {
 	if wt.isZeroClip() {
 		return
 	}
-	// Note that we could be more aggressive in optimizing a whole-tile opaque fill
-	// even with a clip stack. It would be valid to elide all drawing commands from
-	// the enclosing clip push up to the fill. Further, we could extend the clip
-	// push command to include a background color, rather than always starting with
-	// a transparent buffer. Lastly, a sequence of push(bg); alphaFill/fill; pop could
-	// be replaced with alphaFill/fill with the color (the latter is true even with a
-	// non-opaque color).
-	//
-	// However, the extra cost of tracking such optimizations may outweigh the
-	// benefit, especially in hybrid mode with GPU painting.
-	if x == 0 && width == wideTileWidth && c[3] == 1.0 && wt.numClips == 0 {
-		wt.cmds = wt.cmds[:0]
-		wt.bg = c
-	} else {
-		wt.cmds = append(wt.cmds, cmd{typ: cmdFill, x: x, width: width, color: c})
+	if s, ok := paint.(Color); ok {
+		// Note that we could be more aggressive in optimizing a whole-tile opaque fill
+		// even with a clip stack. It would be valid to elide all drawing commands from
+		// the enclosing clip push up to the fill. Further, we could extend the clip
+		// push command to include a background color, rather than always starting with
+		// a transparent buffer. Lastly, a sequence of push(bg); alphaFill/fill; pop could
+		// be replaced with alphaFill/fill with the color (the latter is true even with a
+		// non-opaque color).
+		//
+		// However, the extra cost of tracking such optimizations may outweigh the
+		// benefit, especially in hybrid mode with GPU painting.
+		if x == 0 && width == wideTileWidth && s[3] == 1.0 && wt.numClips == 0 {
+			wt.cmds = wt.cmds[:0]
+			wt.bg = s
+			return
+		}
 	}
+	wt.cmds = append(wt.cmds, cmd{typ: cmdFill, x: x, width: width, paint: paint})
 }
 
 func (wt *wideTile) alphaFill(c cmd) {

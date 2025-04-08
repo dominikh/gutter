@@ -24,6 +24,9 @@ const (
 
 type Color [4]float32
 
+// isEncodedPaint implements encodedPaint.
+func (s Color) isEncodedPaint() {}
+
 type gfxState struct {
 	numLayers int
 }
@@ -93,6 +96,7 @@ func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
 			y += group * step
 			for x := range row {
 				tile := &row[x]
+				fine.setTile(uint16(x), uint16(y))
 				fine.topLayer().clear(tile.bg)
 
 				if false && len(tile.cmds) > 0 {
@@ -114,7 +118,7 @@ func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
 				default:
 					panic("internal error: left with more than one layer")
 				}
-				fine.pack(uint16(x), uint16(y))
+				fine.pack()
 			}
 		}
 		return nil
@@ -149,7 +153,7 @@ func CompileStrokedPath(path iter.Seq[curve.PathElement], affine curve.Affine, s
 	return CompiledPath{strips, alphas, NonZero}
 }
 
-func (ctx *Renderer) renderPath(p CompiledPath, color Color) {
+func (ctx *Renderer) renderPath(p CompiledPath, paint encodedPaint) {
 	// XXX support a brush
 
 	stripBuf := p.strips
@@ -194,7 +198,7 @@ func (ctx *Renderer) renderPath(p CompiledPath, color Color) {
 				typ:    cmdAlphaFill,
 				x:      xTileRel,
 				width:  width,
-				color:  color,
+				paint:  paint,
 				alphas: alphas[col:],
 			}
 			x += width
@@ -225,7 +229,7 @@ func (ctx *Renderer) renderPath(p CompiledPath, color Color) {
 				xTileRel := x % wideTileWidth
 				width := min(x2, (xtile+1)*wideTileWidth) - x
 				x += width
-				ctx.tiles[stripY][xtile].fill(xTileRel, width, color)
+				ctx.tiles[stripY][xtile].fill(xTileRel, width, paint)
 			}
 		}
 	}
@@ -384,31 +388,28 @@ func (ctx *Renderer) popLayers() {
 	}
 }
 
-func (ctx *Renderer) FillCompiled(p CompiledPath, color Color) {
-	// XXX support brushes
-	ctx.renderPath(p, color)
+func (ctx *Renderer) FillCompiled(p CompiledPath, paint Paint) {
+	ctx.renderPath(p, paint.encode())
 }
 
 func (ctx *Renderer) Fill(
 	path iter.Seq[curve.PathElement],
 	transform curve.Affine,
 	fillRule FillRule,
-	color Color,
+	paint Paint,
 ) {
 	p := CompileFillPath(path, transform, fillRule, ctx.width, ctx.height)
-	// XXX support brushes
-	ctx.renderPath(p, color)
+	ctx.renderPath(p, paint.encode())
 }
 
 func (ctx *Renderer) Stroke(
 	path iter.Seq[curve.PathElement],
 	transform curve.Affine,
 	stroke_ curve.Stroke,
-	color Color,
+	paint Paint,
 ) {
-	// XXX support brushes
 	p := CompileStrokedPath(path, transform, stroke_, ctx.width, ctx.height)
-	ctx.renderPath(p, color)
+	ctx.renderPath(p, paint.encode())
 }
 
 type Layer struct {

@@ -491,8 +491,8 @@ func TestClipping(t *testing.T) {
 		ctx.PushClip(circle.PathElements(0.1), curve.Identity, NonZero)
 		ctx.PushClip(triangle.Elements(), curve.Identity, NonZero)
 		ctx.Fill(triangle.Elements(), curve.Identity, NonZero, Color{0.5, 0.5, 0.5, 0.5})
-		ctx.Stroke(circle.PathElements(0.1), curve.Identity, curve.DefaultStroke.WithWidth(5), [4]float32{0, 0, 1, 1})
-		ctx.Stroke(triangle.Elements(), curve.Identity, curve.DefaultStroke.WithWidth(5), [4]float32{0, 0, 1, 1})
+		ctx.Stroke(circle.PathElements(0.1), curve.Identity, curve.DefaultStroke.WithWidth(5), Color{0, 0, 1, 1})
+		ctx.Stroke(triangle.Elements(), curve.Identity, curve.DefaultStroke.WithWidth(5), Color{0, 0, 1, 1})
 	})
 }
 
@@ -606,7 +606,8 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 			for b.Loop() {
 				for x := range tt.width / wideTileWidth {
 					for y := range tt.height / stripHeight {
-						f.pack(x, y)
+						f.setTile(x, y)
+						f.pack()
 					}
 				}
 			}
