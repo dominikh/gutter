@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 
+	"honnef.co/go/color"
 	"honnef.co/go/curve"
 )
 
@@ -27,11 +28,12 @@ type GradientStop struct {
 }
 
 type LinearGradient struct {
-	Stops     []GradientStop
-	Transform curve.Affine
-	Extend    GradientExtend
-	Start     curve.Point
-	End       curve.Point
+	Stops      []GradientStop
+	Transform  curve.Affine
+	Extend     GradientExtend
+	Start      curve.Point
+	End        curve.Point
+	ColorSpace *color.Space
 }
 
 // encode implements Gradient.
@@ -130,7 +132,7 @@ func (l *LinearGradient) encode() encodedPaint {
 		x2MinusX1: x2_minus_x1,
 	}
 
-	return encodeGradient(kind, clampRange, stops, l.Extend, xOffset, yOffset, l.Transform, hasOpacities)
+	return encodeGradient(kind, clampRange, stops, l.Extend, xOffset, yOffset, l.Transform, hasOpacities, l.ColorSpace)
 }
 
 func encodeGradient(
@@ -142,9 +144,13 @@ func encodeGradient(
 	yOffset float32,
 	transform curve.Affine,
 	hasOpacities bool,
+	space *color.Space,
 ) encodedPaint {
+	if space == nil {
+		space = color.LinearSRGB
+	}
 	pad := extend == GradientExtendPad
-	ranges := encodeStops(stops, clampRange[0], clampRange[1], pad)
+	ranges := encodeStops(stops, clampRange[0], clampRange[1], pad, space)
 
 	// This represents the transform that needs to be applied to the starting
 	// point of a command before starting with the rendering. First we need to
@@ -183,6 +189,7 @@ func encodeGradient(
 		pad,
 		hasOpacities,
 		clampRange,
+		space,
 	}
 
 	return encoded
@@ -208,6 +215,7 @@ type RadialGradient struct {
 	StartRadius float32
 	EndCenter   curve.Point
 	EndRadius   float32
+	ColorSpace  *color.Space
 }
 
 // encode implements Gradient.
@@ -278,7 +286,7 @@ func (r *RadialGradient) encode() encodedPaint {
 		cone_like,
 	}
 
-	return encodeGradient(kind, clampRange, stops, r.Extend, xOffset, yOffset, r.Transform, hasOpacities)
+	return encodeGradient(kind, clampRange, stops, r.Extend, xOffset, yOffset, r.Transform, hasOpacities, r.ColorSpace)
 }
 
 func (r *RadialGradient) validate() (valid bool, fallback encodedPaint) {
@@ -308,6 +316,8 @@ type SweepGradient struct {
 	// The start and end angles, in radian.
 	StartAngle float32
 	EndAngle   float32
+
+	ColorSpace *color.Space
 }
 
 // encode implements Gradient.
@@ -346,7 +356,7 @@ func (s *SweepGradient) encode() encodedPaint {
 	clampRange := [2]float32{start_angle, end_angle}
 
 	kind := encodedSweepGradient{}
-	return encodeGradient(kind, clampRange, stops, s.Extend, xOffset, yOffset, s.Transform, hasOpacities)
+	return encodeGradient(kind, clampRange, stops, s.Extend, xOffset, yOffset, s.Transform, hasOpacities, s.ColorSpace)
 }
 
 func (s *SweepGradient) validate() (valid bool, fallback encodedPaint) {
@@ -562,6 +572,8 @@ type encodedGradient struct {
 	hasOpacities bool
 	// The values that should be used for clamping when applying the extend.
 	clampRange [2]float32
+	// The color space to use for interpolation.
+	space *color.Space
 }
 
 // isEncodedPaint implements encodedPaint.
@@ -573,7 +585,7 @@ type gradientRange struct {
 	// The end value of the range.
 	x1 float32
 	// The start color of the range.
-	c0 Color
+	c0 color.Color
 	// The interpolation factors of the range.
 	factors [4]float32
 }
@@ -607,12 +619,30 @@ func applyReflect(stops []GradientStop) []GradientStop {
 }
 
 // Encode all stops into a sequence of ranges.
-func encodeStops(stops []GradientStop, start, end float32, pad bool) []gradientRange {
+func encodeStops(stops []GradientStop, start, end float32, pad bool, space *color.Space) []gradientRange {
 	create_range := func(left_stop, right_stop GradientStop) gradientRange {
 		x0 := start + (end-start)*left_stop.Offset
 		x1 := start + (end-start)*right_stop.Offset
-		c0 := left_stop.Color
-		c1 := right_stop.Color
+		c0 := color.Make(
+			color.LinearSRGB,
+			float64(left_stop.Color[0]),
+			float64(left_stop.Color[1]),
+			float64(left_stop.Color[2]),
+			float64(left_stop.Color[3]),
+		)
+		c0 = c0.Convert(space)
+		c1 := color.Make(
+			color.LinearSRGB,
+			float64(right_stop.Color[0]),
+			float64(right_stop.Color[1]),
+			float64(right_stop.Color[2]),
+			float64(right_stop.Color[3]),
+		)
+		c1 = c1.Convert(space)
+
+		// FIXME(dh): support interpolating correctly in cylindrical color
+		// spaces. See
+		// https://developer.mozilla.org/en-US/docs/Web/CSS/hue-interpolation-method
 
 		// Given two positions x0 and x1 as well as two corresponding colors c0 and c1,
 		// the delta that needs to be applied to c0 to calculate the color of x between x0 and x1
@@ -624,8 +654,8 @@ func encodeStops(stops []GradientStop, start, end float32, pad bool) []gradientR
 		x1_minus_x0 := max(x1-x0, 0.0000001)
 		var factors [4]float32
 
-		for i := range 4 {
-			c1_minus_c0 := float32(c1[i]) - float32(c0[i])
+		for i := range factors {
+			c1_minus_c0 := float32(c1.Values[i]) - float32(c0.Values[i])
 			factors[i] = c1_minus_c0 / x1_minus_x0
 		}
 
@@ -735,9 +765,18 @@ func (gf *gradientFiller) runColumn(col *[stripHeight]Color) {
 		gf.advance(dist)
 		rng := gf.curRange()
 
+		c := rng.c0
+
 		for compIdx := range px {
 			factor := (rng.factors[compIdx] * (dist - rng.x0))
-			px[compIdx] = rng.c0[compIdx] + factor
+			c.Values[compIdx] += float64(factor)
+		}
+		cd := color.GamutMapCSS(c, color.LinearSRGB)
+		*px = Color{
+			float32(cd.Values[0]),
+			float32(cd.Values[1]),
+			float32(cd.Values[2]),
+			float32(cd.Values[3]),
 		}
 		pos = pos.Translate(gf.gradient.yAdvance)
 	}
