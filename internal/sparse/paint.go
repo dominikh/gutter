@@ -5,12 +5,18 @@
 
 package sparse
 
+import "honnef.co/go/color"
+
 type Paint interface {
 	encode() encodedPaint
 }
 
-func (s Color) encode() encodedPaint {
-	return s
+type Solid color.Color
+
+func (s Solid) encode() encodedPaint {
+	c := (*color.Color)(&s).Convert(ColorSpace)
+	cc := colorToInternal(c)
+	return cc
 }
 
 type encodedPaint interface {

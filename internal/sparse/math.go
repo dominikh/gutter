@@ -26,6 +26,10 @@ func sqrt32(f float32) float32 {
 	return float32(math.Sqrt(float64(f)))
 }
 
+func pow32(f float32, exp float32) float32 {
+	return float32(math.Pow(float64(f), float64(exp)))
+}
+
 func sign32(f float32) float32 {
 	if math.Float32bits(f)&(1<<31) != 0 {
 		// f is -0.0 or negative

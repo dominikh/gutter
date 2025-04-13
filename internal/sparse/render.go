@@ -12,8 +12,27 @@ import (
 	"runtime"
 	"slices"
 
+	"honnef.co/go/color"
 	"honnef.co/go/curve"
+	"honnef.co/go/safeish"
 )
+
+// ColorSpace is the color space used to represent pixel values internally. This
+// is the color space that is used by default for blending. All [color.Color]
+// values provided by the user are converted to this color space for
+// storage--however, colors do not get color mapped or clipped; out of gamut
+// colors will be represented with values less than 0 or greater than 1.
+//
+// When values aren't constrained to the range [0, 1], all linear RGB color
+// spaces as well as XYZ give identical results for linear operations.
+// Multiplying two colors, however, is non-linear and will give different
+// results in different linear RGB color spaces. To get predictable results, and
+// to avoid color space conversions for the most common case (sRGB inputs and
+// outputs), we choose linear sRGB (i.e. an RGB color space that uses the same
+// primaries and white point as sRGB).
+//
+// Colors exposed as [4]float32 use this color space.
+var ColorSpace = color.LinearSRGB
 
 type FillRule int
 
@@ -22,7 +41,29 @@ const (
 	EvenOdd
 )
 
+// Color represents a premultiplied color in the [ColorSpace] color space.
 type Color [4]float32
+
+func colorToInternal(c color.Color) Color {
+	c = c.Convert(ColorSpace)
+	cc := Color{
+		float32(c.Values[0]) * float32(c.Values[3]),
+		float32(c.Values[1]) * float32(c.Values[3]),
+		float32(c.Values[2]) * float32(c.Values[3]),
+		float32(c.Values[3]),
+	}
+	return cc
+}
+
+func internalToColor(c Color) color.Color {
+	return color.Make(
+		ColorSpace,
+		float64(c[0]/max(c[3], 1e-10)),
+		float64(c[1]/max(c[3], 1e-10)),
+		float64(c[2]/max(c[3], 1e-10)),
+		float64(c[3]),
+	)
+}
 
 // isEncodedPaint implements encodedPaint.
 func (s Color) isEncodedPaint() {}
@@ -88,10 +129,10 @@ func (ctx *Renderer) finish() {
 	ctx.popLayers()
 }
 
-func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap []Color) {
+func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap [][4]float32) {
 	ctx.finish()
 	distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
-		fine := newFine(width, height, pixmap)
+		fine := newFine(width, height, safeish.SliceCast[[]Color](pixmap))
 		for y, row := range subitems {
 			y += group * step
 			for x := range row {

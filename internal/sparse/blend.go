@@ -434,26 +434,29 @@ func blendSimpleSimple(dst [][stripHeight]Color, nos, tos Color, blend BlendMode
 		Cr2 = (1-nos[3])*Cs2 + nos[3]*Cm2
 	}
 
+	var nc Color
 	if fa == 0 {
-		memsetColumnsFp(dst, Color{
+		nc = Color{
 			nos[0] * fb,
 			nos[1] * fb,
 			nos[2] * fb,
 			min(nos[3]*fb, 1),
-		})
+		}
 	} else if blend.Mix == MixNormal {
-		memsetColumnsFp(dst, Color{
+		nc = Color{
 			tos[0]*fa + nos[0]*fb,
 			tos[1]*fa + nos[1]*fb,
 			tos[2]*fa + nos[2]*fb,
 			min(tos[3]*fa+nos[3]*fb, 1),
-		})
+		}
 	} else {
-		memsetColumnsFp(dst, Color{
+		nc = Color{
 			(Cr0*tos[3])*fa + nos[0]*fb,
 			(Cr1*tos[3])*fa + nos[1]*fb,
 			(Cr2*tos[3])*fa + nos[2]*fb,
 			min(tos[3]*fa+nos[3]*fb, 1),
-		})
+		}
 	}
+
+	memsetColumnsFp(dst, nc)
 }

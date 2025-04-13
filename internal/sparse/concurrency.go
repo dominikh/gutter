@@ -29,7 +29,7 @@ const (
 type renderTask struct {
 	path  chan CompiledPath
 	kind  renderTaskKind
-	color Color
+	paint Paint
 }
 
 func NewConcurrentRenderer(width, height uint16, parallelism int) *ConcurrentRenderer {
@@ -49,7 +49,7 @@ func NewConcurrentRenderer(width, height uint16, parallelism int) *ConcurrentRen
 			case clipRenderTask:
 				r.r.PushClipCompiled(p)
 			case fillRenderTask:
-				r.r.FillCompiled(p, t.color)
+				r.r.FillCompiled(p, t.paint)
 			case saveRenderTask:
 				r.r.Save()
 			case restoreRenderTask:
@@ -71,7 +71,7 @@ func (r *ConcurrentRenderer) Stop() {
 	<-r.done
 }
 
-func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, pixmap []Color) {
+func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, pixmap [][4]float32) {
 	r.Stop()
 	r.r.RenderToPixmap(width, height, pixmap)
 }
@@ -80,12 +80,12 @@ func (r *ConcurrentRenderer) Fill(
 	path iter.Seq[curve.PathElement],
 	transform curve.Affine,
 	fillRule FillRule,
-	color Color,
+	paint Paint,
 ) {
 	t := renderTask{
 		path:  make(chan CompiledPath, 1),
 		kind:  fillRenderTask,
-		color: color,
+		paint: paint,
 	}
 	r.tasks <- t
 	go func(width, height uint16) {
@@ -97,12 +97,12 @@ func (r *ConcurrentRenderer) Stroke(
 	path iter.Seq[curve.PathElement],
 	transform curve.Affine,
 	stroke_ curve.Stroke,
-	color Color,
+	paint Paint,
 ) {
 	t := renderTask{
 		path:  make(chan CompiledPath, 1),
 		kind:  fillRenderTask,
-		color: color,
+		paint: paint,
 	}
 	r.tasks <- t
 	go func(width, height uint16) {

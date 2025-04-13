@@ -227,6 +227,8 @@ func (f *fine) runCmd(cmd cmd) {
 		f.freeScratches = append(f.freeScratches, f.layers[len(f.layers)-1].scratch)
 		f.layers = f.layers[:len(f.layers)-1]
 	case cmdClipFill:
+		// OPT(dh): we should probably just pass *cmd to clipFill and
+		// clipAlphaFill
 		f.clipFill(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
 	case cmdClipAlphaFill:
 		f.clipAlphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.blend, cmd.opacity)
@@ -334,6 +336,9 @@ func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
 
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
+
+	// OPT(dh): can x==0 and width==256? in that case, why would we materialize
+	// the pixels when nos and tos are simple? the result would still be simple.
 
 	// If nos isn't complex yet, it will be after we've processed this fill.
 	// Materialize all the pixels that this fill isn't going to overwrite.

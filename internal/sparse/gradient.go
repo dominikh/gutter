@@ -24,7 +24,7 @@ const (
 
 type GradientStop struct {
 	Offset float32
-	Color  Color
+	Color  color.Color
 }
 
 type LinearGradient struct {
@@ -44,7 +44,7 @@ func (l *LinearGradient) encode() encodedPaint {
 	}
 	var hasOpacities bool
 	for _, stop := range l.Stops {
-		if stop.Color[3] != 1.0 {
+		if stop.Color.Values[3] != 1.0 {
 			hasOpacities = true
 			break
 		}
@@ -202,7 +202,7 @@ func (l *LinearGradient) validate() (valid bool, fallback encodedPaint) {
 	first := l.Stops[0].Color
 	// Start and end points must not be too close together.
 	if degeneratePoint(l.Start, l.End) {
-		return false, first
+		return false, colorToInternal(first)
 	}
 	return true, nil
 }
@@ -226,7 +226,7 @@ func (r *RadialGradient) encode() encodedPaint {
 	}
 	var hasOpacities bool
 	for _, stop := range r.Stops {
-		if stop.Color[3] != 1.0 {
+		if stop.Color.Values[3] != 1.0 {
 			hasOpacities = true
 			break
 		}
@@ -296,13 +296,13 @@ func (r *RadialGradient) validate() (valid bool, fallback encodedPaint) {
 	first := r.Stops[0].Color
 	// Radii must not be negative.
 	if r.StartRadius < 0.0 || r.EndRadius < 0.0 {
-		return false, first
+		return false, colorToInternal(first)
 	}
 
 	// Radii and center points must not be close to the same.
 	if degeneratePoint(r.StartCenter, r.EndCenter) &&
 		degenerateVal(r.StartRadius, r.EndRadius) {
-		return false, first
+		return false, colorToInternal(first)
 	}
 	return true, nil
 }
@@ -328,7 +328,7 @@ func (s *SweepGradient) encode() encodedPaint {
 	}
 
 	hasOpacities := slices.ContainsFunc(s.Stops, func(stop GradientStop) bool {
-		return stop.Color[3] != 1.0
+		return stop.Color.Values[3] != 1.0
 	})
 
 	stops := s.Stops
@@ -369,16 +369,16 @@ func (s *SweepGradient) validate() (valid bool, fallback encodedPaint) {
 		s.StartAngle > 360.0 ||
 		s.EndAngle < 0.0 ||
 		s.EndAngle > 360.0 {
-		return false, first
+		return false, colorToInternal(first)
 	}
 
 	// The end angle must be larger than the start angle.
 	if degenerateVal(s.StartAngle, s.EndAngle) {
-		return false, first
+		return false, colorToInternal(first)
 	}
 
 	if s.EndAngle <= s.StartAngle {
-		return false, first
+		return false, colorToInternal(first)
 	}
 	return true, nil
 }
@@ -402,7 +402,7 @@ func validateStops(stops []GradientStop) (valid bool, fallback encodedPaint) {
 	first := stops[0].Color
 
 	if len(stops) == 1 {
-		return false, first
+		return false, colorToInternal(first)
 	}
 
 	// First stop must be at offset 0.0 and last offset must be at 1.0.
@@ -623,22 +623,8 @@ func encodeStops(stops []GradientStop, start, end float32, pad bool, space *colo
 	create_range := func(left_stop, right_stop GradientStop) gradientRange {
 		x0 := start + (end-start)*left_stop.Offset
 		x1 := start + (end-start)*right_stop.Offset
-		c0 := color.Make(
-			color.LinearSRGB,
-			float64(left_stop.Color[0]),
-			float64(left_stop.Color[1]),
-			float64(left_stop.Color[2]),
-			float64(left_stop.Color[3]),
-		)
-		c0 = c0.Convert(space)
-		c1 := color.Make(
-			color.LinearSRGB,
-			float64(right_stop.Color[0]),
-			float64(right_stop.Color[1]),
-			float64(right_stop.Color[2]),
-			float64(right_stop.Color[3]),
-		)
-		c1 = c1.Convert(space)
+		c0 := left_stop.Color.Convert(space)
+		c1 := right_stop.Color.Convert(space)
 
 		// FIXME(dh): support interpolating correctly in cylindrical color
 		// spaces. See
@@ -771,13 +757,7 @@ func (gf *gradientFiller) runColumn(col *[stripHeight]Color) {
 			factor := (rng.factors[compIdx] * (dist - rng.x0))
 			c.Values[compIdx] += float64(factor)
 		}
-		cd := color.GamutMapCSS(c, color.LinearSRGB)
-		*px = Color{
-			float32(cd.Values[0]),
-			float32(cd.Values[1]),
-			float32(cd.Values[2]),
-			float32(cd.Values[3]),
-		}
+		*px = colorToInternal(c)
 		pos = pos.Translate(gf.gradient.yAdvance)
 	}
 }
