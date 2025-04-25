@@ -40,7 +40,6 @@ type fineStats struct {
 	clipAlphaFills uint64
 
 	materializedLayers uint64
-	materializedPixels uint64
 }
 
 func (s *fineStats) String() string {
@@ -64,7 +63,6 @@ func (s *fineStats) String() string {
 
 		fmt.Sprintf("Clip alpha fills: %d", s.clipAlphaFills),
 
-		fmt.Sprintf("Materialized pixels: %d", s.materializedPixels),
 		fmt.Sprintf("Materialized layers: %d", s.materializedLayers),
 
 		fmt.Sprintf("Simple packs: %d", s.simplePacks),
@@ -193,15 +191,14 @@ func memsetColumnsNative(buf [][stripHeight]Color, c Color) {
 	}
 }
 
-func (f *fine) materialize(l *fineLayer, start, end int) {
+func (f *fine) materialize(l *fineLayer) {
 	if l.complex {
 		return
 	}
 
-	f.stats.materializedPixels += uint64(end-start) * stripHeight
 	f.stats.materializedLayers++
 
-	memsetColumnsFp(l.scratch[start:end], l.singleColor)
+	memsetColumnsFp(l.scratch[:], l.singleColor)
 }
 
 func (f *fine) runCmd(cmd cmd) {
@@ -265,10 +262,8 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			}
 		} else {
 			// If the tile isn't complex yet, it will be after we've processed this
-			// fill. Materialize all the pixels that this fill isn't going to
-			// overwrite.
-			f.materialize(l, 0, x)
-			f.materialize(l, x+width, wideTileWidth)
+			// fill.
+			f.materialize(l)
 
 			if color[3] == 1.0 {
 				f.stats.opaqueFills++
@@ -307,15 +302,13 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 				// don't matter.
 				gf.run(buf)
 			} else {
-				f.materialize(l, 0, x)
-				f.materialize(l, x+width, wideTileWidth)
+				f.materialize(l)
 				gf.run(buf)
 			}
 		} else {
 			// OPT(dh): when the layer is simple, we don't have to read pixels
-			// from memory to blend with the gradient, so only materialize the
-			// parts we're not overwriting and blend with a single color.
-			f.materialize(l, 0, wideTileWidth)
+			// from memory to blend with the gradient
+			f.materialize(l)
 			// OPT(dh): reuse memory
 			colors := make([][tileHeight]Color, width)
 			gf.run(colors)
@@ -342,8 +335,7 @@ func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
 
 	// If nos isn't complex yet, it will be after we've processed this fill.
 	// Materialize all the pixels that this fill isn't going to overwrite.
-	f.materialize(nos, 0, x)
-	f.materialize(nos, x+width, wideTileWidth)
+	f.materialize(nos)
 
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
@@ -356,8 +348,8 @@ func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
 		c[3] *= opacity
 		blendSimpleSimple(dst, nos.singleColor, c, blend)
 	} else {
-		f.materialize(nos, x, x+width)
-		f.materialize(tos, x, x+width)
+		f.materialize(nos)
+		f.materialize(tos)
 		f.stats.complexComplexClipFills++
 		blendComplexComplex(dst, src, nil, blend, opacity)
 	}
@@ -370,8 +362,8 @@ func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend Bl
 	nos := &f.layers[len(f.layers)-2]
 
 	// OPT implement handling of layer.complex
-	f.materialize(tos, 0, wideTileWidth)
-	f.materialize(nos, 0, wideTileWidth)
+	f.materialize(tos)
+	f.materialize(nos)
 	tos.complex = true
 	nos.complex = true
 
@@ -438,8 +430,7 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 		} else {
 			f.stats.simpleAlphaFills++
 			bg := l.singleColor
-			f.materialize(l, 0, x)
-			f.materialize(l, x+width, wideTileWidth)
+			f.materialize(l)
 			l.complex = true
 
 			for x := range dst {
