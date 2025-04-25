@@ -197,8 +197,8 @@ func (f *fine) materialize(l *fineLayer) {
 	}
 
 	f.stats.materializedLayers++
-
 	memsetColumnsFp(l.scratch[:], l.singleColor)
+	l.complex = true
 }
 
 func (f *fine) runCmd(cmd cmd) {
@@ -263,6 +263,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 		} else {
 			// If the tile isn't complex yet, it will be after we've processed this
 			// fill.
+			complex := l.complex
 			f.materialize(l)
 
 			if color[3] == 1.0 {
@@ -270,8 +271,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 				// The fill color is opaque, so we use a fill function that doesn't care
 				// about the background color.
 				memsetColumnsFp(buf, color)
-				l.complex = true
-			} else if !l.complex {
+			} else if !complex {
 				f.stats.simpleFills++
 				// The tile is simple, which means the fill only has to blend colors
 				// once, not for every pixel.
@@ -283,7 +283,6 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 					3: l.singleColor[3]*oneMinusAlpha + color[3],
 				}
 				memsetColumnsFp(buf, color)
-				l.complex = true
 			} else {
 				f.stats.complexFills++
 				// Do the general, per-pixel fill.
@@ -301,6 +300,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 				// We're going to overwrite the entire tile, so the old contents
 				// don't matter.
 				gf.run(buf)
+				l.complex = true
 			} else {
 				f.materialize(l)
 				gf.run(buf)
@@ -314,8 +314,6 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			gf.run(colors)
 			blendComplexComplex(buf, colors, nil, BlendMode{}, 1)
 		}
-
-		l.complex = true
 
 	default:
 		panic(fmt.Sprintf("internal error: unhandled type %T", paint))
@@ -335,11 +333,12 @@ func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
 
 	// If nos isn't complex yet, it will be after we've processed this fill.
 	// Materialize all the pixels that this fill isn't going to overwrite.
+	nosComplex := nos.complex
 	f.materialize(nos)
 
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
-	if !nos.complex && !tos.complex {
+	if !nosComplex && !tos.complex {
 		f.stats.simpleSimpleClipFills++
 		c := tos.singleColor
 		c[0] *= opacity
@@ -348,12 +347,10 @@ func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
 		c[3] *= opacity
 		blendSimpleSimple(dst, nos.singleColor, c, blend)
 	} else {
-		f.materialize(nos)
 		f.materialize(tos)
 		f.stats.complexComplexClipFills++
 		blendComplexComplex(dst, src, nil, blend, opacity)
 	}
-	nos.complex = true
 }
 
 func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend BlendMode, opacity float32) {
@@ -364,8 +361,6 @@ func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend Bl
 	// OPT implement handling of layer.complex
 	f.materialize(tos)
 	f.materialize(nos)
-	tos.complex = true
-	nos.complex = true
 
 	// OPT(dh): instead of modifying the source in place, teach blend functions
 	// how to apply alpha values.
@@ -431,7 +426,6 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 			f.stats.simpleAlphaFills++
 			bg := l.singleColor
 			f.materialize(l)
-			l.complex = true
 
 			for x := range dst {
 				col := &dst[x]
