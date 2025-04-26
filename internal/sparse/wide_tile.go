@@ -66,7 +66,7 @@ func (wt *wideTile) fill(x, width uint16, paint encodedPaint) {
 	if wt.isZeroClip() {
 		return
 	}
-	if s, ok := paint.(Color); ok {
+	if s, ok := paint.(plainColor); ok {
 		// Note that we could be more aggressive in optimizing a whole-tile opaque fill
 		// even with a clip stack. It would be valid to elide all drawing commands from
 		// the enclosing clip push up to the fill. Further, we could extend the clip

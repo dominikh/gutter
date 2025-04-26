@@ -7,16 +7,16 @@
 package sparse
 
 //go:noescape
-func memsetColumnsAVX(buf [][stripHeight]Color, color Color)
+func memsetColumnsAVX(buf [][stripHeight]plainColor, color plainColor)
 
 //go:noescape
-func fineFillComplexAVX(buf [][stripHeight]Color, color Color)
+func fineFillComplexAVX(buf [][stripHeight]plainColor, color plainColor)
 
 //go:noescape
-func memsetColumnsSSE(buf [][stripHeight]Color, color Color)
+func memsetColumnsSSE(buf [][stripHeight]plainColor, color plainColor)
 
 //go:noescape
-func fineFillComplexSSE(buf [][stripHeight]Color, color Color)
+func fineFillComplexSSE(buf [][stripHeight]plainColor, color plainColor)
 
 //go:noescape
 func computeWindingSSE(

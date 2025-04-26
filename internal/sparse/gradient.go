@@ -392,7 +392,7 @@ var _ Gradient = (*RadialGradient)(nil)
 var _ Gradient = (*SweepGradient)(nil)
 
 func validateStops(stops []GradientStop) (valid bool, fallback encodedPaint) {
-	black := Color{0, 0, 0, 1}
+	black := plainColor{0, 0, 0, 1}
 
 	// Gradients need at least two stops.
 	if len(stops) == 0 {
@@ -717,7 +717,7 @@ func (gf *gradientFiller) advance(targetPos float32) {
 	}
 }
 
-func (gf *gradientFiller) run(dst [][stripHeight]Color) {
+func (gf *gradientFiller) run(dst [][stripHeight]plainColor) {
 	oldPos := gf.curPos
 
 	for i := range dst {
@@ -740,7 +740,7 @@ func (gf *gradientFiller) run(dst [][stripHeight]Color) {
 	}
 }
 
-func (gf *gradientFiller) runColumn(col *[stripHeight]Color) {
+func (gf *gradientFiller) runColumn(col *[stripHeight]plainColor) {
 	pos := gf.curPos
 	extend := func(val float32) float32 {
 		return extend(val, gf.gradient.pad, gf.gradient.clampRange)
@@ -762,14 +762,14 @@ func (gf *gradientFiller) runColumn(col *[stripHeight]Color) {
 	}
 }
 
-func (gf *gradientFiller) runUndefined(dst [][stripHeight]Color) {
+func (gf *gradientFiller) runUndefined(dst [][stripHeight]plainColor) {
 	for i := range dst {
 		col := &dst[i]
 		pos := gf.curPos
 		for i := range col {
 			px := &col[i]
 			if !gf.gradient.kind.isDefined(pos) {
-				*px = Color{}
+				*px = plainColor{}
 			}
 			pos = pos.Translate(gf.gradient.yAdvance)
 		}

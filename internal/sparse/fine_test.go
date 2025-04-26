@@ -534,8 +534,8 @@ func writeF32AsU16(in [][4]float32, out [][8]uint8) {
 	}
 }
 
-func benchmarkFill(b *testing.B, fn func(b *testing.B, buf [][stripHeight]Color)) {
-	buf := make([][stripHeight]Color, wideTileWidth)
+func benchmarkFill(b *testing.B, fn func(b *testing.B, buf [][stripHeight]plainColor)) {
+	buf := make([][stripHeight]plainColor, wideTileWidth)
 	// make sure memory is paged in
 	clear(buf)
 
@@ -555,9 +555,9 @@ func benchmarkFill(b *testing.B, fn func(b *testing.B, buf [][stripHeight]Color)
 	}
 }
 
-func benchmarkClipFill(b *testing.B, fn func(b *testing.B, dst, src [][stripHeight]Color)) {
-	dst := make([][stripHeight]Color, wideTileWidth)
-	src := make([][stripHeight]Color, wideTileWidth)
+func benchmarkClipFill(b *testing.B, fn func(b *testing.B, dst, src [][stripHeight]plainColor)) {
+	dst := make([][stripHeight]plainColor, wideTileWidth)
+	src := make([][stripHeight]plainColor, wideTileWidth)
 	// make sure memory is paged in
 	clear(dst)
 	clear(src)
@@ -579,8 +579,8 @@ func benchmarkClipFill(b *testing.B, fn func(b *testing.B, dst, src [][stripHeig
 }
 
 func Benchmark_fineFillComplexNative(b *testing.B) {
-	c := Color{0.5, 0.5, 0.5, 0.5}
-	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]Color) {
+	c := plainColor{0.5, 0.5, 0.5, 0.5}
+	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]plainColor) {
 		for b.Loop() {
 			fineFillComplexNative(buf, c)
 		}
@@ -588,8 +588,8 @@ func Benchmark_fineFillComplexNative(b *testing.B) {
 }
 
 func Benchmark_memsetColumnsNative(b *testing.B) {
-	c := Color{1, 1, 1, 1}
-	benchmarkFill(b, func(b *testing.B, buf [][4]Color) {
+	c := plainColor{1, 1, 1, 1}
+	benchmarkFill(b, func(b *testing.B, buf [][4]plainColor) {
 		for b.Loop() {
 			memsetColumnsNative(buf, c)
 		}
@@ -621,7 +621,7 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 				b.Fatalf("height %d isn't multiple of stripHeight", tt.height)
 			}
 
-			pixmap := make([]Color, int(tt.width)*int(tt.height))
+			pixmap := make([]plainColor, int(tt.width)*int(tt.height))
 			f := newFine(tt.width, tt.height, pixmap)
 			clear(pixmap)
 			if complex {

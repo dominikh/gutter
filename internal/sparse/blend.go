@@ -156,7 +156,7 @@ func mixSoftLight(dst, src float32) float32 {
 	}
 }
 
-func blendComplexComplex(dst, tos [][stripHeight]Color, alphas [][stripHeight]uint8, blend BlendMode, opacity float32) {
+func blendComplexComplex(dst, tos [][stripHeight]plainColor, alphas [][stripHeight]uint8, blend BlendMode, opacity float32) {
 	switch blend.Compose {
 	case ComposeClear:
 		clear(dst)
@@ -314,7 +314,7 @@ func blendComplexComplex(dst, tos [][stripHeight]Color, alphas [][stripHeight]ui
 	}
 }
 
-func blendSimpleSimple(dst [][stripHeight]Color, nos, tos Color, blend BlendMode) {
+func blendSimpleSimple(dst [][stripHeight]plainColor, nos, tos plainColor, blend BlendMode) {
 	switch blend.Compose {
 	case ComposeClear:
 		clear(dst)
@@ -434,23 +434,23 @@ func blendSimpleSimple(dst [][stripHeight]Color, nos, tos Color, blend BlendMode
 		Cr2 = (1-nos[3])*Cs2 + nos[3]*Cm2
 	}
 
-	var nc Color
+	var nc plainColor
 	if fa == 0 {
-		nc = Color{
+		nc = plainColor{
 			nos[0] * fb,
 			nos[1] * fb,
 			nos[2] * fb,
 			min(nos[3]*fb, 1),
 		}
 	} else if blend.Mix == MixNormal {
-		nc = Color{
+		nc = plainColor{
 			tos[0]*fa + nos[0]*fb,
 			tos[1]*fa + nos[1]*fb,
 			tos[2]*fa + nos[2]*fb,
 			min(tos[3]*fa+nos[3]*fb, 1),
 		}
 	} else {
-		nc = Color{
+		nc = plainColor{
 			(Cr0*tos[3])*fa + nos[0]*fb,
 			(Cr1*tos[3])*fa + nos[1]*fb,
 			(Cr2*tos[3])*fa + nos[2]*fb,

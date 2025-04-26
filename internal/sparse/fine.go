@@ -16,7 +16,7 @@ import (
 )
 
 // [x][y]Color
-type fineScratch = [wideTileWidth][stripHeight]Color
+type fineScratch = [wideTileWidth][stripHeight]plainColor
 
 type fineStats struct {
 	simplePacks  uint64
@@ -77,7 +77,7 @@ type fine struct {
 	width, height uint16
 	tileX         uint16
 	tileY         uint16
-	outBuf        []Color
+	outBuf        []plainColor
 	layers        []fineLayer
 
 	// free list of scratch space
@@ -88,13 +88,13 @@ type fine struct {
 
 type fineLayer struct {
 	scratch     *fineScratch
-	singleColor Color
+	singleColor plainColor
 	// if complex is false, all pixels have the color stored in singleColor and
 	// the contents of scratch may be undefined.
 	complex bool
 }
 
-func newFine(width, height uint16, out []Color) *fine {
+func newFine(width, height uint16, out []plainColor) *fine {
 	f := &fine{
 		width:  width,
 		height: height,
@@ -125,7 +125,7 @@ func (f *fine) newScratch() *fineScratch {
 	return (*fineScratch)(alignedPtr)
 }
 
-func (l *fineLayer) clear(c Color) {
+func (l *fineLayer) clear(c plainColor) {
 	l.complex = false
 	l.singleColor = c
 }
@@ -153,7 +153,7 @@ func (f *fine) packSimple(l *fineLayer, tileX, tileY uint16) {
 		// We're writing the same color to every pixel, so even though
 		// memsetColumns operates on columns, we can just pretend that a
 		// single row of pixels is a bunch of columns.
-		outCols := safeish.SliceCast[[][stripHeight]Color](row)
+		outCols := safeish.SliceCast[[][stripHeight]plainColor](row)
 		memsetColumnsFp(outCols, l.singleColor)
 		for x := len(row) &^ 0b11; x < len(row); x++ {
 			row[x] = l.singleColor
@@ -181,8 +181,8 @@ func (f *fine) packComplex(l *fineLayer, tileX, tileY uint16) {
 	}
 }
 
-func memsetColumnsNative(buf [][stripHeight]Color, c Color) {
-	var col [stripHeight]Color
+func memsetColumnsNative(buf [][stripHeight]plainColor, c plainColor) {
+	var col [stripHeight]plainColor
 	for i := range col {
 		col[i] = c
 	}
@@ -240,8 +240,8 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 	buf := l.scratch[x : x+width]
 
 	switch paint := paint.(type) {
-	case Color:
-		color := Color(paint)
+	case plainColor:
+		color := plainColor(paint)
 		if x == 0 && width == wideTileWidth {
 			if color[3] == 1.0 {
 				f.stats.fullWidthOpaqueClearFills++
@@ -252,7 +252,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			} else {
 				f.stats.fullWidthTranslucentClearFills++
 				oneMinusAlpha := 1.0 - color[3]
-				color = Color{
+				color = plainColor{
 					0: l.singleColor[0]*oneMinusAlpha + color[0],
 					1: l.singleColor[1]*oneMinusAlpha + color[1],
 					2: l.singleColor[2]*oneMinusAlpha + color[2],
@@ -276,7 +276,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 				// The tile is simple, which means the fill only has to blend colors
 				// once, not for every pixel.
 				oneMinusAlpha := 1.0 - color[3]
-				color = Color{
+				color = plainColor{
 					0: l.singleColor[0]*oneMinusAlpha + color[0],
 					1: l.singleColor[1]*oneMinusAlpha + color[1],
 					2: l.singleColor[2]*oneMinusAlpha + color[2],
@@ -310,7 +310,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			// from memory to blend with the gradient
 			f.materialize(l)
 			// OPT(dh): reuse memory
-			colors := make([][tileHeight]Color, width)
+			colors := make([][tileHeight]plainColor, width)
 			gf.run(colors)
 			blendComplexComplex(buf, colors, nil, BlendMode{}, 1)
 		}
@@ -369,7 +369,7 @@ func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend Bl
 	blendComplexComplex(dst, src, alphas, blend, opacity)
 }
 
-func fineFillComplexNative(buf [][stripHeight]Color, color Color) {
+func fineFillComplexNative(buf [][stripHeight]plainColor, color plainColor) {
 	oneMinusAlpha := 1.0 - color[3]
 	for x := range buf {
 		col := &buf[x]
@@ -393,9 +393,9 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 	l := f.topLayer()
 	dst := l.scratch[x : x+width]
 
-	alphaFillInner := func(colors []Color) {
+	alphaFillInner := func(colors []plainColor) {
 		colorIdx := 0
-		nextColor := func() Color {
+		nextColor := func() plainColor {
 			c := colors[colorIdx]
 			colorIdx = (colorIdx + 1) % len(colors)
 			return c
@@ -448,9 +448,9 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 	}
 
 	switch paint := paint.(type) {
-	case Color:
+	case plainColor:
 		// OPT(dh): make sure the slice doesn't escape
-		alphaFillInner([]Color{paint})
+		alphaFillInner([]plainColor{paint})
 
 	case *encodedGradient:
 		startX := f.tileX*wideTileWidth + uint16(x)
@@ -463,8 +463,8 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 		// read it again pixel by pixel. we could instead generate the colors
 		// one at a time. this is currently only complicated by the way
 		// undefined colors are handled when drawing gradients.
-		colors := make([][tileHeight]Color, width)
+		colors := make([][tileHeight]plainColor, width)
 		gf.run(colors)
-		alphaFillInner(safeish.SliceCast[[]Color](colors))
+		alphaFillInner(safeish.SliceCast[[]plainColor](colors))
 	}
 }

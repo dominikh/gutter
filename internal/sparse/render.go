@@ -41,12 +41,12 @@ const (
 	EvenOdd
 )
 
-// Color represents a premultiplied color in the [ColorSpace] color space.
-type Color [4]float32
+// plainColor represents a premultiplied color in the [ColorSpace] color space.
+type plainColor [4]float32
 
-func colorToInternal(c color.Color) Color {
+func colorToInternal(c color.Color) plainColor {
 	c = c.Convert(ColorSpace)
-	cc := Color{
+	cc := plainColor{
 		float32(c.Values[0]) * float32(c.Values[3]),
 		float32(c.Values[1]) * float32(c.Values[3]),
 		float32(c.Values[2]) * float32(c.Values[3]),
@@ -55,7 +55,7 @@ func colorToInternal(c color.Color) Color {
 	return cc
 }
 
-func internalToColor(c Color) color.Color {
+func internalToColor(c plainColor) color.Color {
 	return color.Make(
 		ColorSpace,
 		float64(c[0]/max(c[3], 1e-10)),
@@ -66,7 +66,7 @@ func internalToColor(c Color) color.Color {
 }
 
 // isEncodedPaint implements encodedPaint.
-func (s Color) isEncodedPaint() {}
+func (s plainColor) isEncodedPaint() {}
 
 type gfxState struct {
 	numLayers int
@@ -114,7 +114,7 @@ func (ctx *Renderer) Reset() {
 	for _, row := range ctx.tiles {
 		for x := range row {
 			tile := &row[x]
-			tile.bg = Color{}
+			tile.bg = plainColor{}
 			clear(tile.cmds)
 			tile.cmds = tile.cmds[:0]
 		}
@@ -132,7 +132,7 @@ func (ctx *Renderer) finish() {
 func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap [][4]float32) {
 	ctx.finish()
 	distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
-		fine := newFine(width, height, safeish.SliceCast[[]Color](pixmap))
+		fine := newFine(width, height, safeish.SliceCast[[]plainColor](pixmap))
 		for y, row := range subitems {
 			y += group * step
 			for x := range row {

@@ -29,8 +29,8 @@ var blends = []Mix{
 }
 
 func BenchmarkClipFillReuseGen(b *testing.B) {
-	origDst := make([][stripHeight]Color, 256)
-	origSrc := make([][stripHeight]Color, 256)
+	origDst := make([][stripHeight]plainColor, 256)
+	origSrc := make([][stripHeight]plainColor, 256)
 	for i := range origDst {
 		for j := range origDst[i] {
 			for k := range origDst[i][j] {
@@ -44,7 +44,7 @@ func BenchmarkClipFillReuseGen(b *testing.B) {
 		}
 	}
 
-	dst := make([][stripHeight]Color, 256)
+	dst := make([][stripHeight]plainColor, 256)
 	run := func(kind string, comp Compose, blend Mix, fn func()) {
 		b.Run(fmt.Sprintf("kind=%s/comp=%s/blend=%s", kind, comp, blend), func(b *testing.B) {
 			for b.Loop() {
