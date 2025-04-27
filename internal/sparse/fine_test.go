@@ -497,6 +497,14 @@ func TestClipping(t *testing.T) {
 	})
 }
 
+func TestLinearAntiAliasing(t *testing.T) {
+	renderAndCompare(t, 32, 32, true, "linear_anti_aliasing", func(ctx *Renderer) {
+		r := curve.NewRectFromOrigin(curve.Pt(16.5, 0), curve.Sz(1, 32))
+		// We expect pixels 16 and 17 to be 50% transparent red.
+		ctx.Fill(r.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.LinearSRGB, 1, 0, 0, 1)))
+	})
+}
+
 func Test50pctGrey(t *testing.T) {
 	renderAndCompare(t, 32, 32, false, "50pct_grey", func(ctx *Renderer) {
 		r := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(32, 32))
