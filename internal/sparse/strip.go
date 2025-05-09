@@ -57,20 +57,17 @@ func renderStripsScalar(
 	tiles []tile,
 	fillRule FillRule,
 	lines []flatLine,
-	stripBuf []strip,
-	alphaBuf [][stripHeight]uint8,
 ) ([]strip, [][stripHeight]uint8) {
-	stripBuf = stripBuf[:0]
-	alphaBuf = alphaBuf[:0]
-
 	if len(tiles) == 0 {
-		return stripBuf, alphaBuf
+		return nil, nil
 	}
 
 	// The accumulated tile winding delta. A line that crosses the top edge of a tile
 	// increments the delta if the line is directed upwards, and decrements it if goes
 	// downwards. Horizontal lines leave it unchanged.
 	var windingDelta int32
+	var stripBuf []strip
+	var alphaBuf [][stripHeight]uint8
 
 	// The previous tile visited.
 	prevTile := tiles[0]
