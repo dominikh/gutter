@@ -12,7 +12,7 @@ import (
 const wideTileWidth = 256
 
 type wideTile struct {
-	bg           [4]float32
+	bg           plainColor
 	cmds         []cmd
 	numZeroClips int
 	numClips     int
