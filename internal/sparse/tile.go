@@ -45,16 +45,16 @@ func newTile(x, y uint16, lineIdx uint32, winding bool) tile {
 //
 // Tiles exceeding the top, right or bottom of the viewport (given by `width`
 // and `height` in pixels) are culled.
-func makeTiles(lineBuf []flatLine, tileBuf []tile, width, height uint16) []tile {
+func makeTiles(lineBuf []flatLine, width, height uint16) []tile {
 	// TODO: Tiles are clamped to the left edge of the viewport, but lines fully to the left of the
 	// viewport are not culled yet. These lines impact winding, and would need forwarding of
 	// winding to the strip generation stage.
-	tileBuf = tileBuf[:0]
 
 	if width == 0 || height == 0 {
 		return nil
 	}
 
+	var tileBuf []tile
 	tileColumns := divCeil(width, tileWidth)
 	tileRows := divCeil(height, tileHeight)
 
