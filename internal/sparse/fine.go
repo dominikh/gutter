@@ -310,7 +310,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			// from memory to blend with the gradient
 			f.materialize(l)
 			// OPT(dh): reuse memory
-			colors := make([][tileHeight]plainColor, width)
+			colors := make([][stripHeight]plainColor, width)
 			gf.run(colors)
 			blendComplexComplex(buf, colors, nil, BlendMode{}, 1)
 		}
@@ -463,7 +463,7 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 		// read it again pixel by pixel. we could instead generate the colors
 		// one at a time. this is currently only complicated by the way
 		// undefined colors are handled when drawing gradients.
-		colors := make([][tileHeight]plainColor, width)
+		colors := make([][stripHeight]plainColor, width)
 		gf.run(colors)
 		alphaFillInner(safeish.SliceCast[[]plainColor](colors))
 	}
