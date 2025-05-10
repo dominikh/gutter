@@ -195,8 +195,6 @@ func CompileStrokedPath(path iter.Seq[curve.PathElement], affine curve.Affine, s
 }
 
 func (ctx *Renderer) renderPath(p CompiledPath, paint encodedPaint) {
-	// XXX support a brush
-
 	stripBuf := p.strips
 	alphas := p.alphas
 
