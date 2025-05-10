@@ -16,7 +16,7 @@ import (
 
 func BenchmarkComputeAlphasNonZeroAMD64(b *testing.B) {
 	fns := []struct {
-		fp      func(tail *[4][4]uint8, locationWinding *[4][4]float32)
+		fp      func(tail *[tileWidth][tileHeight]uint8, locationWinding *[tileWidth][tileHeight]float32)
 		desc    string
 		enabled bool
 	}{
@@ -28,15 +28,15 @@ func BenchmarkComputeAlphasNonZeroAMD64(b *testing.B) {
 	// Ideally, these two variables would be in the scope of a single iteration,
 	// but our use of function pointers causes them to escape to the heap, which
 	// would dominate the benchmark results.
-	var locationWinding [4][4]float32
-	var tail [4][4]uint8
+	var locationWinding [tileWidth][tileHeight]float32
+	var tail [tileWidth][tileHeight]uint8
 	for _, fn := range fns {
 		b.Run(fmt.Sprintf("instr=%s", fn.desc), func(b *testing.B) {
 			if !fn.enabled {
 				b.Skip()
 			}
 			for b.Loop() {
-				locationWinding = [4][4]float32{{0.25, 1, 1, 1}, {0, 0.75, 1, 1}, {0, 0.25, 1, 1}, {0, 0, 0.75, 1}}
+				locationWinding = [tileWidth][tileHeight]float32{{0.25, 1, 1, 1}, {0, 0.75, 1, 1}, {0, 0.25, 1, 1}, {0, 0, 0.75, 1}}
 				fn.fp(&tail, &locationWinding)
 			}
 		})
@@ -48,8 +48,8 @@ func BenchmarkProcessOutOfBoundsWindingSSE(b *testing.B) {
 		ymin := float32(4.4388885)
 		ymax := float32(7.99)
 		sign := float32(1)
-		var locationWinding [4][4]float32
-		var accumulatedWinding [4]float32
+		var locationWinding [tileWidth][tileHeight]float32
+		var accumulatedWinding [tileHeight]float32
 		processOutOfBoundsWindingSSE(ymin, ymax, sign, &locationWinding, &accumulatedWinding)
 	}
 }
@@ -63,8 +63,8 @@ func BenchmarkComputeWindingAMD64(b *testing.B) {
 			sign float32,
 			xSlope float32,
 			ySlope float32,
-			locationWinding *[4][4]float32,
-			accumulatedWinding *[4]float32,
+			locationWinding *[tileWidth][tileHeight]float32,
+			accumulatedWinding *[tileHeight]float32,
 		)
 		desc    string
 		enabled bool
@@ -78,8 +78,8 @@ func BenchmarkComputeWindingAMD64(b *testing.B) {
 	// Ideally, these two variables would be in the scope of a single iteration,
 	// but our use of function pointers causes them to escape to the heap, which
 	// would dominate the benchmark results.
-	var locationWinding [4][4]float32
-	var accumulatedWinding [4]float32
+	var locationWinding [tileWidth][tileHeight]float32
+	var accumulatedWinding [tileHeight]float32
 	for _, fn := range fns {
 		b.Run(fmt.Sprintf("instr=%s", fn.desc), func(b *testing.B) {
 			if !fn.enabled {

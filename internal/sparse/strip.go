@@ -15,7 +15,7 @@ import (
 // The height of a strip.
 // Requirement: stripHeight * 16 % 32 == 0
 // Requirement: stripHeight >= widest vectorized load we use
-const stripHeight = 4
+const stripHeight = tileHeight
 
 type strip struct {
 	_ structs.HostLayout
@@ -109,7 +109,7 @@ func renderStripsScalar(
 				// OPT(dh): slicing alphaBuf and tail introduces unnecessary bounds checks
 				alphaBuf = slices.Grow(alphaBuf, tileWidth)[:len(alphaBuf)+tileWidth]
 				tail := alphaBuf[len(alphaBuf)-tileWidth:][:tileWidth]
-				computeAlphasNonZeroFp((*[4][4]uint8)(tail), &locationWinding)
+				computeAlphasNonZeroFp((*[tileWidth][tileHeight]uint8)(tail), &locationWinding)
 			case EvenOdd:
 				for x := range tileWidth {
 					var alphas [stripHeight]uint8
@@ -276,7 +276,7 @@ func renderStripsScalar(
 	return stripBuf, alphaBuf
 }
 
-func computeAlphasNonZeroNative(tail *[4][4]uint8, locationWinding *[4][4]float32) {
+func computeAlphasNonZeroNative(tail *[tileWidth][tileHeight]uint8, locationWinding *[tileWidth][tileHeight]float32) {
 	for x := range tileWidth {
 		for y := range tileHeight {
 			area := locationWinding[x][y]
@@ -292,8 +292,8 @@ func processOutOfBoundsWindingNative(
 	ymin float32,
 	ymax float32,
 	sign float32,
-	locationWinding *[4][4]float32,
-	accumulatedWinding *[4]float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
 ) {
 	for yIdx := range tileHeight {
 		pxTopY := float32(yIdx)
@@ -318,8 +318,8 @@ func computeWindingNative(
 	sign float32,
 	xSlope float32,
 	ySlope float32,
-	locationWinding *[4][4]float32,
-	accumulatedWinding *[4]float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
 ) {
 	for yIdx := range tileHeight {
 		pxTopY := float32(yIdx)

@@ -54,7 +54,7 @@ func Benchmark_memsetColumnsAMD64(b *testing.B) {
 				b.Skip()
 			}
 			c := plainColor{1, 1, 1, 1}
-			benchmarkFill(b, func(b *testing.B, buf [][4]plainColor) {
+			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]plainColor) {
 				for b.Loop() {
 					fn.fp(buf, c)
 				}

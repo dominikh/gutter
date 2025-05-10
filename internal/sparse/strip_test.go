@@ -10,8 +10,8 @@ import (
 )
 
 func BenchmarkComputeAlphasNonZeroNative(b *testing.B) {
-	locationWinding := [4][4]float32{{0.25, 1, 1, 1}, {0, 0.75, 1, 1}, {0, 0.25, 1, 1}, {0, 0, 0.75, 1}}
-	var tail [4][4]uint8
+	locationWinding := [tileWidth][tileHeight]float32{{0.25, 1, 1, 1}, {0, 0.75, 1, 1}, {0, 0.25, 1, 1}, {0, 0, 0.75, 1}}
+	var tail [tileWidth][tileHeight]uint8
 	for b.Loop() {
 		computeAlphasNonZeroNative(&tail, &locationWinding)
 	}
@@ -22,8 +22,8 @@ func BenchmarkProcessOutOfBoundsWindingNative(b *testing.B) {
 		ymin := float32(4.4388885)
 		ymax := float32(7.99)
 		sign := float32(1)
-		var locationWinding [4][4]float32
-		var accumulatedWinding [4]float32
+		var locationWinding [tileWidth][tileHeight]float32
+		var accumulatedWinding [tileHeight]float32
 		processOutOfBoundsWindingNative(ymin, ymax, sign, &locationWinding, &accumulatedWinding)
 	}
 }
@@ -36,8 +36,8 @@ func BenchmarkComputeWindingNative(b *testing.B) {
 		sign := float32(1)
 		xSlope := float32(0)
 		ySlope := float32(math.Inf(1))
-		var locationWinding [4][4]float32
-		var accumulatedWinding [4]float32
+		var locationWinding [tileWidth][tileHeight]float32
+		var accumulatedWinding [tileHeight]float32
 		computeWindingNative(
 			lineTopY,
 			lineTopX,

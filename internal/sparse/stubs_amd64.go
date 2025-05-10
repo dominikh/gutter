@@ -26,8 +26,8 @@ func computeWindingSSE(
 	sign float32,
 	xSlope float32,
 	ySlope float32,
-	locationWinding *[4][4]float32,
-	accumulatedWinding *[4]float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
 )
 
 //go:noescape
@@ -38,8 +38,8 @@ func computeWindingAVX(
 	sign float32,
 	xSlope float32,
 	ySlope float32,
-	locationWinding *[4][4]float32,
-	accumulatedWinding *[4]float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
 )
 
 //go:noescape
@@ -50,8 +50,8 @@ func computeWindingAVXFMA(
 	sign float32,
 	xSlope float32,
 	ySlope float32,
-	locationWinding *[4][4]float32,
-	accumulatedWinding *[4]float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
 )
 
 //go:noescape
@@ -59,12 +59,12 @@ func processOutOfBoundsWindingSSE(
 	ymin float32,
 	ymax float32,
 	sign float32,
-	locationWinding *[4][4]float32,
-	accumulatedWinding *[4]float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
 )
 
 //go:noescape
-func computeAlphasNonZeroSSE(tail *[4][4]uint8, locationWinding *[4][4]float32)
+func computeAlphasNonZeroSSE(tail *[tileWidth][tileHeight]uint8, locationWinding *[tileWidth][tileHeight]float32)
 
 //go:noescape
-func computeAlphasNonZeroAVX(tail *[4][4]uint8, locationWinding *[4][4]float32)
+func computeAlphasNonZeroAVX(tail *[tileWidth][tileHeight]uint8, locationWinding *[tileWidth][tileHeight]float32)

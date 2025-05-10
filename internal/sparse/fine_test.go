@@ -597,7 +597,7 @@ func Benchmark_fineFillComplexNative(b *testing.B) {
 
 func Benchmark_memsetColumnsNative(b *testing.B) {
 	c := plainColor{1, 1, 1, 1}
-	benchmarkFill(b, func(b *testing.B, buf [][4]plainColor) {
+	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]plainColor) {
 		for b.Loop() {
 			memsetColumnsNative(buf, c)
 		}
