@@ -27,6 +27,14 @@ type GradientStop struct {
 	Color  color.Color
 }
 
+type Gradient interface {
+	Paint
+}
+
+var _ Gradient = (*LinearGradient)(nil)
+var _ Gradient = (*RadialGradient)(nil)
+var _ Gradient = (*SweepGradient)(nil)
+
 type LinearGradient struct {
 	Stops      []GradientStop
 	Transform  curve.Affine
@@ -42,27 +50,15 @@ func (l *LinearGradient) encode() encodedPaint {
 	if valid, fallback := l.validate(); !valid {
 		return fallback
 	}
-	var hasOpacities bool
-	for _, stop := range l.Stops {
-		if stop.Color.Values[3] != 1.0 {
-			hasOpacities = true
-			break
-		}
-	}
-
-	stops := l.Stops
+	hasOpacities := slices.ContainsFunc(l.Stops, func(stop GradientStop) bool {
+		return stop.Color.Values[3] != 1.0
+	})
 
 	// For each gradient type, before doing anything we first translate it such
 	// that one of the points of the gradient lands on the origin (0, 0). We do
 	// this because it makes things simpler and allows for some optimizations
 	// for certain calculations.
 	var xOffset, yOffset float32
-
-	// The start/end range of the color line. We use this to resolve the extend
-	// of the gradient. Currently radial gradients uses normalized values
-	// between 0.0 and 1.0, for sweep and linear gradients different values are
-	// used (TODO: Would be nice to make this more consistent).
-	clampRange := [2]float32{0, 1}
 
 	// For linear gradients, we want to interpolate the color along the line
 	// that is formed by `start` and `end`.
@@ -71,6 +67,7 @@ func (l *LinearGradient) encode() encodedPaint {
 
 	// For simplicity, ensure that the gradient line always goes from left to
 	// right.
+	stops := l.Stops
 	if p0.X >= p1.X {
 		p0, p1 = p1, p0
 		stops = slices.Clone(stops)
@@ -84,8 +81,8 @@ func (l *LinearGradient) encode() encodedPaint {
 	// case we have the extend `Reflect`. Then we can treat it the same as a
 	// repeated gradient.
 	if l.Extend == GradientExtendReflect {
-		p1.X += p1.X - p0.X
-		p1.Y += p1.Y - p0.Y
+		p1.X = p1.X + p1.X - p0.X
+		p1.Y = p1.Y + p1.Y - p0.Y
 		stops = applyReflect(stops)
 	}
 
@@ -116,23 +113,34 @@ func (l *LinearGradient) encode() encodedPaint {
 	distance := sqrt32(norm[1]*norm[1] + norm[0]*norm[0])
 	// This corresponds to (y_2 - y_1) in the formula, but because of the above
 	// reasons shortens to y_2.
-	y2_minus_y1 := norm[1]
+	y2MinusY1 := norm[1]
 	// This corresponds to (x_2 - x_1) in the formula, but because of the above
 	// reasons shortens to x_2.
-	x2_minus_x1 := norm[0]
+	x2MinusX1 := norm[0]
 	// Note that we can completely disregard the x_2 * y_1 - y_2 * x_1 factor,
 	// since y_1 and x_1 are both 0.
 
-	end_val := sqrt32(dx*dx + dy*dy)
-	clampRange = [2]float32{0, end_val}
+	// The start/end range of the color line. We use this to resolve the extend
+	// of the gradient. Currently radial gradients uses normalized values
+	// between 0.0 and 1.0, for sweep and linear gradients different values are
+	// used (TODO: Would be nice to make this more consistent).
+	clampRange := [2]float32{0, sqrt32(dx*dx + dy*dy)}
 
-	kind := encodedLinearGradient{
-		distance:  distance,
-		y2MinusY1: y2_minus_y1,
-		x2MinusX1: x2_minus_x1,
-	}
-
-	return encodeGradient(kind, clampRange, stops, l.Extend, xOffset, yOffset, l.Transform, hasOpacities, l.ColorSpace)
+	return encodeGradient(
+		encodedLinearGradient{
+			distance:  distance,
+			y2MinusY1: y2MinusY1,
+			x2MinusX1: x2MinusX1,
+		},
+		clampRange,
+		stops,
+		l.Extend,
+		xOffset,
+		yOffset,
+		l.Transform,
+		hasOpacities,
+		l.ColorSpace,
+	)
 }
 
 func encodeGradient(
@@ -224,15 +232,9 @@ func (r *RadialGradient) encode() encodedPaint {
 	if valid, fallback := r.validate(); !valid {
 		return fallback
 	}
-	var hasOpacities bool
-	for _, stop := range r.Stops {
-		if stop.Color.Values[3] != 1.0 {
-			hasOpacities = true
-			break
-		}
-	}
-
-	stops := r.Stops
+	hasOpacities := slices.ContainsFunc(r.Stops, func(stop GradientStop) bool {
+		return stop.Color.Values[3] != 1.0
+	})
 
 	// For each gradient type, before doing anything we first translate it such
 	// that one of the points of the gradient lands on the origin (0, 0). We do
@@ -255,9 +257,10 @@ func (r *RadialGradient) encode() encodedPaint {
 
 	// Same story as for linear gradients, mutate stops so that reflect and
 	// repeat can be treated the same.
+	stops := r.Stops
 	if r.Extend == GradientExtendReflect {
 		c1 = c1.Translate(c1.Sub(c0))
-		r1 += r1 - r0
+		r1 = r1 + r1 - r0
 		stops = applyReflect(stops)
 	}
 
@@ -265,28 +268,34 @@ func (r *RadialGradient) encode() encodedPaint {
 	xOffset = float32(-c0.X)
 	yOffset = float32(-c0.Y)
 
-	end_point := c1.Sub(c0)
+	endPoint := c1.Sub(c0)
 
-	dist := float32(math.Sqrt(end_point.X*end_point.X + end_point.Y*end_point.Y))
-	c0_in_c1 := r1 >= r0+dist
-	c1_in_c0 := r0 >= r1+dist
-	cone_like := !(c0_in_c1 || c1_in_c0)
+	dist := float32(math.Sqrt(endPoint.X*endPoint.X + endPoint.Y*endPoint.Y))
+	conelike := r1 < r0+dist && r0 < r1+dist
 	// If the inner circle is not completely contained within the outer circle,
 	// the gradient can deform into a cone-like structure where some areas of
 	// the shape are not defined. Because of this, we might need opacities and
 	// source-over compositing in that case.
-	if cone_like {
+	if conelike {
 		hasOpacities = true
 	}
 
-	kind := encodedRadialGradient{
-		[2]float32{float32(end_point.X), float32(end_point.Y)},
-		r0,
-		r1,
-		cone_like,
-	}
-
-	return encodeGradient(kind, clampRange, stops, r.Extend, xOffset, yOffset, r.Transform, hasOpacities, r.ColorSpace)
+	return encodeGradient(
+		encodedRadialGradient{
+			[2]float32{float32(endPoint.X), float32(endPoint.Y)},
+			r0,
+			r1,
+			conelike,
+		},
+		clampRange,
+		stops,
+		r.Extend,
+		xOffset,
+		yOffset,
+		r.Transform,
+		hasOpacities,
+		r.ColorSpace,
+	)
 }
 
 func (r *RadialGradient) validate() (valid bool, fallback encodedPaint) {
@@ -331,8 +340,6 @@ func (s *SweepGradient) encode() encodedPaint {
 		return stop.Color.Values[3] != 1.0
 	})
 
-	stops := s.Stops
-
 	// For each gradient type, before doing anything we first translate it such
 	// that one of the points of the gradient lands on the origin (0, 0). We do
 	// this because it makes things simpler and allows for some optimizations
@@ -341,22 +348,31 @@ func (s *SweepGradient) encode() encodedPaint {
 
 	// For sweep gradients, the position on the "color line" is defined by the
 	// angle towards the gradient center.
-	start_angle := s.StartAngle
-	end_angle := s.EndAngle
+	startAngle := s.StartAngle
+	endAngle := s.EndAngle
 
 	// Same as before, reduce `Reflect` to `Repeat`.
+	stops := s.Stops
 	if s.Extend == GradientExtendReflect {
-		end_angle += end_angle - start_angle
+		endAngle = endAngle + endAngle - startAngle
 		stops = applyReflect(stops)
 	}
 
 	// Make sure the center of the gradient falls on the origin (0, 0).
 	xOffset = float32(-s.Center.X)
 	yOffset = float32(-s.Center.Y)
-	clampRange := [2]float32{start_angle, end_angle}
 
-	kind := encodedSweepGradient{}
-	return encodeGradient(kind, clampRange, stops, s.Extend, xOffset, yOffset, s.Transform, hasOpacities, s.ColorSpace)
+	return encodeGradient(
+		encodedSweepGradient{},
+		[2]float32{startAngle, endAngle},
+		stops,
+		s.Extend,
+		xOffset,
+		yOffset,
+		s.Transform,
+		hasOpacities,
+		s.ColorSpace,
+	)
 }
 
 func (s *SweepGradient) validate() (valid bool, fallback encodedPaint) {
@@ -382,14 +398,6 @@ func (s *SweepGradient) validate() (valid bool, fallback encodedPaint) {
 	}
 	return true, nil
 }
-
-type Gradient interface {
-	Paint
-}
-
-var _ Gradient = (*LinearGradient)(nil)
-var _ Gradient = (*RadialGradient)(nil)
-var _ Gradient = (*SweepGradient)(nil)
 
 func validateStops(stops []GradientStop) (valid bool, fallback encodedPaint) {
 	black := plainColor{0, 0, 0, 1}
@@ -513,9 +521,9 @@ func (r encodedRadialGradient) posInner(pos curve.Point) (float32, bool) {
 		return 0, false
 	}
 
-	sqrt_d := sqrt32(discriminant)
-	t1 := (-b - sqrt_d) / (2.0 * a)
-	t2 := (-b + sqrt_d) / (2.0 * a)
+	sqrtD := sqrt32(discriminant)
+	t1 := (-b - sqrtD) / (2.0 * a)
+	t2 := (-b + sqrtD) / (2.0 * a)
 
 	max := max(t1, t2)
 	min := min(t1, t2)
@@ -558,11 +566,11 @@ type encodedGradient struct {
 	// A transform that needs to be applied to the position of the first
 	// processed pixel.
 	transform curve.Affine
-	// How much to advance into the x/y direction for one step in the x
-	// direction.
+	// How much to advance along the x and y directions in the gradient for one
+	// step in the x direction in the output image.
 	xAdvance curve.Vec2
-	// How much to advance into the x/y direction for one step in the y
-	// direction.
+	// How much to advance along the x and y directions in the gradient for one
+	// step in the y direction in the output image.
 	yAdvance curve.Vec2
 	// The color ranges of the gradient.
 	ranges []gradientRange
@@ -620,7 +628,7 @@ func applyReflect(stops []GradientStop) []GradientStop {
 
 // Encode all stops into a sequence of ranges.
 func encodeStops(stops []GradientStop, start, end float32, pad bool, space *color.Space) []gradientRange {
-	create_range := func(left_stop, right_stop GradientStop) gradientRange {
+	createRange := func(left_stop, right_stop GradientStop) gradientRange {
 		x0 := start + (end-start)*left_stop.Offset
 		x1 := start + (end-start)*right_stop.Offset
 		c0 := left_stop.Color.Convert(space)
@@ -635,14 +643,16 @@ func encodeStops(stops []GradientStop, start, end float32, pad bool, space *colo
 		// is calculated by c0 + ((x - x0) / (x1 - x0)) * (c1 - c0).
 		// We can precompute the (c1 - c0)/(x1 - x0) part for each color component.
 
+		// OPT(dh): can we fold color space conversion (i.e. colorToInternal) into the factors?
+
 		// We call this method with two same stops for `left_range` and
 		// `right_range`, so make sure we don't actually end up with a 0 here.
-		x1_minus_x0 := max(x1-x0, 0.0000001)
-		var factors [4]float32
-
-		for i := range factors {
-			c1_minus_c0 := float32(c1.Values[i]) - float32(c0.Values[i])
-			factors[i] = c1_minus_c0 / x1_minus_x0
+		x1MinusX0 := max(x1-x0, 0.0000001)
+		factors := [4]float32{
+			float32(c1.Values[0]-c0.Values[0]) / x1MinusX0,
+			float32(c1.Values[1]-c0.Values[1]) / x1MinusX0,
+			float32(c1.Values[2]-c0.Values[2]) / x1MinusX0,
+			float32(c1.Values[3]-c0.Values[3]) / x1MinusX0,
 		}
 
 		return gradientRange{
@@ -656,31 +666,26 @@ func encodeStops(stops []GradientStop, start, end float32, pad bool, space *colo
 	if pad {
 		// We handle padding by inserting dummy stops in the beginning and end
 		// with a very big range.
-		stop_ranges := make([]gradientRange, len(stops)+1)
-		first_stop := stops[0]
-		encoded_range := create_range(first_stop, first_stop)
-		encoded_range.x0 = -math.MaxFloat32
-		stop_ranges[0] = encoded_range
+		stopRanges := make([]gradientRange, len(stops)+1)
+		encodedRange := createRange(stops[0], stops[0])
+		encodedRange.x0 = -math.MaxFloat32
+		stopRanges[0] = encodedRange
 
 		for i := range stops[:len(stops)-1] {
-			left_stop := stops[i]
-			right_stop := stops[i+1]
-			stop_ranges[i+1] = create_range(left_stop, right_stop)
+			stopRanges[i+1] = createRange(stops[i], stops[i+1])
 		}
 
-		last_stop := stops[len(stops)-1]
-		encoded_range = create_range(last_stop, last_stop)
-		encoded_range.x1 = math.MaxFloat32
-		stop_ranges[len(stop_ranges)-1] = encoded_range
-		return stop_ranges
+		lastStop := stops[len(stops)-1]
+		encodedRange = createRange(lastStop, lastStop)
+		encodedRange.x1 = math.MaxFloat32
+		stopRanges[len(stopRanges)-1] = encodedRange
+		return stopRanges
 	} else {
-		stop_ranges := make([]gradientRange, len(stops)-1)
+		stopRanges := make([]gradientRange, len(stops)-1)
 		for i := range stops[:len(stops)-1] {
-			left_stop := stops[i]
-			right_stop := stops[i+1]
-			stop_ranges[i] = create_range(left_stop, right_stop)
+			stopRanges[i] = createRange(stops[i], stops[i+1])
 		}
-		return stop_ranges
+		return stopRanges
 	}
 }
 
@@ -706,8 +711,7 @@ func (gf *gradientFiller) curRange() *gradientRange {
 	return &gf.gradient.ranges[gf.rangeIdx]
 }
 
-func (gf *gradientFiller) advance(targetPos float32) {
-	// log.Println(targetPos, gf.curRange().x1, gf.curRange().x0)
+func (gf *gradientFiller) advanceTo(targetPos float32) {
 	for targetPos > gf.curRange().x1 || targetPos < gf.curRange().x0 {
 		if gf.rangeIdx == 0 {
 			gf.rangeIdx = len(gf.gradient.ranges) - 1
@@ -720,8 +724,8 @@ func (gf *gradientFiller) advance(targetPos float32) {
 func (gf *gradientFiller) run(dst [][stripHeight]plainColor) {
 	oldPos := gf.curPos
 
-	for i := range dst {
-		col := &dst[i]
+	for x := range dst {
+		col := &dst[x]
 		gf.runColumn(col)
 		gf.curPos = gf.curPos.Translate(gf.gradient.xAdvance)
 	}
@@ -745,16 +749,16 @@ func (gf *gradientFiller) runColumn(col *[stripHeight]plainColor) {
 	extend := func(val float32) float32 {
 		return extend(val, gf.gradient.pad, gf.gradient.clampRange)
 	}
-	for i := range col {
-		px := &col[i]
-		dist := extend(gf.gradient.kind.curPos(pos))
-		gf.advance(dist)
+	for y := range col {
+		px := &col[y]
+		extendedPos := extend(gf.gradient.kind.curPos(pos))
+		gf.advanceTo(extendedPos)
 		rng := gf.curRange()
 
 		c := rng.c0
 
 		for compIdx := range px {
-			factor := (rng.factors[compIdx] * (dist - rng.x0))
+			factor := (rng.factors[compIdx] * (extendedPos - rng.x0))
 			c.Values[compIdx] += float64(factor)
 		}
 		*px = colorToInternal(c)
