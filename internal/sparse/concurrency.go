@@ -5,7 +5,6 @@
 package sparse
 
 import (
-	"iter"
 	"runtime"
 
 	"honnef.co/go/curve"
@@ -77,7 +76,7 @@ func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, packer Packer)
 }
 
 func (r *ConcurrentRenderer) Fill(
-	path iter.Seq[curve.PathElement],
+	shape Shape,
 	transform curve.Affine,
 	fillRule FillRule,
 	paint Paint,
@@ -89,12 +88,12 @@ func (r *ConcurrentRenderer) Fill(
 	}
 	r.tasks <- t
 	go func(width, height uint16) {
-		t.path <- CompileFillPath(path, transform, fillRule, width, height)
+		t.path <- CompileFillPath(shape, transform, fillRule, width, height)
 	}(r.Width(), r.Height())
 }
 
 func (r *ConcurrentRenderer) Stroke(
-	path iter.Seq[curve.PathElement],
+	shape Shape,
 	transform curve.Affine,
 	stroke_ curve.Stroke,
 	paint Paint,
@@ -106,12 +105,12 @@ func (r *ConcurrentRenderer) Stroke(
 	}
 	r.tasks <- t
 	go func(width, height uint16) {
-		t.path <- CompileStrokedPath(path, transform, stroke_, width, height)
+		t.path <- CompileStrokedPath(shape, transform, stroke_, width, height)
 	}(r.Width(), r.Height())
 }
 
 func (r *ConcurrentRenderer) PushClip(
-	path iter.Seq[curve.PathElement],
+	shape Shape,
 	transform curve.Affine,
 	fill FillRule,
 ) {
@@ -121,7 +120,7 @@ func (r *ConcurrentRenderer) PushClip(
 	}
 	r.tasks <- t
 	go func(width, height uint16) {
-		t.path <- CompileFillPath(path, transform, fill, width, height)
+		t.path <- CompileFillPath(shape, transform, fill, width, height)
 	}(r.Width(), r.Height())
 }
 

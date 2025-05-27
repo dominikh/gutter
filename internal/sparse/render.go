@@ -40,6 +40,10 @@ const (
 	EvenOdd
 )
 
+type Shape interface {
+	PathElements(precision float64) iter.Seq[curve.PathElement]
+}
+
 // plainColor represents a premultiplied color in the [ColorSpace] color space.
 type plainColor [4]float32
 
@@ -181,13 +185,28 @@ type CompiledPath struct {
 	fillRule FillRule
 }
 
-func CompileFillPath(path iter.Seq[curve.PathElement], affine curve.Affine, fillRule FillRule, width, height uint16) CompiledPath {
-	lines := fill(path, affine)
+func CompileFillPath(
+	shape Shape,
+	affine curve.Affine,
+	fillRule FillRule,
+	width uint16,
+	height uint16,
+) CompiledPath {
+	// TODO(dh): scale precision based on transformation
+	lines := fill(shape.PathElements(0.1), affine)
 	strips, alphas := renderPathCommon(lines, fillRule, width, height)
 	return CompiledPath{strips, alphas, fillRule}
 }
 
-func CompileStrokedPath(path iter.Seq[curve.PathElement], affine curve.Affine, stroke_ curve.Stroke, width, height uint16) CompiledPath {
+func CompileStrokedPath(
+	shape Shape,
+	affine curve.Affine,
+	stroke_ curve.Stroke,
+	width uint16,
+	height uint16,
+) CompiledPath {
+	// TODO(dh): scale precision based on transformation
+	path := shape.PathElements(0.1)
 	lines := stroke(path, stroke_, affine)
 	strips, alphas := renderPathCommon(lines, NonZero, width, height)
 	return CompiledPath{strips, alphas, NonZero}
@@ -431,29 +450,29 @@ func (ctx *Renderer) FillCompiled(p CompiledPath, paint Paint) {
 }
 
 func (ctx *Renderer) Fill(
-	path iter.Seq[curve.PathElement],
+	shape Shape,
 	transform curve.Affine,
 	fillRule FillRule,
 	paint Paint,
 ) {
-	p := CompileFillPath(path, transform, fillRule, ctx.width, ctx.height)
+	p := CompileFillPath(shape, transform, fillRule, ctx.width, ctx.height)
 	ctx.renderPath(p, paint.encode())
 }
 
 func (ctx *Renderer) Stroke(
-	path iter.Seq[curve.PathElement],
+	shape Shape,
 	transform curve.Affine,
 	stroke_ curve.Stroke,
 	paint Paint,
 ) {
-	p := CompileStrokedPath(path, transform, stroke_, ctx.width, ctx.height)
+	p := CompileStrokedPath(shape, transform, stroke_, ctx.width, ctx.height)
 	ctx.renderPath(p, paint.encode())
 }
 
 type Layer struct {
 	BlendMode     BlendMode
 	Opacity       float32
-	Clip          iter.Seq[curve.PathElement]
+	Clip          Shape
 	ClipTransform curve.Affine
 	ClipFillRule  FillRule
 }
@@ -464,8 +483,8 @@ type LayerCompiled struct {
 	Clip      CompiledPath
 }
 
-func (ctx *Renderer) PushClip(path iter.Seq[curve.PathElement], transform curve.Affine, fill FillRule) {
-	ctx.PushLayer(Layer{Opacity: 1, Clip: path, ClipFillRule: fill, ClipTransform: transform})
+func (ctx *Renderer) PushClip(shape Shape, transform curve.Affine, fill FillRule) {
+	ctx.PushLayer(Layer{Opacity: 1, Clip: shape, ClipFillRule: fill, ClipTransform: transform})
 }
 
 func (ctx *Renderer) PushClipCompiled(p CompiledPath) {
@@ -591,7 +610,7 @@ func (ctx *Renderer) PushLayer(l Layer) {
 		l.Clip = curve.NewRectFromOrigin(
 			curve.Pt(0, 0),
 			curve.Sz(float64(ctx.width), float64(ctx.height)),
-		).PathElements(0.1)
+		)
 		l.ClipTransform = curve.Identity
 	}
 

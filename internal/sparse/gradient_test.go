@@ -66,7 +66,7 @@ func TestLinearGradientOnThreeWideTiles(t *testing.T) {
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -81,7 +81,7 @@ func TestLinearGradientTwoStops(t *testing.T) {
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -96,7 +96,7 @@ func TestLinearGradientTwoStopsWithAlpha(t *testing.T) {
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -122,7 +122,7 @@ func TestLinearGradientsDirections(t *testing.T) {
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -148,7 +148,7 @@ func TestLinearGradientsExtends(t *testing.T) {
 					Extend:     tt.extend,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -166,7 +166,7 @@ func TestLinearGradient4Stops(t *testing.T) {
 			ColorSpace: color.SRGB,
 		}
 
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -181,7 +181,7 @@ func TestLinearGradientComplexShape(t *testing.T) {
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, gradient)
+		ctx.Fill(path, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -196,7 +196,7 @@ func TestLinearGradientWithYRepeat(t *testing.T) {
 			Extend:     GradientExtendRepeat,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -211,7 +211,7 @@ func TestLinearGradientWithYReflect(t *testing.T) {
 			Extend:     GradientExtendReflect,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -320,7 +320,7 @@ func TestLinearGradientsWithTransform(t *testing.T) {
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), tt.transform, NonZero, gradient)
+				ctx.Fill(rect, tt.transform, NonZero, gradient)
 			})
 		})
 	}
@@ -348,7 +348,7 @@ func TestRadialGradientsSimple(t *testing.T) {
 					Extend:      GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -377,7 +377,7 @@ func TestRadialGradientsWithOffsets(t *testing.T) {
 					Extend:      GradientExtendRepeat,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -406,7 +406,7 @@ func TestRadialGradientsWithExtends(t *testing.T) {
 					Extend:      tt.extend,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -425,7 +425,7 @@ func TestRadialGradientC0Bigger(t *testing.T) {
 			Extend:      GradientExtendPad,
 			ColorSpace:  color.SRGB,
 		}
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -452,7 +452,7 @@ func TestRadialGradientsNonOverlapping(t *testing.T) {
 					Extend:      GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -471,7 +471,7 @@ func TestRadialGradientComplexShape(t *testing.T) {
 			Extend:      GradientExtendPad,
 			ColorSpace:  color.SRGB,
 		}
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, gradient)
+		ctx.Fill(path, curve.Identity, NonZero, gradient)
 	})
 }
 
@@ -569,7 +569,7 @@ func TestRadialGradientsWithTransforms(t *testing.T) {
 					Extend:      GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), tt.transform, NonZero, gradient)
+				ctx.Fill(rect, tt.transform, NonZero, gradient)
 			})
 		})
 	}
@@ -598,7 +598,7 @@ func TestSweepGradientsBasic(t *testing.T) {
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -625,7 +625,7 @@ func TestSweepGradientsWithExtends(t *testing.T) {
 					Extend:     tt.extend,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, NonZero, gradient)
 			})
 		})
 	}
@@ -724,7 +724,7 @@ func TestSweepGradientsWithTransforms(t *testing.T) {
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect.PathElements(0.1), tt.transform, NonZero, gradient)
+				ctx.Fill(rect, tt.transform, NonZero, gradient)
 			})
 		})
 	}
@@ -742,6 +742,6 @@ func TestSweepGradientComplexShape(t *testing.T) {
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, gradient)
+		ctx.Fill(path, curve.Identity, NonZero, gradient)
 	})
 }

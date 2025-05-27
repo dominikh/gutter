@@ -24,7 +24,7 @@ func getCtx(width, height uint16, transparent bool) *Renderer {
 	ctx := NewRenderer(width, height)
 	if !transparent {
 		ctx.Fill(
-			curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(float64(width), float64(height))).PathElements(0.1),
+			curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(float64(width), float64(height))),
 			curve.Identity,
 			NonZero,
 			Solid(color.Make(color.LinearSRGB, 1, 1, 1, 1)),
@@ -145,7 +145,7 @@ func TestIncorrectFilling1(t *testing.T) {
 		path.LineTo(curve.Pt(0, 4))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -159,7 +159,7 @@ func TestIncorrectFilling2(t *testing.T) {
 		path.LineTo(curve.Pt(16, 48))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -173,7 +173,7 @@ func TestIncorrectFilling3(t *testing.T) {
 		path.LineTo(curve.Pt(1e-45, 4.00001))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -193,7 +193,7 @@ func TestIncorrectFilling4(t *testing.T) {
 		path.LineTo(curve.Pt(16.000002, 9))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -207,7 +207,7 @@ func TestIncorrectFilling5(t *testing.T) {
 		path.LineTo(curve.Pt(32, 8))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -221,7 +221,7 @@ func TestIncorrectFilling6(t *testing.T) {
 		path.LineTo(curve.Pt(16, 9))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -235,7 +235,7 @@ func TestIncorrectFilling7(t *testing.T) {
 		path.LineTo(curve.Pt(32.000002, 8))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -255,7 +255,7 @@ func TestIncorrectFilling8(t *testing.T) {
 		path.LineTo(curve.Pt(16.000427, 9))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -265,7 +265,7 @@ func TestOutOfBoundStrip(t *testing.T) {
 	var path curve.BezPath
 	path.MoveTo(curve.Pt(256, 254))
 	path.LineTo(curve.Pt(265, 254))
-	ctx.Stroke(path.Elements(), curve.Identity, curve.DefaultStroke.WithWidth(1), Solid(color.Make(color.SRGB, 1, 0, 0, 1)))
+	ctx.Stroke(path, curve.Identity, curve.DefaultStroke.WithWidth(1), Solid(color.Make(color.SRGB, 1, 0, 0, 1)))
 	// Test that we don't panic.
 	render(ctx)
 }
@@ -284,14 +284,14 @@ func starPath() curve.BezPath {
 func TestFillingNonZeroRule(t *testing.T) {
 	renderAndCompare(t, 100, 100, false, "filling_nonzero_rule", func(ctx *Renderer) {
 		star := starPath()
-		ctx.Fill(star.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.5, 0, 0, 1)))
+		ctx.Fill(star, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.5, 0, 0, 1)))
 	})
 }
 
 func TestFillingEvenOddRule(t *testing.T) {
 	renderAndCompare(t, 100, 100, false, "filling_evenodd_rule", func(ctx *Renderer) {
 		star := starPath()
-		ctx.Fill(star.Elements(), curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0.5, 0, 0, 1)))
+		ctx.Fill(star, curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0.5, 0, 0, 1)))
 	})
 }
 
@@ -302,7 +302,7 @@ func TestFillingUnclosedPath1(t *testing.T) {
 		path.MoveTo(curve.Pt(75, 25))
 		path.LineTo(curve.Pt(25, 25))
 		path.LineTo(curve.Pt(25, 75))
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -320,7 +320,7 @@ func TestFillingUnclosedPath2(t *testing.T) {
 		path.LineTo(curve.Pt(50, 100))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -333,7 +333,7 @@ func TestTriangleExceedingViewport1(t *testing.T) {
 		path.LineTo(curve.Pt(-4, 7.99))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -346,7 +346,7 @@ func TestTriangleExceedingViewport2(t *testing.T) {
 		path.LineTo(curve.Pt(-5, 7.99))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -360,14 +360,14 @@ func TestShapeAtWideTileBoundary(t *testing.T) {
 	path.LineTo(curve.Pt(248, 2))
 	path.ClosePath()
 
-	ctx.Fill(path.Elements(), curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+	ctx.Fill(path, curve.Identity, EvenOdd, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	// Make sure we don't panic.
 	render(ctx)
 }
 
 func TestFullCover1(t *testing.T) {
 	renderAndCompare(t, 8, 8, true, "full_cover_1", func(ctx *Renderer) {
-		c := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(8, 8)).PathElements(0.1)
+		c := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(8, 8))
 		ctx.Fill(c, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.96, 0.96, 0.86, 1)))
 	})
 }
@@ -380,7 +380,7 @@ func TestFilledTriangle(t *testing.T) {
 		path.LineTo(curve.Pt(5, 95))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -392,7 +392,7 @@ func TestStrokedTriangle(t *testing.T) {
 		path.LineTo(curve.Pt(5, 95))
 		path.ClosePath()
 
-		ctx.Stroke(path.Elements(), curve.Identity, curve.DefaultStroke.WithWidth(3), Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Stroke(path, curve.Identity, curve.DefaultStroke.WithWidth(3), Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -401,7 +401,7 @@ func TestFilledCircle(t *testing.T) {
 		c := curve.Circle{
 			Center: curve.Pt(50, 50),
 			Radius: 45,
-		}.PathElements(0.1)
+		}
 		ctx.Fill(c, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
@@ -411,7 +411,7 @@ func TestFilledCircleWithOpacity(t *testing.T) {
 		c := curve.Circle{
 			Center: curve.Pt(50, 50),
 			Radius: 45,
-		}.PathElements(0.1)
+		}
 		ctx.Fill(c, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.4, 0.2, 0.6, 0.5)))
 	})
 }
@@ -428,7 +428,7 @@ func TestFilledOverlappingCircles(t *testing.T) {
 			{50, 65, color.Make(color.SRGB, 0, 0, 1, 0.5)},
 		} {
 			circle := curve.Circle{Center: curve.Pt(e.x, e.y), Radius: 30}
-			ctx.Fill(circle.PathElements(0.1), curve.Identity, NonZero, Solid(e.color))
+			ctx.Fill(circle, curve.Identity, NonZero, Solid(e.color))
 		}
 	})
 }
@@ -438,7 +438,7 @@ func TestStrokedCircle(t *testing.T) {
 		circle := curve.Circle{Center: curve.Pt(50, 50), Radius: 45}
 		stroke := curve.DefaultStroke.WithWidth(3)
 
-		ctx.Stroke(circle.PathElements(0.1), curve.Identity, stroke, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
+		ctx.Stroke(circle, curve.Identity, stroke, Solid(color.Make(color.SRGB, 0, 1, 0, 1)))
 	})
 }
 
@@ -451,7 +451,7 @@ func TestTriangleAboveAndWiderThanViewport(t *testing.T) {
 		path.LineTo(curve.Pt(-8, 6))
 		path.ClosePath()
 
-		ctx.Fill(path.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
+		ctx.Fill(path, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
 	})
 }
 
@@ -460,14 +460,14 @@ func TestRectangleLeftOfViewport(t *testing.T) {
 	// viewport in scan direction.
 	renderAndCompare(t, 10, 10, false, "rectangle_left_of_viewport", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(-4, 3), curve.Pt(1, 8))
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
+		ctx.Fill(rect, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
 	})
 }
 
 func TestFilledAlignedRect(t *testing.T) {
 	renderAndCompare(t, 30, 20, false, "filled_aligned_rect", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(1, 1), curve.Pt(29, 19))
-		ctx.Fill(rect.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
+		ctx.Fill(rect, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
 	})
 }
 
@@ -475,7 +475,7 @@ func TestStrokedUnalignedRect(t *testing.T) {
 	renderAndCompare(t, 30, 30, false, "stroked_unaligned_rect", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(5, 5), curve.Pt(25, 25))
 		stroke := curve.DefaultStroke.WithWidth(1).WithJoin(curve.MiterJoin)
-		ctx.Stroke(rect.PathElements(0.1), curve.Identity, stroke, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
+		ctx.Stroke(rect, curve.Identity, stroke, Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
 	})
 }
 
@@ -492,13 +492,13 @@ func TestClipping(t *testing.T) {
 			Radius: 19.0,
 		}
 
-		ctx.Fill(curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(64, 64)).PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.8, 0, 0, 0.5)))
+		ctx.Fill(curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(64, 64)), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.8, 0, 0, 0.5)))
 
-		ctx.PushClip(circle.PathElements(0.1), curve.Identity, NonZero)
-		ctx.PushClip(triangle.Elements(), curve.Identity, NonZero)
-		ctx.Fill(triangle.Elements(), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 1, 1, 0.5)))
-		ctx.Stroke(circle.PathElements(0.1), curve.Identity, curve.DefaultStroke.WithWidth(5), Solid(color.Make(color.SRGB, 0, 0, 1, 1)))
-		ctx.Stroke(triangle.Elements(), curve.Identity, curve.DefaultStroke.WithWidth(5), Solid(color.Make(color.SRGB, 0, 0, 1, 1)))
+		ctx.PushClip(circle, curve.Identity, NonZero)
+		ctx.PushClip(triangle, curve.Identity, NonZero)
+		ctx.Fill(triangle, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 1, 1, 0.5)))
+		ctx.Stroke(circle, curve.Identity, curve.DefaultStroke.WithWidth(5), Solid(color.Make(color.SRGB, 0, 0, 1, 1)))
+		ctx.Stroke(triangle, curve.Identity, curve.DefaultStroke.WithWidth(5), Solid(color.Make(color.SRGB, 0, 0, 1, 1)))
 	})
 }
 
@@ -506,14 +506,14 @@ func TestLinearAntiAliasing(t *testing.T) {
 	renderAndCompare(t, 32, 32, true, "linear_anti_aliasing", func(ctx *Renderer) {
 		r := curve.NewRectFromOrigin(curve.Pt(16.5, 0), curve.Sz(1, 32))
 		// We expect pixels 16 and 17 to be 50% transparent red.
-		ctx.Fill(r.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.LinearSRGB, 1, 0, 0, 1)))
+		ctx.Fill(r, curve.Identity, NonZero, Solid(color.Make(color.LinearSRGB, 1, 0, 0, 1)))
 	})
 }
 
 func Test50pctGrey(t *testing.T) {
 	renderAndCompare(t, 32, 32, false, "50pct_grey", func(ctx *Renderer) {
 		r := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(32, 32))
-		ctx.Fill(r.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.LinearSRGB, 0.5, 0.5, 0.5, 1)))
+		ctx.Fill(r, curve.Identity, NonZero, Solid(color.Make(color.LinearSRGB, 0.5, 0.5, 0.5, 1)))
 	})
 }
 

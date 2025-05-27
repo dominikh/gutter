@@ -76,14 +76,14 @@ func TestCompose(t *testing.T) {
 	for _, op := range ComposeOps {
 		t.Run("op="+op.String(), func(t *testing.T) {
 			renderAndCompare(t, 64, 64, true, "compose_"+op.String(), func(ctx *Renderer) {
-				ctx.Fill(dst.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
+				ctx.Fill(dst, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
 				ctx.PushLayer(Layer{
 					BlendMode: BlendMode{
 						Compose: op,
 					},
 					Opacity: 1,
 				})
-				ctx.Fill(src.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
+				ctx.Fill(src, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
 			})
 		})
 	}
@@ -96,14 +96,14 @@ func TestMix(t *testing.T) {
 	for _, op := range MixOps {
 		t.Run("op="+op.String(), func(t *testing.T) {
 			renderAndCompare(t, 64, 64, true, "mix_"+op.String(), func(ctx *Renderer) {
-				ctx.Fill(dst.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
+				ctx.Fill(dst, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
 				ctx.PushLayer(Layer{
 					BlendMode: BlendMode{
 						Mix: op,
 					},
 					Opacity: 1,
 				})
-				ctx.Fill(src.PathElements(0.1), curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
+				ctx.Fill(src, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
 			})
 		})
 	}
