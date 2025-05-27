@@ -14,7 +14,6 @@ import (
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
-	"honnef.co/go/safeish"
 )
 
 // ColorSpace is the color space used to represent pixel values internally. This
@@ -129,10 +128,10 @@ func (ctx *Renderer) finish() {
 	ctx.popLayers()
 }
 
-func (ctx *Renderer) RenderToPixmap(width, height uint16, pixmap [][4]float32) {
+func (ctx *Renderer) Render(width, height uint16, packer Packer) {
 	ctx.finish()
 	distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
-		fine := newFine(width, height, safeish.SliceCast[[]plainColor](pixmap))
+		fine := newFine(width, height, packer)
 		for y, row := range subitems {
 			y += group * step
 			for x := range row {

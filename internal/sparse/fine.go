@@ -77,8 +77,8 @@ type fine struct {
 	width, height uint16
 	tileX         uint16
 	tileY         uint16
-	outBuf        []plainColor
 	layers        []fineLayer
+	packer        Packer
 
 	// free list of scratch space
 	freeScratches []*fineScratch
@@ -94,11 +94,11 @@ type fineLayer struct {
 	complex bool
 }
 
-func newFine(width, height uint16, out []plainColor) *fine {
+func newFine(width, height uint16, packer Packer) *fine {
 	f := &fine{
 		width:  width,
 		height: height,
-		outBuf: out,
+		packer: packer,
 	}
 	f.layers = []fineLayer{{scratch: f.newScratch()}}
 	return f
@@ -130,6 +130,11 @@ func (l *fineLayer) clear(c plainColor) {
 	l.singleColor = c
 }
 
+type Packer interface {
+	PackSimple(x0, y0, x1, y1 uint16, c [4]float32)
+	PackComplex(x0, y0, x1, y1 uint16, tile [][4]float32)
+}
+
 // pack writes the tile at (tileX, tileY) to the output buffer.
 func (f *fine) pack() {
 	l := f.topLayer()
@@ -142,43 +147,25 @@ func (f *fine) pack() {
 
 func (f *fine) packSimple(l *fineLayer, tileX, tileY uint16) {
 	f.stats.simplePacks++
-	outWidth := max(0, min(wideTileWidth, f.width-tileX*wideTileWidth))
-	outHeight := max(0, min(stripHeight, f.height-tileY*stripHeight))
-
-	baseIdx := (int(tileY*stripHeight)*int(f.width) + int(tileX*wideTileWidth))
-	out := f.outBuf[baseIdx:]
-	for range outHeight {
-		row := out[:min(len(out), int(outWidth))]
-
-		// We're writing the same color to every pixel, so even though
-		// memsetColumns operates on columns, we can just pretend that a
-		// single row of pixels is a bunch of columns.
-		outCols := safeish.SliceCast[[][stripHeight]plainColor](row)
-		memsetColumnsFp(outCols, l.singleColor)
-		for x := len(row) &^ 0b11; x < len(row); x++ {
-			row[x] = l.singleColor
-		}
-		out = out[min(uint(len(out)), uint(f.width)):]
-	}
+	outWidth := uint16(wideTileWidth)
+	outHeight := uint16(stripHeight)
+	x0 := tileX * wideTileWidth
+	x1 := x0 + outWidth
+	y0 := tileY * stripHeight
+	y1 := y0 + outHeight
+	f.packer.PackSimple(x0, y0, x1, y1, l.singleColor)
 }
 
 func (f *fine) packComplex(l *fineLayer, tileX, tileY uint16) {
-	// OPT add SIMD implementation
-
 	f.stats.complexPacks++
-	outWidth := max(0, min(wideTileWidth, f.width-tileX*wideTileWidth))
-	outHeight := max(0, min(stripHeight, f.height-tileY*stripHeight))
+	outWidth := uint16(wideTileWidth)
+	outHeight := uint16(stripHeight)
 
-	baseIdx := (int(tileY*stripHeight)*int(f.width) + int(tileX*wideTileWidth))
-	out := f.outBuf[baseIdx:]
-	scratch := l.scratch[:outWidth]
-	for y := range outHeight {
-		row := out[:min(len(out), int(outWidth))]
-		for x := range row {
-			row[x] = scratch[x][y]
-		}
-		out = out[min(uint(len(out)), uint(f.width)):]
-	}
+	x0 := tileX * wideTileWidth
+	x1 := x0 + outWidth
+	y0 := tileY * stripHeight
+	y1 := y0 + outHeight
+	f.packer.PackComplex(x0, y0, x1, y1, safeish.SliceCast[[][4]float32](l.scratch[:]))
 }
 
 func memsetColumnsNative(buf [][stripHeight]plainColor, c plainColor) {

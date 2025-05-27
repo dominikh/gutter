@@ -43,7 +43,12 @@ func renderAndCompare(t *testing.T, width, height uint16, transparent bool, name
 
 func render(ctx *Renderer) [][4]float32 {
 	pixmap := make([][4]float32, int(ctx.width)*int(ctx.height))
-	ctx.RenderToPixmap(ctx.width, ctx.height, pixmap)
+	packer := &PackerFloat32{
+		Out:    pixmap,
+		Width:  int(ctx.width),
+		Height: int(ctx.height),
+	}
+	ctx.Render(ctx.width, ctx.height, packer)
 	return pixmap
 }
 
@@ -629,8 +634,13 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 				b.Fatalf("height %d isn't multiple of stripHeight", tt.height)
 			}
 
-			pixmap := make([]plainColor, int(tt.width)*int(tt.height))
-			f := newFine(tt.width, tt.height, pixmap)
+			pixmap := make([][4]float32, int(tt.width)*int(tt.height))
+			packer := &PackerFloat32{
+				Out:    pixmap,
+				Width:  int(tt.width),
+				Height: int(tt.height),
+			}
+			f := newFine(tt.width, tt.height, packer)
 			clear(pixmap)
 			if complex {
 				clear(f.layers[len(f.layers)-1].scratch[:])

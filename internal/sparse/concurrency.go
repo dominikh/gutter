@@ -71,9 +71,9 @@ func (r *ConcurrentRenderer) Stop() {
 	<-r.done
 }
 
-func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, pixmap [][4]float32) {
+func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, packer Packer) {
 	r.Stop()
-	r.r.RenderToPixmap(width, height, pixmap)
+	r.r.Render(width, height, packer)
 }
 
 func (r *ConcurrentRenderer) Fill(
