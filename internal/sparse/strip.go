@@ -403,7 +403,7 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 	}
 	y1 := float32(min(float64(height), rect.MaxY()))
 
-	topStripIdx := satConv[uint16](y0) / tileHeight
+	topStripIdx := uint16(y0) / tileHeight
 	topStripY := topStripIdx * tileHeight
 
 	// In the wide tile generation stage, there is an assertion that all strips outside the
@@ -411,16 +411,16 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 	//
 	// This index is inclusive, i.e. pixels at row `bottomStripIdx`
 	// are still part of the rectangle.
-	bottomStripIdx := min(height-1, satConv[uint16](y1)) / tileHeight
+	bottomStripIdx := min(height-1, uint16(y1)) / tileHeight
 	bottomStripY := bottomStripIdx * tileHeight
 
 	x0Floored := floor32(x0)
 	x1Floored := floor32(x1)
 
-	xStart := satConv[uint16](x0Floored)
+	xStart := uint16(x0Floored)
 	// Inclusive, i.e. the pixel at column `xEnd` is the very right border (possibly only anti-aliased)
 	// of the rectangle, which should still be stripped.
-	xEnd := min(satConv[uint16](x1Floored), width-1)
+	xEnd := min(uint16(x1Floored), width-1)
 
 	// Calculate the vertical/horizontal coverage of a pixel, using a start
 	// and end point. The area between the start and end point is considered to be
@@ -506,7 +506,7 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 
 		// Push the actual strip.
 		stripBuf = append(stripBuf, strip{
-			x:       satConv[uint16](x0Floored),
+			x:       uint16(x0Floored),
 			y:       stripY,
 			col:     alphaIdx,
 			winding: 0,
@@ -535,7 +535,7 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 			alphaBuf = pushAlpha(alphas, leftAlpha, alphaBuf)
 
 			stripBuf = append(stripBuf, strip{
-				x:       satConv[uint16](x0Floored),
+				x:       uint16(x0Floored),
 				y:       i * tileHeight,
 				col:     alphaIdx,
 				winding: 0,
@@ -547,7 +547,7 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 				alphaBuf = pushAlpha(alphas, rightAlpha, alphaBuf)
 
 				stripBuf = append(stripBuf, strip{
-					x:       satConv[uint16](x1Floored),
+					x:       uint16(x1Floored),
 					y:       i * tileHeight,
 					col:     alphaIdx,
 					winding: 1,
