@@ -427,9 +427,8 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 	// covered by the shape.
 	pixelCoverage := func(pixel_pos uint16, start float32, end float32) float32 {
 		pixelPosF := float32(pixel_pos)
-		end = max(0, min(1, (end-pixelPosF)))
-		start = max(0, min(1, (start-pixelPosF)))
-
+		end = clamp(end-pixelPosF, 0, 1)
+		start = clamp(start-pixelPosF, 0, 1)
 		return end - start
 	}
 
