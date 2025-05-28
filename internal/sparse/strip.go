@@ -10,6 +10,8 @@ import (
 	"math"
 	"slices"
 	"structs"
+
+	"honnef.co/go/curve"
 )
 
 // The height of a strip.
@@ -366,4 +368,205 @@ func computeWindingNative(
 		}
 		accumulatedWinding[yIdx] += acc
 	}
+}
+
+func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]uint8) {
+	// The idea for this fast path is as follows:
+	// - We generate strips of width 1 for the left as well as the right side of the rectangle. The
+	//   left side has a winding number of 0, the right side has a winding number of 1.
+	// - We generate a strip of the full rectangle width for the top and bottom part of the rectangle.
+	// - Of course, it's also possible that a rectangle has a width of less than 2 or a height of
+	//   less than 4. The current logic does account for those edge cases.
+	// - There could be some further optimizations (for example, if a rectangle is strip-aligned on
+	//   the y-axis, we don't need the strips for the top part of the rectangle)
+
+	// Don't try to draw empty rectangles.
+	if rect.Area() == 0 {
+		return nil, nil
+	}
+
+	var stripBuf []strip
+	var alphaBuf [][stripHeight]uint8
+
+	// Note that we currently deal with negative-area rects as positive-area rects.
+	// Shouldn't be a problem for solid fill, but might need some tweaking for gradient
+	// and pattern fills.
+
+	x0 := float32(max(0, rect.MinX()))
+	if x0 >= float32(width) {
+		return nil, nil
+	}
+	x1 := float32(min(float64(width), rect.MaxX()))
+	y0 := float32(max(0, rect.MinY()))
+	if y0 >= float32(height) {
+		return nil, nil
+	}
+	y1 := float32(min(float64(height), rect.MaxY()))
+
+	topStripIdx := satConv[uint16](y0) / tileHeight
+	topStripY := topStripIdx * tileHeight
+
+	// In the wide tile generation stage, there is an assertion that all strips outside the
+	// viewport must have been culled, so we cull here.
+	//
+	// This index is inclusive, i.e. pixels at row `bottomStripIdx`
+	// are still part of the rectangle.
+	bottomStripIdx := min(height-1, satConv[uint16](y1)) / tileHeight
+	bottomStripY := bottomStripIdx * tileHeight
+
+	x0Floored := floor32(x0)
+	x1Floored := floor32(x1)
+
+	xStart := satConv[uint16](x0Floored)
+	// Inclusive, i.e. the pixel at column `xEnd` is the very right border (possibly only anti-aliased)
+	// of the rectangle, which should still be stripped.
+	xEnd := min(satConv[uint16](x1Floored), width-1)
+
+	// Calculate the vertical/horizontal coverage of a pixel, using a start
+	// and end point. The area between the start and end point is considered to be
+	// covered by the shape.
+	pixelCoverage := func(pixel_pos uint16, start float32, end float32) float32 {
+		pixelPosF := float32(pixel_pos)
+		end = max(0, min(1, (end-pixelPosF)))
+		start = max(0, min(1, (start-pixelPosF)))
+
+		return end - start
+	}
+
+	// Calculate the alpha coverages of the strips containing the top/bottom
+	// borders of the rectangle.
+	verticalAlphaCoverage := func(strip_y uint16) [tileHeight]float32 {
+		var buf [tileHeight]float32
+
+		// For each row in the strip, calculate how much it is covered by given the
+		// vertical endpoints y0 and y1.
+		for i := range tileHeight {
+			buf[i] = pixelCoverage(strip_y+uint16(i), y0, y1)
+		}
+
+		return buf
+	}
+
+	// Note that the alpha coverage of all pixels on either the left or ride side of a
+	// rectangle is always the same (except for corners), so we just need to calculate
+	// a single value. The coverage of corners will be calculated by adding an additional
+	// opacity mask as calculated in `horizontal_alphas`.
+	leftAlpha := pixelCoverage(xStart, x0, x1)
+	rightAlpha := pixelCoverage(xEnd, x0, x1)
+
+	// Calculate the alpha coverages of a strip using an alpha mask. For example, if we
+	// want to calculate the coverage of the very first column of the top line in the
+	// rect (which might start at the horizontal offset .5), then we need to multiply
+	// all its alpha values by 0.5 to account for anti-aliasing of the left edge.
+	pushAlpha := func(colAlphas [stripHeight]float32, alpha_mask float32, alpha_buffer [][stripHeight]uint8) [][stripHeight]uint8 {
+		alpha_mask *= 255.0
+		return append(alpha_buffer, [stripHeight]uint8{
+			uint8(colAlphas[0]*alpha_mask + 0.5),
+			uint8(colAlphas[1]*alpha_mask + 0.5),
+			uint8(colAlphas[2]*alpha_mask + 0.5),
+			uint8(colAlphas[3]*alpha_mask + 0.5),
+		})
+	}
+
+	// Create a strip for the top/bottom edge of the rectangle.
+	horizontalStrip := func(
+		alphaBuf [][stripHeight]uint8,
+		stripBuf []strip,
+		colAlphas [stripHeight]float32,
+		stripY uint16,
+	) ([][stripHeight]uint8, []strip) {
+		// Strip the first column, which might have an additional alpha mask due to non-integer
+		// alignment of x0. If the rectangle is less than 1 pixel wide, this will represent
+		// the total coverage of the rectangle inside the pixel.
+		alphaIdx := uint32(len(alphaBuf))
+		alphaBuf = pushAlpha(colAlphas, leftAlpha, alphaBuf)
+
+		// If the rect covers more than one pixel horizontally, fill all the remaining ones
+		// except for the last one with the same opacity as in `alphas`.
+		// If the rect is contained within one pixel horizontally,
+		// then right_alpha == left_alpha, and thus the alpha we pushed above is enough.
+		if xEnd-xStart >= 1 {
+			n := int(xEnd - xStart - 1)
+			alphaBuf = slices.Grow(alphaBuf, n)[:len(alphaBuf)+n]
+			o := alphaBuf[len(alphaBuf)-n:]
+			a := [stripHeight]uint8{
+				uint8(colAlphas[0]*255.0 + 0.5),
+				uint8(colAlphas[1]*255.0 + 0.5),
+				uint8(colAlphas[2]*255.0 + 0.5),
+				uint8(colAlphas[3]*255.0 + 0.5),
+			}
+			for i := range o {
+				o[i] = a
+			}
+
+			// Fill the last, right column, which might also need an additional alpha mask
+			// due to non-integer alignment of x1.
+			alphaBuf = pushAlpha(colAlphas, rightAlpha, alphaBuf)
+		}
+
+		// Push the actual strip.
+		stripBuf = append(stripBuf, strip{
+			x:       satConv[uint16](x0Floored),
+			y:       stripY,
+			col:     alphaIdx,
+			winding: 0,
+		})
+
+		return alphaBuf, stripBuf
+	}
+
+	topAlphas := verticalAlphaCoverage(topStripY)
+	// Create the strip for the top part of the rectangle.
+	alphaBuf, stripBuf = horizontalStrip(alphaBuf, stripBuf, topAlphas, topStripY)
+
+	// If rect covers more than one strip vertically, we need to strip the vertical line
+	// segments of the rectangle, and finally the bottom horizontal line segment.
+	if topStripIdx != bottomStripIdx {
+		var alphas [tileHeight]float32
+		for i := range alphas {
+			alphas[i] = 1
+		}
+
+		// Strip all parts that are inside the rectangle (i.e. neither the top nor the
+		// bottom part. In this case, all pixels will have full opacity).
+		for i := topStripIdx + 1; i < bottomStripIdx; i++ {
+			// Left side (and right side if rect is only one pixel wide).
+			alphaIdx := uint32(len(alphaBuf))
+			alphaBuf = pushAlpha(alphas, leftAlpha, alphaBuf)
+
+			stripBuf = append(stripBuf, strip{
+				x:       satConv[uint16](x0Floored),
+				y:       i * tileHeight,
+				col:     alphaIdx,
+				winding: 0,
+			})
+
+			if xEnd > xStart {
+				// Right side.
+				alphaIdx = uint32(len(alphaBuf))
+				alphaBuf = pushAlpha(alphas, rightAlpha, alphaBuf)
+
+				stripBuf = append(stripBuf, strip{
+					x:       satConv[uint16](x1Floored),
+					y:       i * tileHeight,
+					col:     alphaIdx,
+					winding: 1,
+				})
+			}
+		}
+
+		// Strip the bottom part of the rectangle.
+		bottomAlphas := verticalAlphaCoverage(bottomStripY)
+		alphaBuf, stripBuf = horizontalStrip(alphaBuf, stripBuf, bottomAlphas, bottomStripY)
+	}
+
+	// Push sentinel strip.
+	stripBuf = append(stripBuf, strip{
+		x:       math.MaxUint16,
+		y:       bottomStripY,
+		col:     uint32(len(alphaBuf)),
+		winding: 0,
+	})
+
+	return stripBuf, alphaBuf
 }
