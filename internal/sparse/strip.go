@@ -457,13 +457,17 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 	// want to calculate the coverage of the very first column of the top line in the
 	// rect (which might start at the horizontal offset .5), then we need to multiply
 	// all its alpha values by 0.5 to account for anti-aliasing of the left edge.
-	pushAlpha := func(colAlphas [stripHeight]float32, alpha_mask float32, alpha_buffer [][stripHeight]uint8) [][stripHeight]uint8 {
-		alpha_mask *= 255.0
-		return append(alpha_buffer, [stripHeight]uint8{
-			uint8(colAlphas[0]*alpha_mask + 0.5),
-			uint8(colAlphas[1]*alpha_mask + 0.5),
-			uint8(colAlphas[2]*alpha_mask + 0.5),
-			uint8(colAlphas[3]*alpha_mask + 0.5),
+	pushAlpha := func(
+		colAlphas [stripHeight]float32,
+		alphaMask float32,
+		alphaBuffer [][stripHeight]uint8,
+	) [][stripHeight]uint8 {
+		alphaMask *= 255.0
+		return append(alphaBuffer, [stripHeight]uint8{
+			uint8(colAlphas[0]*alphaMask + 0.5),
+			uint8(colAlphas[1]*alphaMask + 0.5),
+			uint8(colAlphas[2]*alphaMask + 0.5),
+			uint8(colAlphas[3]*alphaMask + 0.5),
 		})
 	}
 
@@ -531,7 +535,12 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 		for i := topStripIdx + 1; i < bottomStripIdx; i++ {
 			// Left side (and right side if rect is only one pixel wide).
 			alphaIdx := uint32(len(alphaBuf))
-			alphaBuf = pushAlpha(alphas, leftAlpha, alphaBuf)
+			alphaBuf = append(alphaBuf, [stripHeight]uint8{
+				uint8(leftAlpha*255.0 + 0.5),
+				uint8(leftAlpha*255.0 + 0.5),
+				uint8(leftAlpha*255.0 + 0.5),
+				uint8(leftAlpha*255.0 + 0.5),
+			})
 
 			stripBuf = append(stripBuf, strip{
 				x:       uint16(x0Floored),
@@ -543,7 +552,12 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 			if xEnd > xStart {
 				// Right side.
 				alphaIdx = uint32(len(alphaBuf))
-				alphaBuf = pushAlpha(alphas, rightAlpha, alphaBuf)
+				alphaBuf = append(alphaBuf, [stripHeight]uint8{
+					uint8(rightAlpha*255.0 + 0.5),
+					uint8(rightAlpha*255.0 + 0.5),
+					uint8(rightAlpha*255.0 + 0.5),
+					uint8(rightAlpha*255.0 + 0.5),
+				})
 
 				stripBuf = append(stripBuf, strip{
 					x:       uint16(x1Floored),
