@@ -693,6 +693,9 @@ type gradientFiller struct {
 	curPos   curve.Point
 	rangeIdx int
 	gradient *encodedGradient
+
+	prevC  color.Color
+	prevPC plainColor
 }
 
 func newGradientFiller(
@@ -704,6 +707,16 @@ func newGradientFiller(
 		curPos:   curve.Pt(float64(startX), float64(startY)).Transform(e.transform),
 		gradient: e,
 	}
+}
+
+func (gf *gradientFiller) colorToInternal(c color.Color) plainColor {
+	if gf.prevC == c {
+		return gf.prevPC
+	}
+	pc := colorToInternal(c)
+	gf.prevC = c
+	gf.prevPC = pc
+	return pc
 }
 
 func (gf *gradientFiller) curRange() *gradientRange {
@@ -761,7 +774,7 @@ func (gf *gradientFiller) runColumn(col *[stripHeight]plainColor) {
 			factor := (rng.factors[compIdx] * (extendedPos - rng.x0))
 			c.Values[compIdx] += float64(factor)
 		}
-		*px = colorToInternal(c)
+		*px = gf.colorToInternal(c)
 		pos = pos.Translate(gf.gradient.yAdvance)
 	}
 }
