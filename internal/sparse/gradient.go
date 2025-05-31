@@ -37,7 +37,6 @@ var _ Gradient = (*SweepGradient)(nil)
 
 type LinearGradient struct {
 	Stops      []GradientStop
-	Transform  curve.Affine
 	Extend     GradientExtend
 	Start      curve.Point
 	End        curve.Point
@@ -45,7 +44,7 @@ type LinearGradient struct {
 }
 
 // encode implements Gradient.
-func (l *LinearGradient) encode() encodedPaint {
+func (l *LinearGradient) encode(transform curve.Affine) encodedPaint {
 	// First make sure that the gradient is valid and not degenerate.
 	if valid, fallback := l.validate(); !valid {
 		return fallback
@@ -137,7 +136,7 @@ func (l *LinearGradient) encode() encodedPaint {
 		l.Extend,
 		xOffset,
 		yOffset,
-		l.Transform,
+		transform,
 		hasOpacities,
 		l.ColorSpace,
 	)
@@ -217,7 +216,6 @@ func (l *LinearGradient) validate() (valid bool, fallback encodedPaint) {
 
 type RadialGradient struct {
 	Stops       []GradientStop
-	Transform   curve.Affine
 	Extend      GradientExtend
 	StartCenter curve.Point
 	StartRadius float32
@@ -227,7 +225,7 @@ type RadialGradient struct {
 }
 
 // encode implements Gradient.
-func (r *RadialGradient) encode() encodedPaint {
+func (r *RadialGradient) encode(transform curve.Affine) encodedPaint {
 	// First make sure that the gradient is valid and not degenerate.
 	if valid, fallback := r.validate(); !valid {
 		return fallback
@@ -292,7 +290,7 @@ func (r *RadialGradient) encode() encodedPaint {
 		r.Extend,
 		xOffset,
 		yOffset,
-		r.Transform,
+		transform,
 		hasOpacities,
 		r.ColorSpace,
 	)
@@ -317,10 +315,9 @@ func (r *RadialGradient) validate() (valid bool, fallback encodedPaint) {
 }
 
 type SweepGradient struct {
-	Stops     []GradientStop
-	Transform curve.Affine
-	Extend    GradientExtend
-	Center    curve.Point
+	Stops  []GradientStop
+	Extend GradientExtend
+	Center curve.Point
 
 	// The start and end angles, in radian.
 	StartAngle float32
@@ -330,7 +327,7 @@ type SweepGradient struct {
 }
 
 // encode implements Gradient.
-func (s *SweepGradient) encode() encodedPaint {
+func (s *SweepGradient) encode(transform curve.Affine) encodedPaint {
 	// First make sure that the gradient is valid and not degenerate.
 	if valid, fallback := s.validate(); !valid {
 		return fallback
@@ -369,7 +366,7 @@ func (s *SweepGradient) encode() encodedPaint {
 		s.Extend,
 		xOffset,
 		yOffset,
-		s.Transform,
+		transform,
 		hasOpacities,
 		s.ColorSpace,
 	)

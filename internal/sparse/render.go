@@ -470,8 +470,8 @@ func (ctx *Renderer) popLayers() {
 	}
 }
 
-func (ctx *Renderer) FillCompiled(p CompiledPath, paint Paint) {
-	ctx.renderPath(p, paint.encode())
+func (ctx *Renderer) FillCompiled(p CompiledPath, transform curve.Affine, paint Paint) {
+	ctx.renderPath(p, paint.encode(transform))
 }
 
 func (ctx *Renderer) Fill(
@@ -481,7 +481,7 @@ func (ctx *Renderer) Fill(
 	paint Paint,
 ) {
 	p := CompileFillPath(shape, transform, fillRule, ctx.width, ctx.height)
-	ctx.renderPath(p, paint.encode())
+	ctx.renderPath(p, paint.encode(transform))
 }
 
 func (ctx *Renderer) Stroke(
@@ -491,7 +491,7 @@ func (ctx *Renderer) Stroke(
 	paint Paint,
 ) {
 	p := CompileStrokedPath(shape, transform, stroke_, ctx.width, ctx.height)
-	ctx.renderPath(p, paint.encode())
+	ctx.renderPath(p, paint.encode(transform))
 }
 
 type Layer struct {

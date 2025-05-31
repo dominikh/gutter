@@ -62,7 +62,6 @@ func TestLinearGradientOnThreeWideTiles(t *testing.T) {
 			Start:      curve.Pt(0, 0),
 			End:        curve.Pt(600, 0),
 			Stops:      stopsGreenBlue,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
@@ -77,7 +76,6 @@ func TestLinearGradientTwoStops(t *testing.T) {
 			Start:      curve.Pt(10, 0),
 			End:        curve.Pt(90, 0),
 			Stops:      stopsGreenBlue,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
@@ -92,7 +90,6 @@ func TestLinearGradientTwoStopsWithAlpha(t *testing.T) {
 			Start:      curve.Pt(10, 0),
 			End:        curve.Pt(90, 0),
 			Stops:      stopsGreenBlueWithAlpha,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
@@ -118,7 +115,6 @@ func TestLinearGradientsDirections(t *testing.T) {
 					Start:      tt.start,
 					End:        tt.end,
 					Stops:      stopsGreenBlue,
-					Transform:  curve.Identity,
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
@@ -144,7 +140,6 @@ func TestLinearGradientsExtends(t *testing.T) {
 					Start:      curve.Pt(40, 40),
 					End:        curve.Pt(60, 60),
 					Stops:      stopsBlueGreenRedYellow,
-					Transform:  curve.Identity,
 					Extend:     tt.extend,
 					ColorSpace: color.SRGB,
 				}
@@ -161,7 +156,6 @@ func TestLinearGradient4Stops(t *testing.T) {
 			Start:      curve.Pt(10.0, 0.0),
 			End:        curve.Pt(90.0, 0.0),
 			Stops:      stopsBlueGreenRedYellow,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
@@ -177,7 +171,6 @@ func TestLinearGradientComplexShape(t *testing.T) {
 			Start:      curve.Pt(0.0, 0.0),
 			End:        curve.Pt(100.0, 0.0),
 			Stops:      stopsBlueGreenRedYellow,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
@@ -192,7 +185,6 @@ func TestLinearGradientWithYRepeat(t *testing.T) {
 			Start:      curve.Pt(47.5, 47.5),
 			End:        curve.Pt(50.5, 52.5),
 			Stops:      stopsBlueGreenRedYellow,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendRepeat,
 			ColorSpace: color.SRGB,
 		}
@@ -207,7 +199,6 @@ func TestLinearGradientWithYReflect(t *testing.T) {
 			Start:      curve.Pt(47.5, 47.5),
 			End:        curve.Pt(50.5, 52.5),
 			Stops:      stopsBlueGreenRedYellow,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendReflect,
 			ColorSpace: color.SRGB,
 		}
@@ -316,7 +307,6 @@ func TestLinearGradientsWithTransform(t *testing.T) {
 					Start:      tt.start,
 					End:        tt.end,
 					Stops:      stopsBlueGreenRedYellow,
-					Transform:  tt.transform,
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
@@ -344,7 +334,6 @@ func TestRadialGradientsSimple(t *testing.T) {
 					EndCenter:   curve.Pt(50, 50),
 					EndRadius:   40,
 					Stops:       tt.stops,
-					Transform:   curve.Identity,
 					Extend:      GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
@@ -373,7 +362,6 @@ func TestRadialGradientsWithOffsets(t *testing.T) {
 					EndCenter:   curve.Pt(50, 50),
 					EndRadius:   40,
 					Stops:       stopsBlueGreenRedYellow,
-					Transform:   curve.Identity,
 					Extend:      GradientExtendRepeat,
 					ColorSpace:  color.SRGB,
 				}
@@ -402,7 +390,6 @@ func TestRadialGradientsWithExtends(t *testing.T) {
 					EndCenter:   curve.Pt(50, 50),
 					EndRadius:   25,
 					Stops:       stopsBlueGreenRedYellow,
-					Transform:   curve.Identity,
 					Extend:      tt.extend,
 					ColorSpace:  color.SRGB,
 				}
@@ -421,7 +408,6 @@ func TestRadialGradientC0Bigger(t *testing.T) {
 			EndCenter:   curve.Pt(50, 50),
 			EndRadius:   10,
 			Stops:       stopsBlueGreenRedYellow,
-			Transform:   curve.Identity,
 			Extend:      GradientExtendPad,
 			ColorSpace:  color.SRGB,
 		}
@@ -448,7 +434,6 @@ func TestRadialGradientsNonOverlapping(t *testing.T) {
 					EndCenter:   curve.Pt(70, 50),
 					EndRadius:   20,
 					Stops:       stopsBlueGreenRedYellow,
-					Transform:   curve.Identity,
 					Extend:      GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
@@ -467,7 +452,6 @@ func TestRadialGradientComplexShape(t *testing.T) {
 			EndCenter:   curve.Pt(50, 50),
 			EndRadius:   35,
 			Stops:       stopsBlueGreenRedYellow,
-			Transform:   curve.Identity,
 			Extend:      GradientExtendPad,
 			ColorSpace:  color.SRGB,
 		}
@@ -565,7 +549,6 @@ func TestRadialGradientsWithTransforms(t *testing.T) {
 					EndCenter:   point,
 					EndRadius:   35,
 					Stops:       stopsBlueGreenRedYellow,
-					Transform:   tt.transform,
 					Extend:      GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
@@ -594,7 +577,6 @@ func TestSweepGradientsBasic(t *testing.T) {
 					StartAngle: 0,
 					EndAngle:   2 * math.Pi,
 					Stops:      tt.stops,
-					Transform:  curve.Identity,
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
@@ -621,7 +603,6 @@ func TestSweepGradientsWithExtends(t *testing.T) {
 					StartAngle: 150 * math.Pi / 180,
 					EndAngle:   210 * math.Pi / 180,
 					Stops:      stopsBlueGreenRedYellow,
-					Transform:  curve.Identity,
 					Extend:     tt.extend,
 					ColorSpace: color.SRGB,
 				}
@@ -720,7 +701,6 @@ func TestSweepGradientsWithTransforms(t *testing.T) {
 					StartAngle: 150 * math.Pi / 180,
 					EndAngle:   210 * math.Pi / 180,
 					Stops:      stopsBlueGreenRedYellow,
-					Transform:  tt.transform,
 					Extend:     GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
@@ -738,7 +718,6 @@ func TestSweepGradientComplexShape(t *testing.T) {
 			StartAngle: 0,
 			EndAngle:   2 * math.Pi,
 			Stops:      stopsBlueGreenRedYellow,
-			Transform:  curve.Identity,
 			Extend:     GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}

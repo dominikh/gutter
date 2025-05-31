@@ -26,9 +26,10 @@ const (
 )
 
 type renderTask struct {
-	path  chan CompiledPath
-	kind  renderTaskKind
-	paint Paint
+	path      chan CompiledPath
+	kind      renderTaskKind
+	transform curve.Affine
+	paint     Paint
 }
 
 func NewConcurrentRenderer(width, height uint16, parallelism int) *ConcurrentRenderer {
@@ -48,7 +49,7 @@ func NewConcurrentRenderer(width, height uint16, parallelism int) *ConcurrentRen
 			case clipRenderTask:
 				r.r.PushClipCompiled(p)
 			case fillRenderTask:
-				r.r.FillCompiled(p, t.paint)
+				r.r.FillCompiled(p, t.transform, t.paint)
 			case saveRenderTask:
 				r.r.Save()
 			case restoreRenderTask:
@@ -82,9 +83,10 @@ func (r *ConcurrentRenderer) Fill(
 	paint Paint,
 ) {
 	t := renderTask{
-		path:  make(chan CompiledPath, 1),
-		kind:  fillRenderTask,
-		paint: paint,
+		path:      make(chan CompiledPath, 1),
+		kind:      fillRenderTask,
+		transform: transform,
+		paint:     paint,
 	}
 	r.tasks <- t
 	go func(width, height uint16) {
@@ -99,9 +101,10 @@ func (r *ConcurrentRenderer) Stroke(
 	paint Paint,
 ) {
 	t := renderTask{
-		path:  make(chan CompiledPath, 1),
-		kind:  fillRenderTask,
-		paint: paint,
+		path:      make(chan CompiledPath, 1),
+		kind:      fillRenderTask,
+		transform: transform,
+		paint:     paint,
 	}
 	r.tasks <- t
 	go func(width, height uint16) {
