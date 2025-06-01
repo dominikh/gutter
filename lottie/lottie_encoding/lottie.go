@@ -339,7 +339,7 @@ type VisualLayer struct {
 	AutoOrient                    IntBoolean              `json:"ao"` // defaults to 0
 	MatteMode                     maybe.Option[MatteMode] `json:"tt"`
 	MatteParent                   maybe.Option[int]       `json:"tp"`
-	MasksProperties               []Mask                  `json:"marksProperties"`
+	MasksProperties               []Mask                  `json:"masksProperties"`
 	TransformBeforeMask           IntBoolean              `json:"ct"`
 	TransformBeforeMaskDeprecated string                  `json:"cp"`
 	BlendMode                     BlendMode               `json:"bm"`
