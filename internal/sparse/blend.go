@@ -174,10 +174,10 @@ func blendComplexComplex(dst, tos [][stripHeight]plainColor, alphas [][stripHeig
 		_ = alphas[len(dst)-1]
 	}
 	getAlpha := func(i, j int) float32 {
-		if alphas != nil {
-			return (float32(safeish.Index(alphas, i)[j]) / 255.0) * opacity
-		} else {
+		if alphas == nil {
 			return opacity
+		} else {
+			return (float32(safeish.Index(alphas, i)[j]) / 255.0) * opacity
 		}
 	}
 
