@@ -8,6 +8,7 @@ package sparse
 import (
 	"fmt"
 	"iter"
+	"math"
 
 	"honnef.co/go/curve"
 )
@@ -86,6 +87,19 @@ func stroke(path iter.Seq[curve.PathElement], style curve.Stroke, affine curve.A
 			}
 		}
 	}
+
+	// Scale stroke width based on affine transformation. This transforms a
+	// circle with radius style.Width, then computes the geometric mean of the
+	// resulting ellipse's semi-major and semi-minor axes (its two "radii").
+	//
+	// This matches the behavior of Skia's SkMatrix::mapRadius.
+	noTranslation := affine
+	noTranslation.N4 = 0
+	noTranslation.N5 = 0
+	l0 := curve.Vec2(curve.Pt(0, style.Width).Transform(noTranslation)).Hypot()
+	l1 := curve.Vec2(curve.Pt(style.Width, 0).Transform(noTranslation)).Hypot()
+	style.Width = math.Sqrt(l0 * l1)
+
 	stroked := curve.StrokePath(iter, style, curve.StrokeOpts{}, flattenTolerance)
 	return fill(stroked, curve.Identity)
 }
