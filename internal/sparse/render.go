@@ -54,6 +54,34 @@ func NewRenderer(width, height uint16) *Renderer {
 	}
 }
 
+func PlayRecording(cmds gfx.Recording, r *Renderer) {
+	// OPT parallelism
+
+	for _, cmd := range cmds {
+		switch cmd := cmd.(type) {
+		case gfx.CommandFill:
+			r.Fill(cmd.Shape, cmd.Transform, cmd.FillRule, cmd.Paint)
+		case gfx.CommandPopLayer:
+			r.Restore()
+		case gfx.CommandPushLayer:
+			r.Save()
+			r.PushLayer(Layer{
+				BlendMode:     cmd.Layer.BlendMode,
+				Opacity:       cmd.Layer.Opacity,
+				Clip:          cmd.Layer.Clip,
+				ClipTransform: cmd.Transform,
+				ClipFillRule:  cmd.FillRule,
+			})
+		case gfx.CommandStroke:
+			r.Stroke(cmd.Shape, cmd.Transform, cmd.Stroke, cmd.Paint)
+		case gfx.CommandPlayRecording:
+			PlayRecording(cmd.Recording, r)
+		default:
+			panic(fmt.Sprintf("unexpected Command: %#v", cmd))
+		}
+	}
+}
+
 func (ctx *Renderer) Width() uint16  { return ctx.width }
 func (ctx *Renderer) Height() uint16 { return ctx.height }
 
