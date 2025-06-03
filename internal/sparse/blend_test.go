@@ -11,26 +11,27 @@ import (
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/gfx"
 )
 
-var blends = []Mix{
-	MixNormal,
-	MixMultiply,
-	MixScreen,
-	MixOverlay,
-	MixDarken,
-	MixLighten,
-	MixColorDodge,
-	MixColorBurn,
-	MixHardLight,
-	MixSoftLight,
-	MixDifference,
-	MixExclusion,
+var blends = []gfx.Mix{
+	gfx.MixNormal,
+	gfx.MixMultiply,
+	gfx.MixScreen,
+	gfx.MixOverlay,
+	gfx.MixDarken,
+	gfx.MixLighten,
+	gfx.MixColorDodge,
+	gfx.MixColorBurn,
+	gfx.MixHardLight,
+	gfx.MixSoftLight,
+	gfx.MixDifference,
+	gfx.MixExclusion,
 }
 
 func BenchmarkClipFillReuseGen(b *testing.B) {
-	origDst := make([][stripHeight]plainColor, 256)
-	origSrc := make([][stripHeight]plainColor, 256)
+	origDst := make([][stripHeight]gfx.PlainColor, 256)
+	origSrc := make([][stripHeight]gfx.PlainColor, 256)
 	for i := range origDst {
 		for j := range origDst[i] {
 			for k := range origDst[i][j] {
@@ -44,8 +45,8 @@ func BenchmarkClipFillReuseGen(b *testing.B) {
 		}
 	}
 
-	dst := make([][stripHeight]plainColor, 256)
-	run := func(kind string, comp Compose, blend Mix, fn func()) {
+	dst := make([][stripHeight]gfx.PlainColor, 256)
+	run := func(kind string, comp gfx.Compose, blend gfx.Mix, fn func()) {
 		b.Run(fmt.Sprintf("kind=%s/comp=%s/blend=%s", kind, comp, blend), func(b *testing.B) {
 			for b.Loop() {
 				copy(dst, origDst)
@@ -60,10 +61,10 @@ func BenchmarkClipFillReuseGen(b *testing.B) {
 		})
 	}
 
-	for _, comp := range ComposeOps {
+	for _, comp := range gfx.ComposeOps {
 		for _, blend := range blends {
 			run("ComplexComplex", comp, blend, func() {
-				blendComplexComplex(dst, origSrc, nil, BlendMode{Compose: comp, Mix: blend}, 1)
+				blendComplexComplex(dst, origSrc, nil, gfx.BlendMode{Compose: comp, Mix: blend}, 1)
 			})
 		}
 	}
@@ -73,17 +74,17 @@ func TestCompose(t *testing.T) {
 	dst := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(40, 40))
 	src := curve.NewRectFromOrigin(curve.Pt(24, 24), curve.Sz(40, 40))
 
-	for _, op := range ComposeOps {
+	for _, op := range gfx.ComposeOps {
 		t.Run("op="+op.String(), func(t *testing.T) {
 			renderAndCompare(t, 64, 64, true, "compose_"+op.String(), func(ctx *Renderer) {
-				ctx.Fill(dst, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
+				ctx.Fill(dst, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
 				ctx.PushLayer(Layer{
-					BlendMode: BlendMode{
+					BlendMode: gfx.BlendMode{
 						Compose: op,
 					},
 					Opacity: 1,
 				})
-				ctx.Fill(src, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
+				ctx.Fill(src, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
 			})
 		})
 	}
@@ -93,17 +94,17 @@ func TestMix(t *testing.T) {
 	dst := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(40, 40))
 	src := curve.NewRectFromOrigin(curve.Pt(24, 24), curve.Sz(40, 40))
 
-	for _, op := range MixOps {
+	for _, op := range gfx.MixOps {
 		t.Run("op="+op.String(), func(t *testing.T) {
 			renderAndCompare(t, 64, 64, true, "mix_"+op.String(), func(ctx *Renderer) {
-				ctx.Fill(dst, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
+				ctx.Fill(dst, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
 				ctx.PushLayer(Layer{
-					BlendMode: BlendMode{
+					BlendMode: gfx.BlendMode{
 						Mix: op,
 					},
 					Opacity: 1,
 				})
-				ctx.Fill(src, curve.Identity, NonZero, Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
+				ctx.Fill(src, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 0.4, 0.78, 0.91, 1)))
 			})
 		})
 	}

@@ -11,11 +11,12 @@ import (
 	"testing"
 
 	"golang.org/x/sys/cpu"
+	"honnef.co/go/gutter/gfx"
 )
 
 func Benchmark_fineFillComplexAMD64(b *testing.B) {
 	fns := []struct {
-		fp      func(buf [][stripHeight]plainColor, color plainColor)
+		fp      func(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 		desc    string
 		enabled bool
 	}{
@@ -28,8 +29,8 @@ func Benchmark_fineFillComplexAMD64(b *testing.B) {
 			if !fn.enabled {
 				b.Skip()
 			}
-			c := plainColor{0.5, 0.5, 0.5, 0.5}
-			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]plainColor) {
+			c := gfx.PlainColor{0.5, 0.5, 0.5, 0.5}
+			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]gfx.PlainColor) {
 				for b.Loop() {
 					fn.fp(buf, c)
 				}
@@ -40,7 +41,7 @@ func Benchmark_fineFillComplexAMD64(b *testing.B) {
 
 func Benchmark_memsetColumnsAMD64(b *testing.B) {
 	fns := []struct {
-		fp      func(buf [][stripHeight]plainColor, color plainColor)
+		fp      func(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 		desc    string
 		enabled bool
 	}{
@@ -53,8 +54,8 @@ func Benchmark_memsetColumnsAMD64(b *testing.B) {
 			if !fn.enabled {
 				b.Skip()
 			}
-			c := plainColor{1, 1, 1, 1}
-			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]plainColor) {
+			c := gfx.PlainColor{1, 1, 1, 1}
+			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]gfx.PlainColor) {
 				for b.Loop() {
 					fn.fp(buf, c)
 				}

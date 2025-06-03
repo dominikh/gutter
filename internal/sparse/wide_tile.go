@@ -7,12 +7,14 @@ package sparse
 
 import (
 	"fmt"
+
+	"honnef.co/go/gutter/gfx"
 )
 
 const wideTileWidth = 256
 
 type wideTile struct {
-	bg           plainColor
+	bg           gfx.PlainColor
 	cmds         []cmd
 	numZeroClips int
 	numClips     int
@@ -31,12 +33,12 @@ const (
 )
 
 type cmd struct {
-	paint   encodedPaint         // fill, alphaFill
+	paint   gfx.EncodedPaint     // fill, alphaFill
 	opacity float32              // clipAlphaFill, clipFill
 	alphas  [][stripHeight]uint8 // alphaFill, clipAlphaFill
 	x       uint16               // fill, alphaFill, clipFill, clipAlphaFill
 	width   uint16               // fill, alphaFill, clipFill, clipAlphaFill
-	blend   BlendMode            // clipAlphaFill, clipFill
+	blend   gfx.BlendMode        // clipAlphaFill, clipFill
 	typ     cmdType
 }
 
@@ -62,11 +64,11 @@ func (cmd cmd) String() string {
 	}
 }
 
-func (wt *wideTile) fill(x, width uint16, paint encodedPaint) {
+func (wt *wideTile) fill(x, width uint16, paint gfx.EncodedPaint) {
 	if wt.isZeroClip() {
 		return
 	}
-	if s, ok := paint.(plainColor); ok {
+	if s, ok := paint.(gfx.PlainColor); ok {
 		// Note that we could be more aggressive in optimizing a whole-tile opaque fill
 		// even with a clip stack. It would be valid to elide all drawing commands from
 		// the enclosing clip push up to the fill. Further, we could extend the clip
@@ -133,17 +135,17 @@ func (wt *wideTile) clipAlphaFill(c cmd) {
 	if wt.isZeroClip() {
 		return
 	}
-	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip && c.blend.Compose&composeAffectsDestRegion == 0 {
+	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip && c.blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
 		return
 	}
 	wt.cmds = append(wt.cmds, c)
 }
 
-func (wt *wideTile) clipFill(x, width uint16, blend BlendMode, opacity float32) {
+func (wt *wideTile) clipFill(x, width uint16, blend gfx.BlendMode, opacity float32) {
 	if wt.isZeroClip() {
 		return
 	}
-	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip && blend.Compose&composeAffectsDestRegion == 0 {
+	if len(wt.cmds) > 0 && wt.cmds[len(wt.cmds)-1].typ == cmdPushClip && blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
 		return
 	}
 	if len(wt.cmds) == 0 {

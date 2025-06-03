@@ -12,6 +12,7 @@ import (
 	"structs"
 
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/gfx"
 )
 
 // The height of a strip.
@@ -57,7 +58,7 @@ func max32(a, b float32) float32 {
 
 func renderStripsScalar(
 	tiles []tile,
-	fillRule FillRule,
+	fillRule gfx.FillRule,
 	lines []flatLine,
 ) ([]strip, [][stripHeight]uint8) {
 	if len(tiles) == 0 {
@@ -107,12 +108,12 @@ func renderStripsScalar(
 		// without the same location).
 		if !prevTile.sameLoc(tile_) {
 			switch fillRule {
-			case NonZero:
+			case gfx.NonZero:
 				// OPT(dh): slicing alphaBuf and tail introduces unnecessary bounds checks
 				alphaBuf = slices.Grow(alphaBuf, tileWidth)[:len(alphaBuf)+tileWidth]
 				tail := alphaBuf[len(alphaBuf)-tileWidth:][:tileWidth]
 				computeAlphasNonZeroFp((*[tileWidth][tileHeight]uint8)(tail), &locationWinding)
-			case EvenOdd:
+			case gfx.EvenOdd:
 				for x := range tileWidth {
 					var alphas [stripHeight]uint8
 					for y := range tileHeight {

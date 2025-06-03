@@ -6,17 +6,19 @@
 
 package sparse
 
-//go:noescape
-func memsetColumnsAVX(buf [][stripHeight]plainColor, color plainColor)
+import "honnef.co/go/gutter/gfx"
 
 //go:noescape
-func fineFillComplexAVX(buf [][stripHeight]plainColor, color plainColor)
+func memsetColumnsAVX(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 
 //go:noescape
-func memsetColumnsSSE(buf [][stripHeight]plainColor, color plainColor)
+func fineFillComplexAVX(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 
 //go:noescape
-func fineFillComplexSSE(buf [][stripHeight]plainColor, color plainColor)
+func memsetColumnsSSE(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
+
+//go:noescape
+func fineFillComplexSSE(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 
 //go:noescape
 func computeWindingSSE(

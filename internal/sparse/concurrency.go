@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/gfx"
 )
 
 type ConcurrentRenderer struct {
@@ -29,7 +30,7 @@ type renderTask struct {
 	path      chan CompiledPath
 	kind      renderTaskKind
 	transform curve.Affine
-	paint     Paint
+	paint     gfx.Paint
 }
 
 func NewConcurrentRenderer(width, height uint16, parallelism int) *ConcurrentRenderer {
@@ -77,10 +78,10 @@ func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, packer Packer)
 }
 
 func (r *ConcurrentRenderer) Fill(
-	shape Shape,
+	shape gfx.Shape,
 	transform curve.Affine,
-	fillRule FillRule,
-	paint Paint,
+	fillRule gfx.FillRule,
+	paint gfx.Paint,
 ) {
 	t := renderTask{
 		path:      make(chan CompiledPath, 1),
@@ -95,10 +96,10 @@ func (r *ConcurrentRenderer) Fill(
 }
 
 func (r *ConcurrentRenderer) Stroke(
-	shape Shape,
+	shape gfx.Shape,
 	transform curve.Affine,
 	stroke_ curve.Stroke,
-	paint Paint,
+	paint gfx.Paint,
 ) {
 	t := renderTask{
 		path:      make(chan CompiledPath, 1),
@@ -113,9 +114,9 @@ func (r *ConcurrentRenderer) Stroke(
 }
 
 func (r *ConcurrentRenderer) PushClip(
-	shape Shape,
+	shape gfx.Shape,
 	transform curve.Affine,
-	fill FillRule,
+	fill gfx.FillRule,
 ) {
 	t := renderTask{
 		path: make(chan CompiledPath, 1),
@@ -127,7 +128,7 @@ func (r *ConcurrentRenderer) PushClip(
 	}(r.Width(), r.Height())
 }
 
-func (r *ConcurrentRenderer) PushLayer(l Layer) {
+func (r *ConcurrentRenderer) PushLayer(l gfx.Layer) {
 	panic("XXX ot implemented")
 }
 

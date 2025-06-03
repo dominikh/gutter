@@ -11,20 +11,21 @@ import (
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/gfx"
 )
 
 const defaultSize = 100
 
 var (
-	stopsGreenBlue = []GradientStop{
-		{0, color.Make(color.SRGB, 0, 0.5, 0, 1)},
-		{1, color.Make(color.SRGB, 0, 0, 1, 1)},
+	stopsGreenBlue = []gfx.GradientStop{
+		{Offset: 0, Color: color.Make(color.SRGB, 0, 0.5, 0, 1)},
+		{Offset: 1, Color: color.Make(color.SRGB, 0, 0, 1, 1)},
 	}
-	stopsGreenBlueWithAlpha = []GradientStop{
-		{0, color.Make(color.SRGB, 0, 0.5, 0, 0.25)},
-		{1, color.Make(color.SRGB, 0, 0, 1, 0.75)},
+	stopsGreenBlueWithAlpha = []gfx.GradientStop{
+		{Offset: 0, Color: color.Make(color.SRGB, 0, 0.5, 0, 0.25)},
+		{Offset: 1, Color: color.Make(color.SRGB, 0, 0, 1, 0.75)},
 	}
-	stopsBlueGreenRedYellow = []GradientStop{
+	stopsBlueGreenRedYellow = []gfx.GradientStop{
 		{
 			Offset: 0.0,
 			Color:  color.Make(color.SRGB, 0, 0, 1, 1),
@@ -58,42 +59,42 @@ func crossedLineStar() curve.BezPath {
 func TestLinearGradientOnThreeWideTiles(t *testing.T) {
 	renderAndCompare(t, 600, 32, false, "gradient_on_3_wide_tiles", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(4, 4), curve.Pt(596, 28))
-		gradient := &LinearGradient{
+		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(0, 0),
 			End:        curve.Pt(600, 0),
 			Stops:      stopsGreenBlue,
-			Extend:     GradientExtendPad,
+			Extend:     gfx.GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect, curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
 func TestLinearGradientTwoStops(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_2_stops", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-		gradient := &LinearGradient{
+		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(10, 0),
 			End:        curve.Pt(90, 0),
 			Stops:      stopsGreenBlue,
-			Extend:     GradientExtendPad,
+			Extend:     gfx.GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect, curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
 func TestLinearGradientTwoStopsWithAlpha(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_2_stops_with_alpha", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-		gradient := &LinearGradient{
+		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(10, 0),
 			End:        curve.Pt(90, 0),
 			Stops:      stopsGreenBlueWithAlpha,
-			Extend:     GradientExtendPad,
+			Extend:     gfx.GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect, curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
@@ -111,14 +112,14 @@ func TestLinearGradientsDirections(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &LinearGradient{
+				gradient := &gfx.LinearGradient{
 					Start:      tt.start,
 					End:        tt.end,
 					Stops:      stopsGreenBlue,
-					Extend:     GradientExtendPad,
+					Extend:     gfx.GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -127,23 +128,23 @@ func TestLinearGradientsDirections(t *testing.T) {
 func TestLinearGradientsExtends(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		extend GradientExtend
+		extend gfx.GradientExtend
 	}{
-		{"with_pad", GradientExtendPad},
-		{"with_repeat", GradientExtendRepeat},
-		{"with_reflect", GradientExtendReflect},
+		{"with_pad", gfx.GradientExtendPad},
+		{"with_repeat", gfx.GradientExtendRepeat},
+		{"with_reflect", gfx.GradientExtendReflect},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &LinearGradient{
+				gradient := &gfx.LinearGradient{
 					Start:      curve.Pt(40, 40),
 					End:        curve.Pt(60, 60),
 					Stops:      stopsBlueGreenRedYellow,
 					Extend:     tt.extend,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -152,57 +153,57 @@ func TestLinearGradientsExtends(t *testing.T) {
 func TestLinearGradient4Stops(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_4_stops", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-		gradient := &LinearGradient{
+		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(10.0, 0.0),
 			End:        curve.Pt(90.0, 0.0),
 			Stops:      stopsBlueGreenRedYellow,
-			Extend:     GradientExtendPad,
+			Extend:     gfx.GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
 
-		ctx.Fill(rect, curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
 func TestLinearGradientComplexShape(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_complex_shape", func(ctx *Renderer) {
 		path := crossedLineStar()
-		gradient := &LinearGradient{
+		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(0.0, 0.0),
 			End:        curve.Pt(100.0, 0.0),
 			Stops:      stopsBlueGreenRedYellow,
-			Extend:     GradientExtendPad,
+			Extend:     gfx.GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(path, curve.Identity, NonZero, gradient)
+		ctx.Fill(path, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
 func TestLinearGradientWithYRepeat(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_with_y_repeat", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-		gradient := &LinearGradient{
+		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(47.5, 47.5),
 			End:        curve.Pt(50.5, 52.5),
 			Stops:      stopsBlueGreenRedYellow,
-			Extend:     GradientExtendRepeat,
+			Extend:     gfx.GradientExtendRepeat,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect, curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
 func TestLinearGradientWithYReflect(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_with_y_reflect", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-		gradient := &LinearGradient{
+		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(47.5, 47.5),
 			End:        curve.Pt(50.5, 52.5),
 			Stops:      stopsBlueGreenRedYellow,
-			Extend:     GradientExtendReflect,
+			Extend:     gfx.GradientExtendReflect,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(rect, curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
@@ -303,14 +304,14 @@ func TestLinearGradientsWithTransform(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(tt.start, tt.end)
-				gradient := &LinearGradient{
+				gradient := &gfx.LinearGradient{
 					Start:      tt.start,
 					End:        tt.end,
 					Stops:      stopsBlueGreenRedYellow,
-					Extend:     GradientExtendPad,
+					Extend:     gfx.GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect, tt.transform, NonZero, gradient)
+				ctx.Fill(rect, tt.transform, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -319,7 +320,7 @@ func TestLinearGradientsWithTransform(t *testing.T) {
 func TestRadialGradientsSimple(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
-		stops []GradientStop
+		stops []gfx.GradientStop
 	}{
 		{"2_stops", stopsGreenBlue},
 		{"4_stops", stopsBlueGreenRedYellow},
@@ -328,16 +329,16 @@ func TestRadialGradientsSimple(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &RadialGradient{
+				gradient := &gfx.RadialGradient{
 					StartCenter: curve.Pt(50, 50),
 					StartRadius: 10,
 					EndCenter:   curve.Pt(50, 50),
 					EndRadius:   40,
 					Stops:       tt.stops,
-					Extend:      GradientExtendPad,
+					Extend:      gfx.GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -356,16 +357,16 @@ func TestRadialGradientsWithOffsets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &RadialGradient{
+				gradient := &gfx.RadialGradient{
 					StartCenter: tt.point,
 					StartRadius: 2,
 					EndCenter:   curve.Pt(50, 50),
 					EndRadius:   40,
 					Stops:       stopsBlueGreenRedYellow,
-					Extend:      GradientExtendRepeat,
+					Extend:      gfx.GradientExtendRepeat,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -374,17 +375,17 @@ func TestRadialGradientsWithOffsets(t *testing.T) {
 func TestRadialGradientsWithExtends(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		extend GradientExtend
+		extend gfx.GradientExtend
 	}{
 		// FIXME rename from spread_method to extend
-		{"spread_method_pad", GradientExtendPad},
-		{"spread_method_reflect", GradientExtendReflect},
-		{"spread_method_repeat", GradientExtendRepeat},
+		{"spread_method_pad", gfx.GradientExtendPad},
+		{"spread_method_reflect", gfx.GradientExtendReflect},
+		{"spread_method_repeat", gfx.GradientExtendRepeat},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &RadialGradient{
+				gradient := &gfx.RadialGradient{
 					StartCenter: curve.Pt(50, 50),
 					StartRadius: 20,
 					EndCenter:   curve.Pt(50, 50),
@@ -393,7 +394,7 @@ func TestRadialGradientsWithExtends(t *testing.T) {
 					Extend:      tt.extend,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -402,16 +403,16 @@ func TestRadialGradientsWithExtends(t *testing.T) {
 func TestRadialGradientC0Bigger(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_circle_1_bigger_radius", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-		gradient := &RadialGradient{
+		gradient := &gfx.RadialGradient{
 			StartCenter: curve.Pt(50, 50),
 			StartRadius: 40,
 			EndCenter:   curve.Pt(50, 50),
 			EndRadius:   10,
 			Stops:       stopsBlueGreenRedYellow,
-			Extend:      GradientExtendPad,
+			Extend:      gfx.GradientExtendPad,
 			ColorSpace:  color.SRGB,
 		}
-		ctx.Fill(rect, curve.Identity, NonZero, gradient)
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
@@ -428,16 +429,16 @@ func TestRadialGradientsNonOverlapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_non_overlapping_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &RadialGradient{
+				gradient := &gfx.RadialGradient{
 					StartCenter: curve.Pt(30, 50),
 					StartRadius: tt.radius,
 					EndCenter:   curve.Pt(70, 50),
 					EndRadius:   20,
 					Stops:       stopsBlueGreenRedYellow,
-					Extend:      GradientExtendPad,
+					Extend:      gfx.GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -446,16 +447,16 @@ func TestRadialGradientsNonOverlapping(t *testing.T) {
 func TestRadialGradientComplexShape(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_complex_shape", func(ctx *Renderer) {
 		path := crossedLineStar()
-		gradient := &RadialGradient{
+		gradient := &gfx.RadialGradient{
 			StartCenter: curve.Pt(50, 50),
 			StartRadius: 5,
 			EndCenter:   curve.Pt(50, 50),
 			EndRadius:   35,
 			Stops:       stopsBlueGreenRedYellow,
-			Extend:      GradientExtendPad,
+			Extend:      gfx.GradientExtendPad,
 			ColorSpace:  color.SRGB,
 		}
-		ctx.Fill(path, curve.Identity, NonZero, gradient)
+		ctx.Fill(path, curve.Identity, gfx.NonZero, gradient)
 	})
 }
 
@@ -543,16 +544,16 @@ func TestRadialGradientsWithTransforms(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_with_transform_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(tt.p0, tt.p1)
 				point := curve.Pt((tt.p0.X+tt.p1.X)/2, (tt.p0.Y+tt.p1.Y)/2)
-				gradient := &RadialGradient{
+				gradient := &gfx.RadialGradient{
 					StartCenter: point,
 					StartRadius: 5,
 					EndCenter:   point,
 					EndRadius:   35,
 					Stops:       stopsBlueGreenRedYellow,
-					Extend:      GradientExtendPad,
+					Extend:      gfx.GradientExtendPad,
 					ColorSpace:  color.SRGB,
 				}
-				ctx.Fill(rect, tt.transform, NonZero, gradient)
+				ctx.Fill(rect, tt.transform, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -561,7 +562,7 @@ func TestRadialGradientsWithTransforms(t *testing.T) {
 func TestSweepGradientsBasic(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		stops  []GradientStop
+		stops  []gfx.GradientStop
 		center curve.Point
 	}{
 		{"2_stops", stopsGreenBlue, curve.Pt(50, 50)},
@@ -572,15 +573,15 @@ func TestSweepGradientsBasic(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_sweep_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &SweepGradient{
+				gradient := &gfx.SweepGradient{
 					Center:     tt.center,
 					StartAngle: 0,
 					EndAngle:   2 * math.Pi,
 					Stops:      tt.stops,
-					Extend:     GradientExtendPad,
+					Extend:     gfx.GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -589,16 +590,16 @@ func TestSweepGradientsBasic(t *testing.T) {
 func TestSweepGradientsWithExtends(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		extend GradientExtend
+		extend gfx.GradientExtend
 	}{
-		{"pad", GradientExtendPad},
-		{"repeat", GradientExtendRepeat},
-		{"reflect", GradientExtendReflect},
+		{"pad", gfx.GradientExtendPad},
+		{"repeat", gfx.GradientExtendRepeat},
+		{"reflect", gfx.GradientExtendReflect},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_sweep_extend_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
-				gradient := &SweepGradient{
+				gradient := &gfx.SweepGradient{
 					Center:     curve.Pt(50, 50),
 					StartAngle: 150 * math.Pi / 180,
 					EndAngle:   210 * math.Pi / 180,
@@ -606,7 +607,7 @@ func TestSweepGradientsWithExtends(t *testing.T) {
 					Extend:     tt.extend,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect, curve.Identity, NonZero, gradient)
+				ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -696,15 +697,15 @@ func TestSweepGradientsWithTransforms(t *testing.T) {
 			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_sweep_with_transform_"+tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(tt.p0, tt.p1)
 				point := curve.Pt((tt.p0.X+tt.p1.X)/2, (tt.p0.Y+tt.p1.Y)/2)
-				gradient := &SweepGradient{
+				gradient := &gfx.SweepGradient{
 					Center:     point,
 					StartAngle: 150 * math.Pi / 180,
 					EndAngle:   210 * math.Pi / 180,
 					Stops:      stopsBlueGreenRedYellow,
-					Extend:     GradientExtendPad,
+					Extend:     gfx.GradientExtendPad,
 					ColorSpace: color.SRGB,
 				}
-				ctx.Fill(rect, tt.transform, NonZero, gradient)
+				ctx.Fill(rect, tt.transform, gfx.NonZero, gradient)
 			})
 		})
 	}
@@ -713,14 +714,14 @@ func TestSweepGradientsWithTransforms(t *testing.T) {
 func TestSweepGradientComplexShape(t *testing.T) {
 	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_sweep_complex_shape", func(ctx *Renderer) {
 		path := crossedLineStar()
-		gradient := &SweepGradient{
+		gradient := &gfx.SweepGradient{
 			Center:     curve.Pt(50, 50),
 			StartAngle: 0,
 			EndAngle:   2 * math.Pi,
 			Stops:      stopsBlueGreenRedYellow,
-			Extend:     GradientExtendPad,
+			Extend:     gfx.GradientExtendPad,
 			ColorSpace: color.SRGB,
 		}
-		ctx.Fill(path, curve.Identity, NonZero, gradient)
+		ctx.Fill(path, curve.Identity, gfx.NonZero, gradient)
 	})
 }

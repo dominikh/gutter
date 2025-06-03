@@ -7,69 +7,13 @@ package sparse
 
 import (
 	"fmt"
-	"iter"
 	"log"
 	"runtime"
 	"slices"
 
-	"honnef.co/go/color"
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/gfx"
 )
-
-// ColorSpace is the color space used to represent pixel values internally. This
-// is the color space that is used by default for blending. All [color.Color]
-// values provided by the user are converted to this color space for
-// storage--however, colors do not get color mapped or clipped; out of gamut
-// colors will be represented with values less than 0 or greater than 1.
-//
-// When values aren't constrained to the range [0, 1], all linear RGB color
-// spaces as well as XYZ give identical results for linear operations.
-// Multiplying two colors, however, is non-linear and will give different
-// results in different linear RGB color spaces. To get predictable results, and
-// to avoid color space conversions for the most common case (sRGB inputs and
-// outputs), we choose linear sRGB (i.e. an RGB color space that uses the same
-// primaries and white point as sRGB).
-//
-// Colors exposed as [4]float32 use this color space.
-var ColorSpace = color.LinearSRGB
-
-type FillRule int
-
-const (
-	NonZero FillRule = iota
-	EvenOdd
-)
-
-type Shape interface {
-	PathElements(precision float64) iter.Seq[curve.PathElement]
-}
-
-// plainColor represents a premultiplied color in the [ColorSpace] color space.
-type plainColor [4]float32
-
-func colorToInternal(c color.Color) plainColor {
-	c = c.Convert(ColorSpace)
-	cc := plainColor{
-		float32(c.Values[0]) * float32(c.Values[3]),
-		float32(c.Values[1]) * float32(c.Values[3]),
-		float32(c.Values[2]) * float32(c.Values[3]),
-		float32(c.Values[3]),
-	}
-	return cc
-}
-
-func internalToColor(c plainColor) color.Color {
-	return color.Make(
-		ColorSpace,
-		float64(c[0]/max(c[3], 1e-10)),
-		float64(c[1]/max(c[3], 1e-10)),
-		float64(c[2]/max(c[3], 1e-10)),
-		float64(c[3]),
-	)
-}
-
-// isEncodedPaint implements encodedPaint.
-func (s plainColor) isEncodedPaint() {}
 
 type gfxState struct {
 	numLayers int
@@ -82,7 +26,7 @@ type layer struct {
 	strips  []strip
 	alphas  [][stripHeight]uint8
 	opacity float32
-	blend   BlendMode
+	blend   gfx.BlendMode
 }
 
 type Renderer struct {
@@ -117,7 +61,7 @@ func (ctx *Renderer) Reset() {
 	for _, row := range ctx.tiles {
 		for x := range row {
 			tile := &row[x]
-			tile.bg = plainColor{}
+			tile.bg = gfx.PlainColor{}
 			clear(tile.cmds)
 			tile.cmds = tile.cmds[:0]
 		}
@@ -172,7 +116,7 @@ func (ctx *Renderer) Render(width, height uint16, packer Packer) {
 	}
 }
 
-func renderPathCommon(lineBuf []flatLine, fillRule FillRule, width, height uint16) ([]strip, [][stripHeight]uint8) {
+func renderPathCommon(lineBuf []flatLine, fillRule gfx.FillRule, width, height uint16) ([]strip, [][stripHeight]uint8) {
 	tileBuf := makeTiles(lineBuf, width, height)
 	slices.Sort(tileBuf)
 	stripBuf, alphas := renderStripsScalar(tileBuf, fillRule, lineBuf)
@@ -182,13 +126,13 @@ func renderPathCommon(lineBuf []flatLine, fillRule FillRule, width, height uint1
 type CompiledPath struct {
 	strips   []strip
 	alphas   [][stripHeight]uint8
-	fillRule FillRule
+	fillRule gfx.FillRule
 }
 
 func CompileFillPath(
-	shape Shape,
+	shape gfx.Shape,
 	affine curve.Affine,
-	fillRule FillRule,
+	fillRule gfx.FillRule,
 	width uint16,
 	height uint16,
 ) CompiledPath {
@@ -212,7 +156,7 @@ func CompileFillPath(
 			return CompiledPath{
 				strips:   strips,
 				alphas:   alphas,
-				fillRule: NonZero,
+				fillRule: gfx.NonZero,
 			}
 		}
 	}
@@ -224,7 +168,7 @@ func CompileFillPath(
 }
 
 func CompileStrokedPath(
-	shape Shape,
+	shape gfx.Shape,
 	affine curve.Affine,
 	stroke_ curve.Stroke,
 	width uint16,
@@ -233,11 +177,11 @@ func CompileStrokedPath(
 	// TODO(dh): scale precision based on transformation
 	path := shape.PathElements(0.1)
 	lines := stroke(path, stroke_, affine)
-	strips, alphas := renderPathCommon(lines, NonZero, width, height)
-	return CompiledPath{strips, alphas, NonZero}
+	strips, alphas := renderPathCommon(lines, gfx.NonZero, width, height)
+	return CompiledPath{strips, alphas, gfx.NonZero}
 }
 
-func (ctx *Renderer) renderPath(p CompiledPath, paint encodedPaint) {
+func (ctx *Renderer) renderPath(p CompiledPath, paint gfx.EncodedPaint) {
 	stripBuf := p.strips
 	alphas := p.alphas
 
@@ -293,9 +237,9 @@ func (ctx *Renderer) renderPath(p CompiledPath, paint encodedPaint) {
 
 		var activeFill bool
 		switch p.fillRule {
-		case NonZero:
+		case gfx.NonZero:
 			activeFill = nextStrip.winding != 0
-		case EvenOdd:
+		case gfx.EvenOdd:
 			activeFill = nextStrip.winding%2 != 0
 		default:
 			panic(fmt.Sprintf("unexpected sparse.FillRule: %#v", p.fillRule))
@@ -470,45 +414,45 @@ func (ctx *Renderer) popLayers() {
 	}
 }
 
-func (ctx *Renderer) FillCompiled(p CompiledPath, transform curve.Affine, paint Paint) {
-	ctx.renderPath(p, paint.encode(transform))
+func (ctx *Renderer) FillCompiled(p CompiledPath, transform curve.Affine, paint gfx.Paint) {
+	ctx.renderPath(p, paint.Encode(transform))
 }
 
 func (ctx *Renderer) Fill(
-	shape Shape,
+	shape gfx.Shape,
 	transform curve.Affine,
-	fillRule FillRule,
-	paint Paint,
+	fillRule gfx.FillRule,
+	paint gfx.Paint,
 ) {
 	p := CompileFillPath(shape, transform, fillRule, ctx.width, ctx.height)
-	ctx.renderPath(p, paint.encode(transform))
+	ctx.renderPath(p, paint.Encode(transform))
 }
 
 func (ctx *Renderer) Stroke(
-	shape Shape,
+	shape gfx.Shape,
 	transform curve.Affine,
 	stroke_ curve.Stroke,
-	paint Paint,
+	paint gfx.Paint,
 ) {
 	p := CompileStrokedPath(shape, transform, stroke_, ctx.width, ctx.height)
-	ctx.renderPath(p, paint.encode(transform))
+	ctx.renderPath(p, paint.Encode(transform))
 }
 
 type Layer struct {
-	BlendMode     BlendMode
+	BlendMode     gfx.BlendMode
 	Opacity       float32
-	Clip          Shape
+	Clip          gfx.Shape
 	ClipTransform curve.Affine
-	ClipFillRule  FillRule
+	ClipFillRule  gfx.FillRule
 }
 
 type LayerCompiled struct {
-	BlendMode BlendMode
+	BlendMode gfx.BlendMode
 	Opacity   float32
 	Clip      CompiledPath
 }
 
-func (ctx *Renderer) PushClip(shape Shape, transform curve.Affine, fill FillRule) {
+func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.FillRule) {
 	ctx.PushLayer(Layer{Opacity: 1, Clip: shape, ClipFillRule: fill, ClipTransform: transform})
 }
 

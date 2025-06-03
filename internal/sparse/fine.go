@@ -12,11 +12,12 @@ import (
 	"strings"
 	"unsafe"
 
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/safeish"
 )
 
 // [x][y]Color
-type fineScratch = [wideTileWidth][stripHeight]plainColor
+type fineScratch = [wideTileWidth][stripHeight]gfx.PlainColor
 
 type fineStats struct {
 	simplePacks  uint64
@@ -88,7 +89,7 @@ type fine struct {
 
 type fineLayer struct {
 	scratch     *fineScratch
-	singleColor plainColor
+	singleColor gfx.PlainColor
 	// if complex is false, all pixels have the color stored in singleColor and
 	// the contents of scratch may be undefined.
 	complex bool
@@ -125,7 +126,7 @@ func (f *fine) newScratch() *fineScratch {
 	return (*fineScratch)(alignedPtr)
 }
 
-func (l *fineLayer) clear(c plainColor) {
+func (l *fineLayer) clear(c gfx.PlainColor) {
 	l.complex = false
 	l.singleColor = c
 }
@@ -168,8 +169,8 @@ func (f *fine) packComplex(l *fineLayer, tileX, tileY uint16) {
 	f.packer.PackComplex(x0, y0, x1, y1, safeish.SliceCast[[][4]float32](l.scratch[:]))
 }
 
-func memsetColumnsNative(buf [][stripHeight]plainColor, c plainColor) {
-	var col [stripHeight]plainColor
+func memsetColumnsNative(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
+	var col [stripHeight]gfx.PlainColor
 	for i := range col {
 		col[i] = c
 	}
@@ -222,13 +223,13 @@ func (f *fine) runCmd(cmd cmd) {
 }
 
 // TODO(dh): change types of x and width to uint16.
-func (f *fine) fill(x, width int, paint encodedPaint) {
+func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 	l := f.topLayer()
 	buf := l.scratch[x : x+width]
 
 	switch paint := paint.(type) {
-	case plainColor:
-		color := plainColor(paint)
+	case gfx.PlainColor:
+		color := gfx.PlainColor(paint)
 		if x == 0 && width == wideTileWidth {
 			if color[3] == 1.0 {
 				f.stats.fullWidthOpaqueClearFills++
@@ -239,7 +240,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			} else {
 				f.stats.fullWidthTranslucentClearFills++
 				oneMinusAlpha := 1.0 - color[3]
-				color = plainColor{
+				color = gfx.PlainColor{
 					0: l.singleColor[0]*oneMinusAlpha + color[0],
 					1: l.singleColor[1]*oneMinusAlpha + color[1],
 					2: l.singleColor[2]*oneMinusAlpha + color[2],
@@ -263,7 +264,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 				// The tile is simple, which means the fill only has to blend colors
 				// once, not for every pixel.
 				oneMinusAlpha := 1.0 - color[3]
-				color = plainColor{
+				color = gfx.PlainColor{
 					0: l.singleColor[0]*oneMinusAlpha + color[0],
 					1: l.singleColor[1]*oneMinusAlpha + color[1],
 					2: l.singleColor[2]*oneMinusAlpha + color[2],
@@ -277,11 +278,11 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			}
 		}
 
-	case *encodedGradient:
+	case *gfx.EncodedGradient:
 		startX := f.tileX*wideTileWidth + uint16(x)
 		startY := f.tileY * tileHeight
 		gf := newGradientFiller(paint, startX, startY)
-		if !paint.hasOpacities {
+		if !paint.HasOpacities {
 			// The gradient is opaque, so we don't have to blend.
 			if x == 0 && width == wideTileWidth {
 				// We're going to overwrite the entire tile, so the old contents
@@ -297,9 +298,9 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			// from memory to blend with the gradient
 			f.materialize(l)
 			// OPT(dh): reuse memory
-			colors := make([][stripHeight]plainColor, width)
+			colors := make([][stripHeight]gfx.PlainColor, width)
 			gf.run(colors)
-			blendComplexComplex(buf, colors, nil, BlendMode{}, 1)
+			blendComplexComplex(buf, colors, nil, gfx.BlendMode{}, 1)
 		}
 
 	default:
@@ -307,7 +308,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 	}
 }
 
-func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
+func (f *fine) clipFill(x, width int, blend gfx.BlendMode, opacity float32) {
 	if n := len(f.layers); n < 2 {
 		panic(fmt.Sprintf("internal error: trying to clipFill but we only have %d layers", n))
 	}
@@ -340,7 +341,7 @@ func (f *fine) clipFill(x, width int, blend BlendMode, opacity float32) {
 	}
 }
 
-func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend BlendMode, opacity float32) {
+func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend gfx.BlendMode, opacity float32) {
 	f.stats.clipAlphaFills++
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
@@ -356,7 +357,7 @@ func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend Bl
 	blendComplexComplex(dst, src, alphas, blend, opacity)
 }
 
-func fineFillComplexNative(buf [][stripHeight]plainColor, color plainColor) {
+func fineFillComplexNative(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
 	oneMinusAlpha := 1.0 - color[3]
 	for x := range buf {
 		col := &buf[x]
@@ -369,7 +370,7 @@ func fineFillComplexNative(buf [][stripHeight]plainColor, color plainColor) {
 	}
 }
 
-func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encodedPaint) {
+func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.EncodedPaint) {
 	// OPT implement SIMD versions
 
 	if len(alphas) < width {
@@ -380,9 +381,9 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 	l := f.topLayer()
 	dst := l.scratch[x : x+width]
 
-	alphaFillInner := func(colors []plainColor) {
+	alphaFillInner := func(colors []gfx.PlainColor) {
 		colorIdx := 0
-		nextColor := func() plainColor {
+		nextColor := func() gfx.PlainColor {
 			c := colors[colorIdx]
 			colorIdx = (colorIdx + 1) % len(colors)
 			return c
@@ -435,11 +436,11 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 	}
 
 	switch paint := paint.(type) {
-	case plainColor:
+	case gfx.PlainColor:
 		// OPT(dh): make sure the slice doesn't escape
-		alphaFillInner([]plainColor{paint})
+		alphaFillInner([]gfx.PlainColor{paint})
 
-	case *encodedGradient:
+	case *gfx.EncodedGradient:
 		startX := f.tileX*wideTileWidth + uint16(x)
 		startY := f.tileY * tileHeight
 		gf := newGradientFiller(paint, startX, startY)
@@ -450,8 +451,8 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 		// read it again pixel by pixel. we could instead generate the colors
 		// one at a time. this is currently only complicated by the way
 		// undefined colors are handled when drawing gradients.
-		colors := make([][stripHeight]plainColor, width)
+		colors := make([][stripHeight]gfx.PlainColor, width)
 		gf.run(colors)
-		alphaFillInner(safeish.SliceCast[[]plainColor](colors))
+		alphaFillInner(safeish.SliceCast[[]gfx.PlainColor](colors))
 	}
 }
