@@ -8,9 +8,10 @@ package lottie_model
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"honnef.co/go/curve"
-	"honnef.co/go/jello/gfx"
+	"honnef.co/go/gutter/gfx"
 )
 
 type FixedRepeater struct {
@@ -42,47 +43,36 @@ func (r *FixedRepeater) Transform(index int) curve.Affine {
 		Mul(curve.Translate(curve.Vec(-r.AnchorPoint.X, -r.AnchorPoint.Y)))
 }
 
-func BrushWithAlpha(brush gfx.Brush, alpha float64) gfx.Brush {
+func BrushWithAlpha(brush gfx.Paint, alpha float64) gfx.Paint {
 	if alpha == 1 {
 		return brush
 	}
 
 	switch brush := brush.(type) {
-	case gfx.SolidBrush:
-		c := brush.Color
-		c.Values[3] = alpha
-		return gfx.SolidBrush{
-			Color: c,
+	case gfx.Solid:
+		brush.Values[3] = alpha
+		return brush
+	case *gfx.LinearGradient:
+		grad := *brush
+		grad.Stops = slices.Clone(grad.Stops)
+		for i := range grad.Stops {
+			grad.Stops[i].Color.Values[3] = alpha
 		}
-	case gfx.GradientBrush:
-		switch grad := brush.Gradient.(type) {
-		case gfx.LinearGradient:
-			stops := make([]gfx.ColorStop, len(grad.Stops))
-			for i, stop := range grad.Stops {
-				stops[i] = stop.WithAlphaFactor(float32(alpha))
-			}
-			grad.Stops = stops
-			brush.Gradient = grad
-			return brush
-		case gfx.RadialGradient:
-			stops := make([]gfx.ColorStop, len(grad.Stops))
-			for i, stop := range grad.Stops {
-				stops[i] = stop.WithAlphaFactor(float32(alpha))
-			}
-			grad.Stops = stops
-			brush.Gradient = grad
-			return brush
-		case gfx.SweepGradient:
-			stops := make([]gfx.ColorStop, len(grad.Stops))
-			for i, stop := range grad.Stops {
-				stops[i] = stop.WithAlphaFactor(float32(alpha))
-			}
-			grad.Stops = stops
-			brush.Gradient = grad
-			return brush
-		default:
-			panic(fmt.Sprintf("internal error: unhandled type %T", grad))
+		return &grad
+	case *gfx.RadialGradient:
+		grad := *brush
+		grad.Stops = slices.Clone(grad.Stops)
+		for i := range brush.Stops {
+			grad.Stops[i].Color.Values[3] = alpha
 		}
+		return &grad
+	case *gfx.SweepGradient:
+		grad := *brush
+		grad.Stops = slices.Clone(grad.Stops)
+		for i := range brush.Stops {
+			grad.Stops[i].Color.Values[3] = alpha
+		}
+		return &grad
 	default:
 		panic(fmt.Sprintf("internal error: unhandled type %T", brush))
 	}

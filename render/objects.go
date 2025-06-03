@@ -14,7 +14,6 @@ import (
 	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/lottie/lottie_model"
-	"honnef.co/go/gutter/lottie/lottie_renderer"
 	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/jello"
 	"honnef.co/go/jello/gfx"
@@ -528,8 +527,8 @@ func (l *Lottie) PerformPaint(p *Painter, scene *jello.Scene) {
 	if l.composition == nil {
 		return
 	}
-	var r lottie_renderer.Renderer
-	r.Append(l.composition, l.frame, curve.Identity, 1, scene)
+	// var r lottie_renderer.Renderer
+	// r.Append(l.composition, l.frame, curve.Identity, 1, scene)
 }
 
 var _ Attacher = (*AnimatedOpacity)(nil)

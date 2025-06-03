@@ -8,15 +8,16 @@ package lottie_converter
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/gmath"
 	encoding "honnef.co/go/gutter/lottie/lottie_encoding"
 	model "honnef.co/go/gutter/lottie/lottie_model"
 	"honnef.co/go/gutter/maybe"
-	"honnef.co/go/jello/gfx"
-	"honnef.co/go/jello/jmath"
 )
 
 func ConvertAnimation(source *encoding.Animation) *model.Composition {
@@ -186,8 +187,21 @@ func setupLayerBase(source encoding.VisualLayer, target *model.Layer) (int, mayb
 	target.StartFrame = source.StartTime
 
 	for _, maskSource := range source.MasksProperties {
+		// TODO(dh): what does a mask without a shape do?
 		if shape, ok := maskSource.Shape.Get(); ok {
 			if geometry, ok := convertShapeGeometry(shape); ok {
+				// TODO(dh): correctly implement masks. Compose together
+				// multiple masks into a single mask, and propagate normal
+				// layer's blend mode through the final mask layer, so that its
+				// isolated blend group doesn't cause problems.
+				//
+				// We could either draw actual mask layers, filling the
+				// geometry, then compose the layers together. However, it'd be
+				// preferable to do boolean math directly on the geometry and
+				// generate a clip instead of a mask layer. That way we can
+				// avoid a lot blending. Not all mask modes can be implemented
+				// that way (lighten, darken, possibly difference), but we can
+				// use both boolean math and fills on a single stack of masks.
 				var mode gfx.BlendMode
 				switch maskSource.Mode {
 				case encoding.MaskModeNone:
@@ -250,20 +264,29 @@ func convertBlendMode(value encoding.BlendMode) maybe.Option[gfx.BlendMode] {
 	case encoding.BlendModeExclusion:
 		return maybe.Some(gfx.BlendMode{Mix: gfx.MixExclusion})
 	case encoding.BlendModeHue:
-		return maybe.Some(gfx.BlendMode{Mix: gfx.MixHue})
+		// return maybe.Some(gfx.BlendMode{Mix: gfx.MixHue})
+		// XXX add support
+		panic("unimplemented")
 	case encoding.BlendModeSaturation:
-		return maybe.Some(gfx.BlendMode{Mix: gfx.MixSaturation})
+		// return maybe.Some(gfx.BlendMode{Mix: gfx.MixSaturation})
+		// XXX add support
+		panic("unimplemented")
 	case encoding.BlendModeColor:
-		return maybe.Some(gfx.BlendMode{Mix: gfx.MixColor})
+		// return maybe.Some(gfx.BlendMode{Mix: gfx.MixColor})
+		// XXX add support
+		panic("unimplemented")
 	case encoding.BlendModeLuminosity:
-		return maybe.Some(gfx.BlendMode{Mix: gfx.MixLuminosity})
+		// return maybe.Some(gfx.BlendMode{Mix: gfx.MixLuminosity})
+		// XXX add support
+		panic("unimplemented")
 	case encoding.BlendModeAdd:
 		// XXX add support
-		fallthrough
+		panic("unimplemented")
 	case encoding.BlendModeHardMix:
 		// XXX add support
-		fallthrough
+		panic("unimplemented")
 	default:
+		panic("unimplemented")
 		return maybe.Option[gfx.BlendMode]{}
 	}
 }
@@ -297,7 +320,7 @@ func convertTransform(value *encoding.Transform) (animation.KeyframedTransform, 
 		transform.Rotation.Values[i] = toRadians(v)
 	}
 	for i, v := range transform.Skew.Values {
-		v = jmath.Clamp(-v, -85, 85)
+		v = gmath.Clamp(-v, -85, 85)
 		transform.Skew.Values[i] = toRadians(v)
 	}
 	for i, v := range transform.SkewAngle.Values {
@@ -688,6 +711,7 @@ func convertDraw(value encoding.AnyGraphicElement) (model.Draw, bool) {
 			StartPoint: startPoint,
 			EndPoint:   endPoint,
 			Stops:      convertGradientColors(value.Colors),
+			ColorSpace: model.WorkingColorSpace,
 		}
 		brush := model.Brush{
 			Kind:     model.BrushKindGradient,
@@ -735,6 +759,7 @@ func convertDraw(value encoding.AnyGraphicElement) (model.Draw, bool) {
 			StartPoint: startPoint,
 			EndPoint:   endPoint,
 			Stops:      convertGradientColors(value.Colors),
+			ColorSpace: model.WorkingColorSpace,
 		}
 		brush := model.Brush{
 			Kind:     model.BrushKindGradient,
@@ -756,40 +781,40 @@ func convertGradientColors(value encoding.GradientProperty) animation.KeyframedC
 		n := len(value.Value.Keyframes)
 		frames := make([]float64, n)
 		easings := make([]animation.Curve, n)
-		values := make([][]animation.ColorStop, n)
+		values := make([][]gfx.GradientStop, n)
 		for i, value := range value.Value.Keyframes {
 			frames[i], easings[i] = convertKeyframe(value.BaseKeyframe)
 			values[i] = convertStops(value.Value, count)
 		}
 		return animation.KeyframedColorStops{
-			Keyframes: animation.Keyframes[[]animation.ColorStop]{
+			Keyframes: animation.Keyframes[[]gfx.GradientStop]{
 				Frames: frames,
 				Curves: easings,
 				Values: values,
 			},
-			Count: count,
+			ColorSpace: model.WorkingColorSpace,
 		}
 	} else {
 		raw := convertStops(value.Value.Value, count)
 		return animation.KeyframedColorStops{
-			Keyframes: animation.Keyframes[[]animation.ColorStop]{
+			Keyframes: animation.Keyframes[[]gfx.GradientStop]{
 				Frames: []float64{0},
 				Curves: []animation.Curve{animation.CurveIdentity},
-				Values: [][]animation.ColorStop{raw},
+				Values: [][]gfx.GradientStop{raw},
 			},
-			Count: count,
+			ColorSpace: model.WorkingColorSpace,
 		}
 	}
 }
 
-func convertStops(value []float64, count int) []animation.ColorStop {
-	var stops []animation.ColorStop
+func convertStops(value []float64, count int) []gfx.GradientStop {
+	var stops []gfx.GradientStop
 	var alphaStops [][2]float64
 	for i := 0; i < (len(value)/4)*4; i += 4 {
 		chunk := value[i : i+4]
-		stops = append(stops, animation.ColorStop{
-			Offset: chunk[0],
-			Color:  color.Make(color.SRGB, chunk[1], chunk[2], chunk[3], 1.0),
+		stops = append(stops, gfx.GradientStop{
+			Offset: float32(chunk[0]),
+			Color:  color.Make(model.ParsedColorSpace, chunk[1], chunk[2], chunk[3], 1.0),
 		})
 		if len(stops) >= count {
 			// there is alpha data at the end of the list, which is a sequence
@@ -806,7 +831,7 @@ func convertStops(value []float64, count int) []animation.ColorStop {
 					b, alphaB := alphaStop[0], alphaStop[1]
 					if a_, ok := last.Get(); ok {
 						a, alphaA := a_[0], a_[1]
-						x := stop.Offset
+						x := float64(stop.Offset)
 						t := normalizeToRange(a, b, x)
 						var alphaInterp float64
 						// todo: this is a hack to get alpha rendering with a
@@ -825,6 +850,16 @@ func convertStops(value []float64, count int) []animation.ColorStop {
 				}
 			}
 			break
+		}
+	}
+	if len(stops) > 1 {
+		if stops[len(stops)-1].Offset < 1 {
+			stops = append(stops, stops[len(stops)-1])
+			stops[len(stops)-1].Offset = 1
+		}
+		if stops[0].Offset > 0 {
+			stops = slices.Insert(stops, 0, stops[0])
+			stops[0].Offset = 0
 		}
 	}
 	return stops

@@ -11,10 +11,22 @@ import (
 	"slices"
 	"time"
 
+	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/maybe"
-	"honnef.co/go/jello/gfx"
+)
+
+var (
+	// Colors in Lottie files are in sRGB
+	ParsedColorSpace = color.SRGB
+
+	// Lottie files are authored for sRGB blending and gradients. However, we
+	// already don't support blending in any color space other than the global
+	// one, so we might as well render gradients in the global one, and avoid a
+	// bunch of color space conversions.
+	WorkingColorSpace = color.LinearSRGB
 )
 
 type Composition struct {

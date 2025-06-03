@@ -11,7 +11,7 @@ import (
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
-	"honnef.co/go/jello/gfx"
+	"honnef.co/go/gutter/gfx"
 )
 
 type BrushKind int
@@ -27,18 +27,18 @@ type Brush struct {
 	Gradient animation.KeyframedGradient
 }
 
-func (b Brush) Evaluate(alpha, frame float64) gfx.Brush {
+func (b Brush) Evaluate(alpha, frame float64) gfx.Paint {
 	switch b.Kind {
 	case BrushKindSolid:
-		return gfx.SolidBrush{
-			Color: color.Make(
-				color.SRGB,
+		return gfx.Solid(
+			color.Make(
+				ParsedColorSpace,
 				b.Solid[0].Evaluate(frame),
 				b.Solid[1].Evaluate(frame),
 				b.Solid[2].Evaluate(frame),
 				alpha,
 			),
-		}
+		)
 	case BrushKindGradient:
 		return b.Gradient.Evaluate(frame)
 	default:

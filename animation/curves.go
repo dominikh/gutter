@@ -8,7 +8,7 @@ import (
 	"math"
 
 	"honnef.co/go/curve"
-	"honnef.co/go/jello/jmath"
+	"honnef.co/go/gutter/gmath"
 )
 
 type Curve interface {
@@ -324,8 +324,8 @@ type CurveCubicBezier struct {
 
 func (ecb CurveCubicBezier) Transform(p float64) float64 {
 	p0 := curve.Pt(0, 0)
-	p1 := curve.Pt(jmath.Clamp(ecb.P1.X, 0, 1), ecb.P1.Y)
-	p2 := curve.Pt(jmath.Clamp(ecb.P2.X, 0, 1), ecb.P2.Y)
+	p1 := curve.Pt(gmath.Clamp(ecb.P1.X, 0, 1), ecb.P1.Y)
+	p2 := curve.Pt(gmath.Clamp(ecb.P2.X, 0, 1), ecb.P2.Y)
 	p3 := curve.Pt(1, 1)
 
 	if p1 == curve.Pt(0, 0) && p2 == curve.Pt(1, 1) {
@@ -353,7 +353,7 @@ func (ecb CurveCubicBezier) Transform(p float64) float64 {
 
 		// Clamp to [0, 1) because the value might be slightly outside those
 		// bounds at the edges.
-		t := jmath.Clamp(intersections[0].SegmentT, 0, 1)
+		t := gmath.Clamp(intersections[0].SegmentT, 0, 1)
 		return cb.Eval(t).Y
 	}
 }

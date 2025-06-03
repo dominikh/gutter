@@ -13,9 +13,9 @@ import (
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/base"
+	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/gmath"
 	"honnef.co/go/gutter/maybe"
-	"honnef.co/go/jello/gfx"
-	"honnef.co/go/jello/jmath"
 
 	"golang.org/x/exp/constraints"
 )
@@ -308,7 +308,7 @@ func (kfs Keyframes[T]) ComputeFramesAndWeight(frame float64) (startValue, endVa
 	if t1 <= t0 {
 		t = 0
 	}
-	return kfs.Values[idx0], kfs.Values[idx1], easing.Transform(jmath.Clamp(t, 0, 1)), true
+	return kfs.Values[idx0], kfs.Values[idx1], easing.Transform(gmath.Clamp(t, 0, 1)), true
 }
 
 type KeyframedTransform struct {
@@ -334,7 +334,7 @@ func (t KeyframedTransform) Evaluate(frame float64) curve.Affine {
 	skewMatrix := curve.Identity
 	if skew != 0.0 {
 		const SKEW_LIMIT = 85.0
-		skew := jmath.Clamp(-skew, -SKEW_LIMIT, SKEW_LIMIT)
+		skew := gmath.Clamp(-skew, -SKEW_LIMIT, SKEW_LIMIT)
 		// skew = toRadians(skew)
 		angle := skewAngle
 		// angle := toRadians(skewAngle)
@@ -433,38 +433,31 @@ func (r KeyframedRoundedRect) Evaluate(frame float64) curve.RoundedRect {
 	})
 }
 
-type ColorStop struct {
-	Offset float64
-	Color  color.Color
-}
-
 type KeyframedColorStops struct {
-	Keyframes[[]ColorStop]
-	// XXX do we need Count
-	Count int
+	Keyframes[[]gfx.GradientStop]
+	ColorSpace *color.Space
 }
 
 // Evaluate implements Animatable.
-func (s KeyframedColorStops) Evaluate(frame float64) []gfx.ColorStop {
+func (s KeyframedColorStops) Evaluate(frame float64) []gfx.GradientStop {
 	v0, v1, t, ok := s.ComputeFramesAndWeight(frame)
 	if !ok {
 		return nil
 	}
 
-	var stops []gfx.ColorStop
-	for i := range s.Count {
+	var stops []gfx.GradientStop
+	for i := range min(len(v0), len(v1)) {
 		j := i
-		if j >= len(v0) || j >= len(v1) {
-			return nil
-		}
 		offset := Lerp(v0[j].Offset, v1[j].Offset, t)
-		r := Lerp(v0[j].Color.Values[0], v1[j].Color.Values[0], t)
-		g := Lerp(v0[j].Color.Values[1], v1[j].Color.Values[1], t)
-		b := Lerp(v0[j].Color.Values[2], v1[j].Color.Values[2], t)
-		a := Lerp(v0[j].Color.Values[3], v1[j].Color.Values[3], t)
-		stops = append(stops, gfx.ColorStop{
+		v0c := v0[j].Color.Convert(s.ColorSpace)
+		v1c := v1[j].Color.Convert(s.ColorSpace)
+		r := Lerp(v0c.Values[0], v1c.Values[0], t)
+		g := Lerp(v0c.Values[1], v1c.Values[1], t)
+		b := Lerp(v0c.Values[2], v1c.Values[2], t)
+		a := Lerp(v0c.Values[3], v1c.Values[3], t)
+		stops = append(stops, gfx.GradientStop{
 			Offset: float32(offset),
-			Color:  color.Make(color.SRGB, r, g, b, a),
+			Color:  color.Make(s.ColorSpace, r, g, b, a),
 		})
 	}
 	return stops
@@ -475,32 +468,29 @@ type KeyframedGradient struct {
 	StartPoint KeyframedPoint
 	EndPoint   KeyframedPoint
 	Stops      KeyframedColorStops
+	ColorSpace *color.Space
 }
 
 // Evaluate implements Animatable.
-func (g KeyframedGradient) Evaluate(frame float64) gfx.Brush {
+func (g KeyframedGradient) Evaluate(frame float64) gfx.Paint {
 	start := g.StartPoint.Evaluate(frame)
 	end := g.EndPoint.Evaluate(frame)
 	stops := g.Stops.Evaluate(frame)
 	if g.IsRadial {
 		radius := curve.Vec2(end).Sub(curve.Vec2(start)).Hypot()
-		gg := gfx.RadialGradient{
+		return &gfx.RadialGradient{
 			StartCenter: start,
 			EndCenter:   start,
 			EndRadius:   float32(radius),
 			Stops:       stops,
-		}
-		return gfx.GradientBrush{
-			Gradient: gg,
+			ColorSpace:  g.ColorSpace,
 		}
 	} else {
-		gg := gfx.LinearGradient{
-			Start: start,
-			End:   end,
-			Stops: stops,
-		}
-		return gfx.GradientBrush{
-			Gradient: gg,
+		return &gfx.LinearGradient{
+			Start:      start,
+			End:        end,
+			Stops:      stops,
+			ColorSpace: g.ColorSpace,
 		}
 	}
 }

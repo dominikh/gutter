@@ -10,55 +10,35 @@ import (
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
+	"honnef.co/go/gutter/gfx"
 	model "honnef.co/go/gutter/lottie/lottie_model"
 	"honnef.co/go/gutter/maybe"
-	"honnef.co/go/jello"
-	"honnef.co/go/jello/gfx"
 )
 
 type Renderer struct {
 	batch        batch
 	maskElements curve.BezPath
-	fullRect     curve.BezPath
 }
 
 func (r *Renderer) Render(
-	animation *model.Composition,
-	frame float64,
-	transform curve.Affine,
-	alpha float64,
-) jello.Scene {
-	var scene jello.Scene
-	r.Append(animation, frame, transform, alpha, &scene)
-	return scene
-}
-
-func (r *Renderer) Append(
 	anim *model.Composition,
 	frame float64,
-	trans curve.Affine,
 	alpha float64,
-	scene *jello.Scene,
+	rec gfx.Recorder,
 ) {
-	r.fullRect = curve.Rect{
-		X0: 0,
-		Y0: 0,
-		X1: float64(anim.Width),
-		Y1: float64(anim.Height),
-	}.Path(0)
+	rec = rec.Checkpoint()
 	r.batch.reset(r)
 
-	mix := gfx.MixClip
-	if alpha != 0 {
-		mix = gfx.MixNormal
-	}
-	scene.PushLayer(gfx.BlendMode{Mix: mix}, float32(alpha), trans, curve.Rect{
-		X0: 0,
-		Y0: 0,
-		X1: float64(anim.Width),
-		Y1: float64(anim.Height),
-	}.Path(0.1))
-	defer scene.PopLayer()
+	rec.PushLayer(gfx.Layer{
+		Opacity: float32(alpha),
+		Clip: curve.Rect{
+			X0: 0,
+			Y0: 0,
+			X1: float64(anim.Width),
+			Y1: float64(anim.Height),
+		},
+	})
+	defer rec.PopLayer()
 
 	for i := len(anim.Layers) - 1; i >= 0; i-- {
 		layer := anim.Layers[i]
@@ -69,9 +49,9 @@ func (r *Renderer) Append(
 			anim,
 			anim.Layers,
 			layer,
-			trans,
+			curve.Identity,
 			frame,
-			scene,
+			rec,
 		)
 	}
 }
@@ -82,34 +62,30 @@ func (r *Renderer) renderLayer(
 	layer model.Layer,
 	trans curve.Affine,
 	frame float64,
-	scene *jello.Scene,
+	rec gfx.Recorder,
 ) {
 	if frame < layer.FirstFrame || frame >= layer.LastFrame {
 		return
 	}
 
-	switch alpha := layer.Opacity.Evaluate(frame) / 100.0; alpha {
-	case 0:
+	alpha := layer.Opacity.Evaluate(frame) / 100.0
+	if alpha == 0 {
 		return
-	case 1:
-		scene.PushLayer(gfx.BlendMode{Mix: gfx.MixClip}, 1, curve.Identity, r.fullRect)
-		defer scene.PopLayer()
-	default:
-		scene.PushLayer(gfx.BlendMode{}, float32(alpha), curve.Identity, r.fullRect)
-		defer scene.PopLayer()
 	}
+
+	rec.PushLayer(gfx.Layer{Opacity: float32(alpha)})
+	defer rec.PopLayer()
 
 	parentTransform := trans
 	trans = r.computeTransform(layerSet, layer, parentTransform, frame)
 	if maskIndex, ok := layer.MaskLayerID.Get(); ok {
 		if mode, ok := layer.MaskLayerMode.Get(); ok {
-			scene.PushLayer(
-				gfx.BlendMode{},
-				1.0,
-				parentTransform,
-				r.fullRect,
-			)
-			defer scene.PopLayer()
+			// OPT(dh): is this layer necessary for correct rendering?
+			rec.PushLayer(gfx.Layer{
+				Opacity: 1,
+			})
+			defer rec.PopLayer()
+
 			if maskIndex >= 0 && maskIndex < len(layerSet) {
 				r.renderLayer(
 					anim,
@@ -117,27 +93,24 @@ func (r *Renderer) renderLayer(
 					layerSet[maskIndex],
 					parentTransform,
 					frame,
-					scene,
+					rec,
 				)
 			}
 
-			scene.PushLayer(mode, 1.0, parentTransform, r.fullRect)
-			defer scene.PopLayer()
+			rec.PushLayer(gfx.Layer{BlendMode: mode, Opacity: 1})
+			defer rec.PopLayer()
 		}
 	}
 	for _, mask := range layer.Masks {
 		alpha := mask.Opacity.Evaluate(frame) / 100.0
 		r.maskElements = mask.Geometry.Evaluate(frame, r.maskElements)
-		mode := gfx.MixClip
-		if alpha != 1 {
-			mode = gfx.MixNormal
-		}
-		scene.PushLayer(
-			gfx.BlendMode{Mix: mode},
-			float32(alpha),
-			trans,
-			r.maskElements,
-		)
+		rec.PushTransform(trans)
+		rec.PushLayer(gfx.Layer{
+			BlendMode: mask.Mode,
+			Opacity:   float32(alpha),
+			Clip:      r.maskElements,
+		})
+		rec.PopTransform()
 		r.maskElements = r.maskElements[:0]
 	}
 	switch layer.Content.Kind {
@@ -158,8 +131,10 @@ func (r *Renderer) renderLayer(
 				frame = (frame - layer.StartFrame) / layer.Stretch
 			}
 
-			scene.PushLayer(gfx.BlendMode{Mix: gfx.MixNormal}, 1, trans, curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(layer.Width, layer.Height)).Path(0.1))
-			defer scene.PopLayer()
+			rec.PushTransform(trans)
+			rec.PushClip(curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(layer.Width, layer.Height)))
+			defer rec.PopLayer()
+			rec.PopTransform()
 
 			for i := len(assetLayers) - 1; i >= 0; i-- {
 				assetLayer := assetLayers[i]
@@ -172,24 +147,24 @@ func (r *Renderer) renderLayer(
 					assetLayer,
 					trans,
 					frame,
-					scene,
+					rec,
 				)
 			}
 		}
 	case model.ContentKindShapes:
-		r.renderShapes(scene, layer.Content.Shapes, trans, frame)
-		r.batch.render(scene, &r.batch.draws[0])
+		r.renderShapes(rec, layer.Content.Shapes, trans, frame)
+		r.batch.render(rec, &r.batch.draws[0])
 		r.batch.reset(r)
 	}
 
 	n := len(layer.Masks)
 	for range n {
-		scene.PopLayer()
+		rec.PopLayer()
 	}
 }
 
 func (r *Renderer) renderShapes(
-	scene *jello.Scene,
+	rec gfx.Recorder,
 	shapes []model.Shape,
 	trans curve.Affine,
 	frame float64,
@@ -210,7 +185,7 @@ func (r *Renderer) renderShapes(
 				groupAlpha = t.Opacity.Evaluate(frame) / 100.0
 			}
 			r.batch.pushGroup(groupAlpha)
-			r.renderShapes(scene, shape.GroupShapes, trans.Mul(groupTransform), frame)
+			r.renderShapes(rec, shape.GroupShapes, trans.Mul(groupTransform), frame)
 			r.batch.popGroup()
 		case model.ShapeKindGeometry:
 			r.batch.pushGeometry(&shape.Geometry, trans, frame)
@@ -270,7 +245,7 @@ type drawData struct {
 	kind drawDataKind
 
 	stroke   maybe.Option[curve.Stroke]
-	brush    gfx.Brush
+	brush    gfx.Paint
 	alpha    float64
 	geometry [2]int
 
@@ -306,7 +281,6 @@ type batch struct {
 	// merging into already used geometries.
 	drawnGeometry int
 	root          drawData
-	fullRect      curve.BezPath
 	draws         []drawData
 	curGroup      int
 }
@@ -355,14 +329,14 @@ func (b *batch) repeat(repeater *model.Repeater, geometryStart int, drawStart in
 	panic("TODO")
 }
 
-func (b *batch) render(scene *jello.Scene, group *drawData) {
+func (b *batch) render(rec gfx.Recorder, group *drawData) {
 	if group.kind != drawDataGroup {
 		panic(fmt.Sprintf("internal error: wrong kind %v", group.kind))
 	}
 
 	if group.groupAlpha != 1 {
-		scene.PushLayer(gfx.BlendMode{}, float32(group.groupAlpha), curve.Identity, b.fullRect)
-		defer scene.PopLayer()
+		rec.PushLayer(gfx.Layer{Opacity: float32(group.groupAlpha)})
+		defer rec.PopLayer()
 	}
 
 	// Process all draws in reverse
@@ -378,14 +352,18 @@ func (b *batch) render(scene *jello.Scene, group *drawData) {
 					// Skip zero-width strokes to work around
 					// https://github.com/linebender/vello/issues/662
 					if stroke.Width != 0 {
-						scene.Stroke(stroke, transform, brush, curve.Identity, path)
+						rec.PushTransform(transform)
+						rec.Stroke(path, stroke, brush)
+						rec.PopTransform()
 					}
 				} else {
-					scene.Fill(gfx.NonZero, transform, brush, curve.Identity, path)
+					rec.PushTransform(transform)
+					rec.Fill(path, brush)
+					rec.PopTransform()
 				}
 			}
 		case drawDataGroup:
-			b.render(scene, draw)
+			b.render(rec, draw)
 		default:
 			panic(fmt.Sprintf("internal error: unexpected draw data kind %v", draw.kind))
 		}
@@ -393,7 +371,7 @@ func (b *batch) render(scene *jello.Scene, group *drawData) {
 }
 
 func (b *batch) reset(r *Renderer) {
-	b.elements = b.elements[:0]
+	b.elements = nil
 	b.geometries = b.geometries[:0]
 	if cap(b.draws) == 0 {
 		b.draws = make([]drawData, 1)
@@ -407,5 +385,4 @@ func (b *batch) reset(r *Renderer) {
 	b.curGroup = 0
 	// b.repeatGeometries = b.repeatGeometries[:0]
 	b.drawnGeometry = 0
-	b.fullRect = r.fullRect
 }

@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"honnef.co/go/jello/jmath"
+	"honnef.co/go/gutter/gmath"
 )
 
 type Tolerance struct {
@@ -41,7 +41,7 @@ type interpolationSimulation struct {
 }
 
 func (sim *interpolationSimulation) X(d time.Duration) float64 {
-	t := jmath.Clamp(float64(d)/float64(sim.Duration), 0, 1)
+	t := gmath.Clamp(float64(d)/float64(sim.Duration), 0, 1)
 	switch t {
 	case 0:
 		return sim.Begin
@@ -86,7 +86,7 @@ func newRepeatingSimulation(
 ) *repeatingSimulation {
 	var initialTime float64
 	if min != max {
-		initialTime = ((jmath.Clamp(initial, min, max) - min) / (max - min)) * period.Seconds()
+		initialTime = ((gmath.Clamp(initial, min, max) - min) / (max - min)) * period.Seconds()
 	}
 	var exitTime float64
 	if count > 0 {
