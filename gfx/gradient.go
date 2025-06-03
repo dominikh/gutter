@@ -11,6 +11,7 @@ import (
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
+	"honnef.co/go/gutter/gmath"
 )
 
 //go:generate go tool stringer -type=GradientExtend -trimprefix=GradientExtend
@@ -109,7 +110,7 @@ func (l *LinearGradient) Encode(transform curve.Affine) EncodedPaint {
 
 	// The denominator, i.e. sqrt((y_2 - y_1)^2 + (x_2 - x_1)^2). Since x_1 and
 	// y_1 are always 0, this shortens to sqrt(y_2^2 + x_2^2).
-	distance := sqrt32(norm[1]*norm[1] + norm[0]*norm[0])
+	distance := gmath.Sqrt32(norm[1]*norm[1] + norm[0]*norm[0])
 	// This corresponds to (y_2 - y_1) in the formula, but because of the above
 	// reasons shortens to y_2.
 	y2MinusY1 := norm[1]
@@ -123,7 +124,7 @@ func (l *LinearGradient) Encode(transform curve.Affine) EncodedPaint {
 	// of the gradient. Currently radial gradients uses normalized values
 	// between 0.0 and 1.0, for sweep and linear gradients different values are
 	// used (TODO: Would be nice to make this more consistent).
-	clampRange := [2]float32{0, sqrt32(dx*dx + dy*dy)}
+	clampRange := [2]float32{0, gmath.Sqrt32(dx*dx + dy*dy)}
 
 	return encodeGradient(
 		EncodedLinearGradient{
@@ -518,7 +519,7 @@ func (r EncodedRadialGradient) posInner(pos curve.Point) (float32, bool) {
 		return 0, false
 	}
 
-	sqrtD := sqrt32(discriminant)
+	sqrtD := gmath.Sqrt32(discriminant)
 	t1 := (-b - sqrtD) / (2.0 * a)
 	t2 := (-b + sqrtD) / (2.0 * a)
 
@@ -603,7 +604,7 @@ func degeneratePoint(p1 curve.Point, p2 curve.Point) bool {
 }
 
 func degenerateVal(v1 float32, v2 float32) bool {
-	return abs32(v2-v1) <= degenerateThreshold
+	return gmath.Abs32(v2-v1) <= degenerateThreshold
 }
 
 // Extend the stops so that we can treat a repeated gradient like a reflected

@@ -12,6 +12,7 @@ import (
 	"math"
 
 	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/gmath"
 	"honnef.co/go/safeish"
 )
 
@@ -155,9 +156,9 @@ func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][strip
 					Cm1 = min(Cs1, Cd1)
 					Cm2 = min(Cs2, Cd2)
 				case gfx.MixDifference:
-					Cm0 = abs32(Cd0 - Cs0)
-					Cm1 = abs32(Cd1 - Cs1)
-					Cm2 = abs32(Cd2 - Cs2)
+					Cm0 = gmath.Abs32(Cd0 - Cs0)
+					Cm1 = gmath.Abs32(Cd1 - Cs1)
+					Cm2 = gmath.Abs32(Cd2 - Cs2)
 				case gfx.MixExclusion:
 					Cm0 = Cd0 + Cs0 - 2*Cd0*Cs0
 					Cm1 = Cd1 + Cs1 - 2*Cd1*Cs1
@@ -297,9 +298,9 @@ func blendSimpleSimple(dst [][stripHeight]gfx.PlainColor, nos, tos gfx.PlainColo
 			Cm1 = min(Cs1, Cd1)
 			Cm2 = min(Cs2, Cd2)
 		case gfx.MixDifference:
-			Cm0 = abs32(Cd0 - Cs0)
-			Cm1 = abs32(Cd1 - Cs1)
-			Cm2 = abs32(Cd2 - Cs2)
+			Cm0 = gmath.Abs32(Cd0 - Cs0)
+			Cm1 = gmath.Abs32(Cd1 - Cs1)
+			Cm2 = gmath.Abs32(Cd2 - Cs2)
 		case gfx.MixExclusion:
 			Cm0 = Cd0 + Cs0 - 2*Cd0*Cs0
 			Cm1 = Cd1 + Cs1 - 2*Cd1*Cs1

@@ -29,3 +29,12 @@ func Abs32(f float32) float32 {
 func Sqrt32(f float32) float32 {
 	return float32(math.Sqrt(float64(f)))
 }
+
+func Sign32(f float32) float32 {
+	if math.Float32bits(f)&(1<<31) != 0 {
+		// f is -0.0 or negative
+		return -1
+	} else {
+		return 1
+	}
+}
