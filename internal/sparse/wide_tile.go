@@ -88,13 +88,6 @@ func (wt *wideTile) fill(x, width uint16, paint gfx.EncodedPaint) {
 	wt.cmds = append(wt.cmds, cmd{typ: cmdFill, x: x, width: width, paint: paint})
 }
 
-func (wt *wideTile) alphaFill(c cmd) {
-	if wt.isZeroClip() {
-		return
-	}
-	wt.cmds = append(wt.cmds, c)
-}
-
 func (wt *wideTile) pushLayer() {
 	if wt.isZeroClip() {
 		return
