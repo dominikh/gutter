@@ -8,7 +8,6 @@ package render
 import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/io/pointer"
-	"honnef.co/go/jello"
 )
 
 var _ Object = (*PointerRegion)(nil)
@@ -125,9 +124,9 @@ func (c *PointerRegion) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements render.Object.
-func (c *PointerRegion) PerformPaint(p *Painter, scene *jello.Scene) {
+func (c *PointerRegion) PerformPaint(p *Painter) {
 	if c.Child != nil {
-		p.PaintAt(c.Child, scene, curve.Point{})
+		p.PaintAt(c.Child, curve.Point{})
 	}
 }
 

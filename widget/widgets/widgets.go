@@ -13,13 +13,12 @@ import (
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/io/pointer"
 	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
 	"honnef.co/go/gutter/wsi"
-	"honnef.co/go/jello"
-	"honnef.co/go/jello/gfx"
 )
 
 var _ widget.KeyedWidget = (*KeyedSubtree)(nil)
@@ -132,19 +131,11 @@ func (c *renderColoredBox) PerformLayout() (size curve.Size) {
 	return render.Layout(c.Child, c.Constraints(), true)
 }
 
-func (c *renderColoredBox) PerformPaint(p *render.Painter, scene *jello.Scene) {
-	sz := c.Size()
-	if sz != curve.Sz(0, 0) {
-		scene.Fill(
-			gfx.NonZero,
-			curve.Identity,
-			gfx.SolidBrush{Color: c.color},
-			curve.Identity,
-			curve.NewRectFromOrigin(curve.Pt(0, 0), sz).Path(0.1),
-		)
-	}
+func (c *renderColoredBox) PerformPaint(p *render.Painter) {
+	sz := c.Handle().Size()
+	p.Canvas.Fill(curve.NewRectFromOrigin(curve.Pt(0, 0), sz), gfx.Solid(c.color))
 	if c.Child != nil {
-		scene.Append(p.Paint(c.Child), curve.Identity)
+		p.PaintAt(c.Child, curve.Point{})
 	}
 }
 

@@ -13,8 +13,8 @@ import (
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/jello"
-	"honnef.co/go/jello/jmath"
+	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/gmath"
 )
 
 // TODO implement support for multiple layers
@@ -29,7 +29,7 @@ import (
 type Object interface {
 	// PerformLayout lays out the object.
 	PerformLayout() (size curve.Size)
-	PerformPaint(p *Painter, scene *jello.Scene)
+	PerformPaint(p *Painter)
 
 	Handle() *ObjectHandle
 }
@@ -112,6 +112,8 @@ func MarkNeedsLayout(obj Object) {
 		return
 	}
 
+	// log.Println(string(rdebug.Stack()))
+
 	if h.relayoutBoundary == nil {
 		h.needsLayout = true
 		if h.Parent != nil {
@@ -144,20 +146,20 @@ func (c Constraints) Tight() bool {
 func (c Constraints) Enforce(oc Constraints) Constraints {
 	return Constraints{
 		Min: curve.Size{
-			Width:  jmath.Clamp(c.Min.Width, oc.Min.Width, oc.Max.Width),
-			Height: jmath.Clamp(c.Min.Height, oc.Min.Height, oc.Max.Height),
+			Width:  gmath.Clamp(c.Min.Width, oc.Min.Width, oc.Max.Width),
+			Height: gmath.Clamp(c.Min.Height, oc.Min.Height, oc.Max.Height),
 		},
 		Max: curve.Size{
-			Width:  jmath.Clamp(c.Max.Width, oc.Min.Width, oc.Max.Width),
-			Height: jmath.Clamp(c.Max.Height, oc.Min.Height, oc.Max.Height),
+			Width:  gmath.Clamp(c.Max.Width, oc.Min.Width, oc.Max.Width),
+			Height: gmath.Clamp(c.Max.Height, oc.Min.Height, oc.Max.Height),
 		},
 	}
 }
 
 // Constrain a size so each dimension is in the range [min, max].
 func (c Constraints) Constrain(size curve.Size) curve.Size {
-	size.Width = jmath.Clamp(size.Width, c.Min.Width, c.Max.Width)
-	size.Height = jmath.Clamp(size.Height, c.Min.Height, c.Max.Height)
+	size.Width = gmath.Clamp(size.Width, c.Min.Width, c.Max.Width)
+	size.Height = gmath.Clamp(size.Height, c.Min.Height, c.Max.Height)
 	return size
 }
 
@@ -195,8 +197,8 @@ func (c Constraints) ConstrainWithAspectRatio(size curve.Size) curve.Size {
 	}
 
 	return curve.Sz(
-		jmath.Clamp(width, c.Min.Width, c.Max.Height),
-		jmath.Clamp(height, c.Min.Height, c.Max.Height),
+		gmath.Clamp(width, c.Min.Width, c.Max.Height),
+		gmath.Clamp(height, c.Min.Height, c.Max.Height),
 	)
 }
 
@@ -297,35 +299,30 @@ func (c *ManyChildren) PerformRemoveChild(child Object) {
 }
 
 type Painter struct {
-	// XXX delete from map when objects disappear
-	cachedScenes map[Object]*jello.Scene
+	Canvas gfx.Recorder
 }
 
-func (p *Painter) Paint(obj Object) *jello.Scene {
+func (p *Painter) Paint(obj Object) {
+	// XXX Paint should probably call Checkpoint
+
 	debug.Assert(obj != nil)
-	var scene *jello.Scene
-	if obj.Handle().needsPaint {
-		obj.Handle().needsPaint = false
-		if cached, ok := p.cachedScenes[obj]; ok {
-			cached.Reset()
-			scene = cached
-		} else {
-			scene = &jello.Scene{}
-		}
-	} else if cached, ok := p.cachedScenes[obj]; ok {
-		return cached
-	} else {
-		scene = &jello.Scene{}
+	obj.Handle().needsPaint = false
+	obj.PerformPaint(p)
+}
+
+func (p *Painter) PaintAt(obj Object, offset curve.Point) {
+	cv := p.Canvas.Checkpoint()
+	cv.SetFillRule(gfx.NonZero)
+	if offset != (curve.Point{}) {
+		cv.PushTransform(curve.Translate(curve.Vec2(offset)))
+		cv = cv.Checkpoint()
 	}
 
-	obj.PerformPaint(p, scene)
-	p.cachedScenes[obj] = scene
-	return scene
-}
+	pp := &Painter{
+		Canvas: cv,
+	}
 
-func (p *Painter) PaintAt(obj Object, scene *jello.Scene, offset curve.Point) {
-	fragment := p.Paint(obj)
-	scene.Append(fragment, curve.Translate(curve.Vec2(offset)))
+	pp.Paint(obj)
 }
 
 func isType[T any](obj any) bool {
@@ -413,9 +410,7 @@ func cleanRelayoutBoundary(child Object) bool {
 }
 
 func NewPainter() *Painter {
-	return &Painter{
-		cachedScenes: make(map[Object]*jello.Scene),
-	}
+	return &Painter{}
 }
 
 // TODO(dh): evaluate if we actually need Dispose, or if GC does all the work for us

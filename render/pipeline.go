@@ -13,8 +13,8 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/mem"
-	"honnef.co/go/jello"
 )
 
 type Renderer struct {
@@ -83,11 +83,11 @@ func NewRenderer() *Renderer {
 	return r
 }
 
-func (r *Renderer) DrawFrame(scene *jello.Scene) {
+func (r *Renderer) DrawFrame(rec gfx.Recorder) {
 	debug.Assert(r.View() != nil)
 	r.FlushLayout()
 	r.FlushCompositingBits()
-	r.FlushPaint(scene)
+	r.FlushPaint(rec)
 }
 
 func (r *Renderer) View() *View {
@@ -188,9 +188,10 @@ func layoutWithoutResize(obj Object) {
 	MarkNeedsPaint(obj)
 }
 
-func (r *Renderer) FlushPaint(scene *jello.Scene) {
+func (r *Renderer) FlushPaint(rec gfx.Recorder) {
+	r.painter.Canvas = rec
 	if r.rootNode != nil {
-		r.painter.PaintAt(r.rootNode, scene, curve.Point{})
+		r.painter.Paint(r.rootNode)
 	}
 }
 
@@ -260,9 +261,9 @@ func NewView() *View {
 	return &View{}
 }
 
-func (v *View) PerformPaint(p *Painter, scene *jello.Scene) {
+func (v *View) PerformPaint(p *Painter) {
 	if v.Child != nil {
-		scene.Append(p.Paint(v.Child), curve.Identity)
+		p.PaintAt(v.Child, curve.Point{})
 	}
 }
 

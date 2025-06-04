@@ -9,7 +9,6 @@ import (
 	"math"
 
 	"honnef.co/go/curve"
-	"honnef.co/go/jello"
 )
 
 type FlexFit uint8
@@ -186,9 +185,9 @@ func (f *Flex) PerformLayout() (size curve.Size) {
 }
 
 // PerformPaint implements ObjectWithChildren.
-func (f *Flex) PerformPaint(p *Painter, scene *jello.Scene) {
+func (f *Flex) PerformPaint(p *Painter) {
 	for _, child := range f.children {
-		p.PaintAt(child, scene, child.Handle().Offset)
+		p.PaintAt(child, child.Handle().Offset)
 	}
 }
 

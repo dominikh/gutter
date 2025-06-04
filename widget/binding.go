@@ -7,14 +7,15 @@ package widget
 
 import (
 	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/wsi"
-	"honnef.co/go/jello"
 )
 
 func RunApp(sys *wsi.System, win wsi.Window, app Widget) *Binding {
 	b := NewBinding(sys, win)
 	b.rootWidget = app
+	b.AttachRootWidget(b.rootWidget)
 	// b.scheduleWarmUpFrame()
 	return b
 }
@@ -43,15 +44,15 @@ func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 	return b
 }
 
-func (b *Binding) DrawFrame(ev *wsi.RedrawRequested, scene *jello.Scene) {
+func (b *Binding) DrawFrame(ev *wsi.RedrawRequested, rec gfx.Recorder) {
 	debug.Assert(!b.buildOwner.inDrawFrame)
 	b.buildOwner.inDrawFrame = true
-	b.AttachRootWidget(b.rootWidget)
+	// b.AttachRootWidget(b.rootWidget)
 	b.Renderer.RunFrameCallbacks(ev.When)
 	if b.renderViewElement != nil {
 		b.buildOwner.BuildScope(nil)
 	}
-	b.Renderer.DrawFrame(scene)
+	b.Renderer.DrawFrame(rec)
 	b.buildOwner.finalizeTree()
 	b.buildOwner.inDrawFrame = false
 }

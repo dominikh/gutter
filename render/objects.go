@@ -13,10 +13,10 @@ import (
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/lottie/lottie_model"
+	"honnef.co/go/gutter/lottie/lottie_renderer"
 	"honnef.co/go/gutter/maybe"
-	"honnef.co/go/jello"
-	"honnef.co/go/jello/gfx"
 )
 
 var _ Object = (*FillColor)(nil)
@@ -47,15 +47,11 @@ func (w *Clip) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements Object.
-func (w *Clip) PerformPaint(p *Painter, scene *jello.Scene) {
-	scene.PushLayer(
-		gfx.BlendMode{},
-		1,
-		curve.Identity,
-		curve.NewRectFromPoints(curve.Pt(0, 0), curve.Point(w.Handle().Size().AsVec2())).Path(0.1),
-	)
-	defer scene.PopLayer()
-	p.PaintAt(w.Child, scene, curve.Point{})
+func (w *Clip) PerformPaint(p *Painter) {
+	p.Canvas.PushClip(curve.NewRectFromOrigin(curve.Point{}, w.Handle().Size()))
+	defer p.Canvas.PopLayer()
+
+	p.PaintAt(w.Child, curve.Point{})
 }
 
 // FillColor fills an infinite plane with the provided color.
@@ -85,14 +81,12 @@ func (c *FillColor) PerformLayout() curve.Size {
 func (c *FillColor) SizedByParent() {}
 
 // PerformPaint implements Object.
-func (c *FillColor) PerformPaint(_ *Painter, scene *jello.Scene) {
-	scene.Fill(
-		gfx.NonZero,
-		curve.Identity,
-		gfx.SolidBrush{Color: c.color},
-		curve.Identity,
-		curve.NewRectFromPoints(curve.Pt(-1e9, -1e9), curve.Pt(1e9, 1e9)).Path(0.1),
-	)
+func (c *FillColor) PerformPaint(p *Painter) {
+	panic("not implemented")
+	// p.Canvas.Fill(
+	// 	curve.NewRectFromPoints(curve.Pt(0, 0), curve.Pt(float64(p.Canvas.Width()), float64(p.Canvas.Height()))),
+	// 	sparse.Solid(c.color),
+	// )
 }
 
 type Inset struct {
@@ -152,8 +146,8 @@ func (pad *Padding) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements Object.
-func (pad *Padding) PerformPaint(p *Painter, scene *jello.Scene) {
-	p.PaintAt(pad.Child, scene, pad.Child.Handle().Offset)
+func (pad *Padding) PerformPaint(p *Painter) {
+	p.PaintAt(pad.Child, pad.Child.Handle().Offset)
 }
 
 // TODO(dh): Alignment should eventually move to a lower level package
@@ -273,9 +267,9 @@ func (p *PositionedBox) alignChild(ourSize, childSize curve.Size) {
 }
 
 // PerformPaint implements ObjectWithChildren.
-func (pb *PositionedBox) PerformPaint(p *Painter, scene *jello.Scene) {
+func (pb *PositionedBox) PerformPaint(p *Painter) {
 	debug.Assert(pb.Child != nil)
-	p.PaintAt(pb.Child, scene, pb.Child.Handle().Offset)
+	p.PaintAt(pb.Child, pb.Child.Handle().Offset)
 }
 
 type Constrained struct {
@@ -307,9 +301,9 @@ func (c *Constrained) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements Object.
-func (c *Constrained) PerformPaint(p *Painter, scene *jello.Scene) {
+func (c *Constrained) PerformPaint(p *Painter) {
 	if c.Child != nil {
-		p.PaintAt(c.Child, scene, curve.Point{})
+		p.PaintAt(c.Child, curve.Point{})
 	}
 }
 
@@ -329,21 +323,18 @@ func (o *Opacity) PerformLayout() curve.Size {
 }
 
 // PerformPaint implements Object.
-func (o *Opacity) PerformPaint(p *Painter, scene *jello.Scene) {
+func (o *Opacity) PerformPaint(p *Painter) {
 	switch o.opacity {
 	case 0:
 		return
 	case 1:
-		p.PaintAt(o.Child, scene, curve.Point{})
+		p.PaintAt(o.Child, curve.Point{})
 	default:
-		scene.PushLayer(
-			gfx.BlendMode{},
-			o.opacity,
-			curve.Identity,
-			curve.NewRectFromPoints(curve.Pt(-1e9, -1e9), curve.Pt(1e9, 1e9)).Path(0.1),
-		)
-		defer scene.PopLayer()
-		p.PaintAt(o.Child, scene, curve.Point{})
+		p.Canvas.PushLayer(gfx.Layer{
+			Opacity: o.opacity,
+		})
+		defer p.Canvas.PopLayer()
+		p.PaintAt(o.Child, curve.Point{})
 	}
 }
 
@@ -395,13 +386,16 @@ func (b *FittedBox) PerformLayout() (size curve.Size) {
 }
 
 // PerformPaint implements Object.
-func (b *FittedBox) PerformPaint(p *Painter, scene *jello.Scene) {
-	if b.Child == nil || b.Size() == curve.Sz(0, 0) || b.Child.Handle().Size() == curve.Sz(0, 0) {
+func (b *FittedBox) PerformPaint(p *Painter) {
+	if b.Child == nil {
 		return
 	}
 
 	childSize := b.Child.Handle().Size()
 	sizes := applyBoxFit(b.fit, childSize, b.Size())
+	if sizes == (fittedSizes{}) {
+		return
+	}
 	scaleX := sizes.Destination.Width / sizes.Source.Width
 	scaleY := sizes.Destination.Height / sizes.Source.Height
 	// TODO(dh): support alignment
@@ -412,17 +406,22 @@ func (b *FittedBox) PerformPaint(p *Painter, scene *jello.Scene) {
 	// TODO(dh): support alignment
 	transform := curve.Scale(scaleX, scaleY)
 
-	if hasVisualOverflow && b.clip {
-		scene.PushLayer(
-			gfx.BlendMode{Mix: gfx.MixClip},
-			1,
-			curve.Identity,
-			destinationRect.Path(0.1),
-		)
-		defer scene.PopLayer()
-	}
-	childScene := p.Paint(b.Child)
-	scene.Append(childScene, transform)
+	// if hasVisualOverflow && b.clip {
+	// 	scene.PushLayer(
+	// 		gfx.BlendMode{Mix: gfx.MixClip},
+	// 		1,
+	// 		curve.Identity,
+	// 		destinationRect.Path(0.1),
+	// 	)
+	// 	defer scene.PopLayer()
+	// }
+	_ = destinationRect
+	_ = hasVisualOverflow
+	p.Canvas.PushTransform(transform)
+	defer p.Canvas.PopTransform()
+	p.PaintAt(b.Child, curve.Point{})
+	// childScene := p.Paint(b.Child)
+	// scene.Append(childScene, transform)
 }
 
 type fittedSizes struct {
@@ -523,12 +522,12 @@ func (l *Lottie) PerformLayout() curve.Size {
 	}
 }
 
-func (l *Lottie) PerformPaint(p *Painter, scene *jello.Scene) {
+func (l *Lottie) PerformPaint(p *Painter) {
 	if l.composition == nil {
 		return
 	}
-	// var r lottie_renderer.Renderer
-	// r.Append(l.composition, l.frame, curve.Identity, 1, scene)
+	var r lottie_renderer.Renderer
+	r.Render(l.composition, l.frame, 1, p.Canvas)
 }
 
 var _ Attacher = (*AnimatedOpacity)(nil)
@@ -557,22 +556,19 @@ func (o *AnimatedOpacity) PerformLayout() (size curve.Size) {
 }
 
 // PerformPaint implements Object.
-func (o *AnimatedOpacity) PerformPaint(p *Painter, scene *jello.Scene) {
+func (o *AnimatedOpacity) PerformPaint(p *Painter) {
 	alpha := o.opacity.Value()
 	switch alpha {
 	case 0:
 		return
 	case 1:
-		p.PaintAt(o.Child, scene, curve.Point{})
+		p.PaintAt(o.Child, curve.Point{})
 	default:
-		scene.PushLayer(
-			gfx.BlendMode{},
-			alpha,
-			curve.Identity,
-			curve.NewRectFromPoints(curve.Pt(-1e9, -1e9), curve.Pt(1e9, 1e9)).Path(0.1),
-		)
-		defer scene.PopLayer()
-		p.PaintAt(o.Child, scene, curve.Point{})
+		p.Canvas.PushLayer(gfx.Layer{
+			Opacity: alpha,
+		})
+		defer p.Canvas.PopLayer()
+		p.PaintAt(o.Child, curve.Point{})
 	}
 }
 

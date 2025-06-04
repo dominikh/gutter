@@ -11,7 +11,6 @@ import (
 	"honnef.co/go/gutter/paint"
 	"honnef.co/go/gutter/text"
 	"honnef.co/go/gutter/text/bidi"
-	"honnef.co/go/jello"
 )
 
 var _ Object = (*Paragraph)(nil)
@@ -58,7 +57,7 @@ func (r *Paragraph) PerformLayout() (size curve.Size) {
 }
 
 // PerformPaint implements Object.
-func (*Paragraph) PerformPaint(p *Painter, scene *jello.Scene) {
+func (*Paragraph) PerformPaint(p *Painter) {
 	panic("unimplemented")
 }
 
