@@ -71,10 +71,6 @@ type Recorder interface {
 
 	Fill(Shape, Paint)
 	Stroke(Shape, curve.Stroke, Paint)
-	// TODO docs
-	//
-	// PlayRecording does not take the current transformation into
-	// consideration. All commands in a recording use absolute coordinates.
 	PlayRecording(Recording)
 
 	// Checkpoint returns a new recorder that copies this recorder's current

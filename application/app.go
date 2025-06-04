@@ -89,7 +89,7 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 			}
 			log.Println("---REPLAY END---")
 		}
-		sparse.PlayRecording(cmds, app.renderer)
+		sparse.PlayRecording(cmds, app.renderer, curve.Identity)
 		log.Printf("played recording in: %s", time.Since(t))
 
 		buf, err := app.win.NextBuffer()
