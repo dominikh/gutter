@@ -27,6 +27,19 @@ type tileBbox struct {
 	tileMin, tileMax tileCoord
 }
 
+func (bbox tileBbox) intersect(other tileBbox) tileBbox {
+	return tileBbox{
+		tileMin: tileCoord{
+			max(bbox.tileMin.tileX, other.tileMin.tileX),
+			max(bbox.tileMin.tileY, other.tileMin.tileY),
+		},
+		tileMax: tileCoord{
+			min(bbox.tileMax.tileX, other.tileMax.tileX),
+			min(bbox.tileMax.tileY, other.tileMax.tileY),
+		},
+	}
+}
+
 type layer struct {
 	// The intersected bounding box after clip
 	bbox tileBbox
@@ -413,6 +426,9 @@ func (ctx *Renderer) popLayer() {
 					popPending = false
 				}
 				xTileRel := x % wideTileWidth
+				if x > min(x2, (xtile+1)*wideTileWidth) {
+					panic("internal error: width overflow")
+				}
 				width := min(x2, (xtile+1)*wideTileWidth) - x
 				if width == 0 {
 					continue
@@ -494,39 +510,35 @@ func (ctx *Renderer) PushClipCompiled(p CompiledPath) {
 	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: p})
 }
 
+func stripsBoundingBox(strips []strip) tileBbox {
+	if len(strips) == 0 {
+		return tileBbox{}
+	}
+
+	y0 := strips[0].stripY()
+	y1 := strips[len(strips)-1].stripY() + 1
+	x0 := strips[0].x / wideTileWidth
+	x1 := x0
+	for i := range len(strips) - 1 {
+		strip := &strips[i]
+		nextStrip := &strips[i+1]
+		width := uint16(nextStrip.col - strip.col)
+		x := strip.x
+		x0 = min(x0, x/wideTileWidth)
+		x1 = max(x1, divCeil(x+width, wideTileWidth))
+	}
+	return tileBbox{
+		tileMin: tileCoord{x0, y0},
+		tileMax: tileCoord{x1, y1},
+	}
+}
+
 func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 	strips := l.Clip.strips
-	var pathBbox tileBbox
-	if len(strips) > 1 {
-		y0 := strips[0].stripY()
-		y1 := strips[len(strips)-1].stripY() + 1
-		x0 := strips[0].x / wideTileWidth
-		x1 := x0
-		for i := range len(strips) - 1 {
-			strip := &strips[i]
-			nextStrip := &strips[i+1]
-			width := uint16(nextStrip.col - strip.col)
-			x := strip.x
-			x0 = min(x0, x/wideTileWidth)
-			x1 = max(x1, divCeil(x+width, wideTileWidth))
-		}
-		pathBbox = tileBbox{
-			tileMin: tileCoord{x0, y0},
-			tileMax: tileCoord{x1, y1},
-		}
-	}
-	parentBbox := ctx.bbox()
+
+	bbox := ctx.bbox()
 	// intersect clip bounding box
-	bbox := tileBbox{
-		tileMin: tileCoord{
-			max(parentBbox.tileMin.tileX, pathBbox.tileMin.tileX),
-			max(parentBbox.tileMin.tileY, pathBbox.tileMin.tileY),
-		},
-		tileMax: tileCoord{
-			min(parentBbox.tileMax.tileX, pathBbox.tileMax.tileX),
-			min(parentBbox.tileMax.tileY, pathBbox.tileMax.tileY),
-		},
-	}
+	bbox = bbox.intersect(stripsBoundingBox(strips))
 
 	// The next bit of code accomplishes the following. For each tile in
 	// the intersected bounding box, it does one of two things depending
