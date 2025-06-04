@@ -17,7 +17,7 @@ import (
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
-	"honnef.co/go/jello/gfx"
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/safeish"
 )
 
@@ -44,34 +44,35 @@ func init() {
 }
 
 var compositeToBlend = [...]gfx.BlendMode{
-	C.HB_PAINT_COMPOSITE_MODE_CLEAR:          {Compose: gfx.ComposeClear},
-	C.HB_PAINT_COMPOSITE_MODE_SRC:            {Compose: gfx.ComposeCopy},
-	C.HB_PAINT_COMPOSITE_MODE_DEST:           {Compose: gfx.ComposeDest},
-	C.HB_PAINT_COMPOSITE_MODE_SRC_OVER:       {Compose: gfx.ComposeSrcOver},
-	C.HB_PAINT_COMPOSITE_MODE_DEST_OVER:      {Compose: gfx.ComposeDestOver},
-	C.HB_PAINT_COMPOSITE_MODE_SRC_IN:         {Compose: gfx.ComposeSrcIn},
-	C.HB_PAINT_COMPOSITE_MODE_DEST_IN:        {Compose: gfx.ComposeDestIn},
-	C.HB_PAINT_COMPOSITE_MODE_SRC_OUT:        {Compose: gfx.ComposeSrcOut},
-	C.HB_PAINT_COMPOSITE_MODE_DEST_OUT:       {Compose: gfx.ComposeDestOut},
-	C.HB_PAINT_COMPOSITE_MODE_SRC_ATOP:       {Compose: gfx.ComposeSrcAtop},
-	C.HB_PAINT_COMPOSITE_MODE_DEST_ATOP:      {Compose: gfx.ComposeDestAtop},
-	C.HB_PAINT_COMPOSITE_MODE_XOR:            {Compose: gfx.ComposeXor},
-	C.HB_PAINT_COMPOSITE_MODE_PLUS:           {Compose: gfx.ComposePlus},
-	C.HB_PAINT_COMPOSITE_MODE_SCREEN:         {Mix: gfx.MixScreen},
-	C.HB_PAINT_COMPOSITE_MODE_OVERLAY:        {Mix: gfx.MixOverlay},
-	C.HB_PAINT_COMPOSITE_MODE_DARKEN:         {Mix: gfx.MixDarken},
-	C.HB_PAINT_COMPOSITE_MODE_LIGHTEN:        {Mix: gfx.MixLighten},
-	C.HB_PAINT_COMPOSITE_MODE_COLOR_DODGE:    {Mix: gfx.MixColorDodge},
-	C.HB_PAINT_COMPOSITE_MODE_COLOR_BURN:     {Mix: gfx.MixColorBurn},
-	C.HB_PAINT_COMPOSITE_MODE_HARD_LIGHT:     {Mix: gfx.MixHardLight},
-	C.HB_PAINT_COMPOSITE_MODE_SOFT_LIGHT:     {Mix: gfx.MixSoftLight},
-	C.HB_PAINT_COMPOSITE_MODE_DIFFERENCE:     {Mix: gfx.MixDifference},
-	C.HB_PAINT_COMPOSITE_MODE_EXCLUSION:      {Mix: gfx.MixExclusion},
-	C.HB_PAINT_COMPOSITE_MODE_MULTIPLY:       {Mix: gfx.MixMultiply},
-	C.HB_PAINT_COMPOSITE_MODE_HSL_HUE:        {Mix: gfx.MixHue},
-	C.HB_PAINT_COMPOSITE_MODE_HSL_SATURATION: {Mix: gfx.MixSaturation},
-	C.HB_PAINT_COMPOSITE_MODE_HSL_COLOR:      {Mix: gfx.MixColor},
-	C.HB_PAINT_COMPOSITE_MODE_HSL_LUMINOSITY: {Mix: gfx.MixLuminosity},
+	C.HB_PAINT_COMPOSITE_MODE_CLEAR:       {Compose: gfx.ComposeClear},
+	C.HB_PAINT_COMPOSITE_MODE_SRC:         {Compose: gfx.ComposeCopy},
+	C.HB_PAINT_COMPOSITE_MODE_DEST:        {Compose: gfx.ComposeDest},
+	C.HB_PAINT_COMPOSITE_MODE_SRC_OVER:    {Compose: gfx.ComposeSrcOver},
+	C.HB_PAINT_COMPOSITE_MODE_DEST_OVER:   {Compose: gfx.ComposeDestOver},
+	C.HB_PAINT_COMPOSITE_MODE_SRC_IN:      {Compose: gfx.ComposeSrcIn},
+	C.HB_PAINT_COMPOSITE_MODE_DEST_IN:     {Compose: gfx.ComposeDestIn},
+	C.HB_PAINT_COMPOSITE_MODE_SRC_OUT:     {Compose: gfx.ComposeSrcOut},
+	C.HB_PAINT_COMPOSITE_MODE_DEST_OUT:    {Compose: gfx.ComposeDestOut},
+	C.HB_PAINT_COMPOSITE_MODE_SRC_ATOP:    {Compose: gfx.ComposeSrcAtop},
+	C.HB_PAINT_COMPOSITE_MODE_DEST_ATOP:   {Compose: gfx.ComposeDestAtop},
+	C.HB_PAINT_COMPOSITE_MODE_XOR:         {Compose: gfx.ComposeXor},
+	C.HB_PAINT_COMPOSITE_MODE_PLUS:        {Compose: gfx.ComposePlus},
+	C.HB_PAINT_COMPOSITE_MODE_SCREEN:      {Mix: gfx.MixScreen},
+	C.HB_PAINT_COMPOSITE_MODE_OVERLAY:     {Mix: gfx.MixOverlay},
+	C.HB_PAINT_COMPOSITE_MODE_DARKEN:      {Mix: gfx.MixDarken},
+	C.HB_PAINT_COMPOSITE_MODE_LIGHTEN:     {Mix: gfx.MixLighten},
+	C.HB_PAINT_COMPOSITE_MODE_COLOR_DODGE: {Mix: gfx.MixColorDodge},
+	C.HB_PAINT_COMPOSITE_MODE_COLOR_BURN:  {Mix: gfx.MixColorBurn},
+	C.HB_PAINT_COMPOSITE_MODE_HARD_LIGHT:  {Mix: gfx.MixHardLight},
+	C.HB_PAINT_COMPOSITE_MODE_SOFT_LIGHT:  {Mix: gfx.MixSoftLight},
+	C.HB_PAINT_COMPOSITE_MODE_DIFFERENCE:  {Mix: gfx.MixDifference},
+	C.HB_PAINT_COMPOSITE_MODE_EXCLUSION:   {Mix: gfx.MixExclusion},
+	C.HB_PAINT_COMPOSITE_MODE_MULTIPLY:    {Mix: gfx.MixMultiply},
+	// XXX support these
+	// C.HB_PAINT_COMPOSITE_MODE_HSL_HUE:        {Mix: gfx.MixHue},
+	// C.HB_PAINT_COMPOSITE_MODE_HSL_SATURATION: {Mix: gfx.MixSaturation},
+	// C.HB_PAINT_COMPOSITE_MODE_HSL_COLOR:      {Mix: gfx.MixColor},
+	// C.HB_PAINT_COMPOSITE_MODE_HSL_LUMINOSITY: {Mix: gfx.MixLuminosity},
 }
 
 type GlyphPainter interface {
@@ -84,7 +85,7 @@ type GlyphPainter interface {
 	PushClipGlyph(glyph int32)
 	PushClipRect(rect curve.Rect)
 	PopClip()
-	Fill(b gfx.Brush)
+	Fill(b gfx.Paint)
 	Image(img image.Image, slant float64, extents GlyphExtents) bool
 }
 
@@ -153,7 +154,7 @@ func linearGradient(
 		// XXX set Extend
 	}
 
-	painter.Fill(gfx.GradientBrush{Gradient: g})
+	painter.Fill(g)
 }
 
 //export radialGradient
@@ -176,7 +177,7 @@ func radialGradient(
 		// XXX set Extend,
 	}
 	painter := cgo.Handle(paintData).Value().(*painter)
-	painter.Fill(gfx.GradientBrush{Gradient: g})
+	painter.Fill(g)
 }
 
 //export sweepGradient
@@ -339,9 +340,9 @@ func colorFunc(
 ) {
 	painter := cgo.Handle(paintData).Value().(*painter)
 	if isForeground != 0 {
-		painter.Fill(gfx.SolidBrush{Color: painter.Foreground()})
+		painter.Fill(gfx.Solid(painter.Foreground()))
 	} else {
-		painter.Fill(gfx.SolidBrush{Color: hbColorToColor(c)})
+		painter.Fill(gfx.Solid(hbColorToColor(c)))
 	}
 }
 
@@ -378,16 +379,16 @@ func pushClipRectangle(
 	cgo.Handle(paintData).Value().(*painter).PushClipRect(rect)
 }
 
-func colorLineStops(l *C.hb_color_line_t) []gfx.ColorStop {
+func colorLineStops(l *C.hb_color_line_t) []gfx.GradientStop {
 	var n C.uint
 	cnt := C.hb_color_line_get_color_stops(l, 0, &n, nil)
 	cstops := make([]C.hb_color_stop_t, cnt)
 	n = cnt
 	C.hb_color_line_get_color_stops(l, 0, &n, &cstops[0])
 
-	stops := make([]gfx.ColorStop, n)
+	stops := make([]gfx.GradientStop, n)
 	for i, cstop := range cstops {
-		stop := gfx.ColorStop{
+		stop := gfx.GradientStop{
 			Offset: float32(cstop.offset),
 		}
 		if cstop.is_foreground == 0 {

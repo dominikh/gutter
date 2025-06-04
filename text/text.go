@@ -32,9 +32,8 @@ package text
 // ParagraphBuilder.splitByFont uses fontdb.Faces and FontLoader to look up font
 // families and create fonts.
 //
-// Paragraph splits the runs into multiple lines based on the max width,
-// answers queries about metrics, and knows how to paint the runs into a Jello
-// scene.
+// Paragraph splits the runs into multiple lines based on the max width, answers
+// queries about metrics, and knows how to paint the runs into a gfx.Recorder.
 //
 // TextPainter is a RenderObject (FIXME: or is it?) that represents text as a
 // tree of InlineSpan (which may be TextSpans or placeholders). It uses
@@ -121,6 +120,7 @@ import (
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/fontdb"
+	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/internal/harfbuzz"
 	xlanguage "honnef.co/go/gutter/internal/language"
 	"honnef.co/go/gutter/internal/tinylfu"
@@ -128,8 +128,6 @@ import (
 	"honnef.co/go/gutter/opentype"
 	"honnef.co/go/gutter/text/bidi"
 	"honnef.co/go/gutter/text/linebreak"
-	"honnef.co/go/jello"
-	"honnef.co/go/jello/gfx"
 )
 
 // XXX make this a dynamic setting
@@ -258,7 +256,7 @@ type Style struct {
 	DontInherit  bool
 	Fill         maybe.Option[color.Color]
 	Stroke       maybe.Option[Stroke]
-	Background   maybe.Option[gfx.Brush]
+	Background   maybe.Option[gfx.Paint]
 	FontFamilies maybe.Option[[]string]
 
 	// The font size, in logical pixels.
@@ -279,7 +277,7 @@ type Style struct {
 	LeadingDistribution maybe.Option[LeadingDistribution]
 	Language            maybe.Option[xlanguage.Tag]
 	Decoration          maybe.Option[Decoration]
-	DecorationBrush     maybe.Option[gfx.Brush]
+	DecorationBrush     maybe.Option[gfx.Paint]
 	DecorationStyle     maybe.Option[DecorationStyle]
 	Overflow            maybe.Option[Overflow]
 }
@@ -406,7 +404,8 @@ type Paragraph struct {
 	extents [][]harfbuzz.GlyphExtents
 	lb      linebreak.Result
 
-	filledGlyphCache map[filledGlyphCacheKey]*jello.Scene
+	// OPT(dh): this only caches recordings, not sparse strips.
+	filledGlyphCache map[filledGlyphCacheKey]gfx.Recording
 }
 
 type filledGlyphCacheKey struct {
@@ -661,7 +660,9 @@ func (p *Paragraph) Layout(maxWidth float64) {
 	p.lines = lines
 }
 
-func (p *Paragraph) Paint(scene *jello.Scene) {
+func (p *Paragraph) Paint(rec gfx.Recorder) {
+	rec = rec.Checkpoint()
+
 	// XXX figure out where this should get called from
 	// XXX get actual available width
 	const maxWidth = 601
@@ -747,13 +748,16 @@ func (p *Paragraph) Paint(scene *jello.Scene) {
 						font:  run.font,
 						color: fill,
 					}
-					glyphScene, ok := p.filledGlyphCache[key]
+					glyphRec, ok := p.filledGlyphCache[key]
 					if !ok {
-						glyphScene = new(jello.Scene)
+						glyphScene := gfx.NewSimpleRecorder()
 						run.font.PaintGlyph(fill, glyph.Codepoint, glyphScene)
-						p.filledGlyphCache[key] = glyphScene
+						glyphRec = glyphScene.Finish()
+						p.filledGlyphCache[key] = glyphRec
 					}
-					scene.Append(glyphScene, scale.ThenTranslate(curve.Vec2(glyphOffset)))
+					rec.PushTransform(scale.ThenTranslate(curve.Vec2(glyphOffset)))
+					rec.PlayRecording(glyphRec)
+					rec.PopTransform()
 				}
 
 				if stroke, ok := run.runeStyles[int(glyph.Cluster)-run.Start].Stroke.Get(); ok {
@@ -766,27 +770,24 @@ func (p *Paragraph) Paint(scene *jello.Scene) {
 					for i := range style.DashPattern {
 						style.DashPattern[i] /= scaleFactor
 					}
-					var glyphScene jello.Scene
+					glyphScene := gfx.NewSimpleRecorder()
+					glyphScene.PushTransform(scale.ThenTranslate(curve.Vec2(glyphOffset)))
 					glyphScene.Stroke(
-						style,
-						scale,
-						gfx.SolidBrush{Color: stroke.Color},
-						curve.Identity,
 						path,
+						style,
+						gfx.Solid(stroke.Color),
 					)
-					scene.Append(&glyphScene, curve.Translate(curve.Vec2(glyphOffset)))
+					glyphScene.PopTransform()
+					rec.PlayRecording(glyphScene.Finish())
 				}
 
 				if debugText {
-					scene.Fill(
-						gfx.NonZero,
-						curve.Identity,
-						gfx.SolidBrush{Color: color.Make(color.SRGB, 1, 0, 0, 1)},
-						curve.Identity,
+					rec.Fill(
 						curve.Circle{
 							Center: glyphOffset,
 							Radius: 1.5,
-						}.Path(0.1),
+						},
+						gfx.Solid(color.Make(color.SRGB, 1, 0, 0, 1)),
 					)
 
 					bbox := curve.NewRectFromOrigin(
@@ -798,12 +799,9 @@ func (p *Paragraph) Paint(scene *jello.Scene) {
 					if glyph.Flags()&harfbuzz.GlyphFlagsUnsafeToBreak != 0 {
 						c = color.Make(color.SRGB, 0, 0, 1, 0.5)
 					}
-					scene.Fill(
-						gfx.NonZero,
-						curve.Identity,
-						gfx.SolidBrush{Color: c},
-						curve.Identity,
-						bbox.Path(0.1),
+					rec.Fill(
+						bbox,
+						gfx.Solid(c),
 					)
 				}
 
@@ -816,12 +814,10 @@ func (p *Paragraph) Paint(scene *jello.Scene) {
 					p0 := oldOrigin
 					p1 := origin
 					p1.Y += 5
-					scene.Stroke(
+					rec.Stroke(
+						curve.NewRectFromPoints(curve.Point(p0), curve.Point(p1)),
 						curve.DefaultStroke.WithJoin(curve.MiterJoin),
-						curve.Identity,
-						gfx.SolidBrush{Color: color.Make(color.SRGB, 1, 0, 0, 1)},
-						curve.Identity,
-						curve.NewRectFromPoints(curve.Point(p0), curve.Point(p1)).Path(0.1),
+						gfx.Solid(color.Make(color.SRGB, 1, 0, 0, 1)),
 					)
 				}
 			}
@@ -860,7 +856,7 @@ type glyphPainter struct {
 	font *Font
 	fg   color.Color
 
-	layers     []jello.Scene
+	layers     []gfx.Recorder
 	transforms []curve.Affine
 }
 
@@ -869,19 +865,15 @@ func (g *glyphPainter) Foreground() color.Color {
 }
 
 // Fill implements harfbuzz.GlyphPainter.
-func (g *glyphPainter) Fill(b gfx.Brush) {
+func (g *glyphPainter) Fill(b gfx.Paint) {
 	// XXX guard against empty layers
-	bt := curve.Identity
 	g.layers[len(g.layers)-1].Fill(
-		gfx.NonZero,
-		curve.Identity,
-		b,
-		bt,
 		// FIXME use the glyph's clip box, if available
 		curve.NewRectFromPoints(
 			curve.Pt(-100_000, -100_000),
 			curve.Pt(100_000, 100_000),
-		).Path(0.1),
+		),
+		b,
 	)
 }
 
@@ -901,23 +893,21 @@ func (g *glyphPainter) Image(img image.Image, slant float64, extents harfbuzz.Gl
 func (g *glyphPainter) PushClipGlyph(glyph int32) {
 	path := g.font.GlyphOutline(glyph)
 	// XXX guard against empty g.transforms
-	g.layers[len(g.layers)-1].PushLayer(
-		gfx.BlendMode{Mix: gfx.MixClip},
-		1,
-		g.transforms[len(g.transforms)-1],
-		path,
-	)
+	// XXX get rid of g.transforms
+	rec := g.layers[len(g.layers)-1]
+	rec.PushTransform(g.transforms[len(g.transforms)-1])
+	rec.PushClip(path)
+	rec.PopTransform()
 }
 
 // PushClipRect implements harfbuzz.GlyphPainter.
 func (g *glyphPainter) PushClipRect(rect curve.Rect) {
 	// XXX guard against empty g.transforms
-	g.layers[len(g.layers)-1].PushLayer(
-		gfx.BlendMode{Mix: gfx.MixClip},
-		1,
-		g.transforms[len(g.transforms)-1],
-		rect.Path(0.1),
-	)
+	// XXX get rid of g.transforms
+	rec := g.layers[len(g.layers)-1]
+	rec.PushTransform(g.transforms[len(g.transforms)-1])
+	rec.PushClip(rect)
+	rec.PopTransform()
 }
 
 // PopClip implements harfbuzz.GlyphPainter.
@@ -928,7 +918,7 @@ func (g *glyphPainter) PopClip() {
 
 // PushGroup implements harfbuzz.GlyphPainter.
 func (g *glyphPainter) PushGroup() {
-	g.layers = append(g.layers, jello.Scene{})
+	g.layers = append(g.layers, gfx.NewSimpleRecorder())
 }
 
 // PopGroup implements harfbuzz.GlyphPainter.
@@ -940,19 +930,19 @@ func (g *glyphPainter) PopGroup(mode gfx.BlendMode) {
 		g.layers = g.layers[:len(g.layers)-1]
 		return
 	}
-	parent := &g.layers[len(g.layers)-2]
-	top := &g.layers[len(g.layers)-1]
+	parent := g.layers[len(g.layers)-2]
+	top := g.layers[len(g.layers)-1]
 	g.layers = g.layers[:len(g.layers)-1]
 	parent.PushLayer(
-		mode,
-		1,
-		curve.Identity,
-		curve.NewRectFromPoints(
-			curve.Pt(-100_000, -100_000),
-			curve.Pt(100_000, 100_000),
-		).Path(0.1),
+		gfx.Layer{
+			BlendMode: mode,
+			Opacity:   1,
+		},
 	)
-	parent.Append(top, g.transforms[len(g.transforms)-1])
+	// XXX do proper transform handling
+	parent.PushTransform(g.transforms[len(g.transforms)-1])
+	parent.PlayRecording(top.Finish())
+	parent.PopTransform()
 	parent.PopLayer()
 }
 
@@ -1004,16 +994,16 @@ type Font struct {
 	glyphCache *tinylfu.T[int32, curve.BezPath]
 }
 
-func (f *Font) PaintGlyph(fg color.Color, gid int32, scene *jello.Scene) {
+func (f *Font) PaintGlyph(fg color.Color, gid int32, rec gfx.Recorder) {
 	gp := &glyphPainter{
 		font:       f,
 		fg:         fg,
 		transforms: []curve.Affine{curve.Identity},
-		layers:     []jello.Scene{{}},
+		layers:     []gfx.Recorder{gfx.NewSimpleRecorder()},
 	}
 	f.hb.PaintGlyph(gid, gp)
 	// XXX guard against mismatched group/pop group
-	scene.Append(&gp.layers[0], curve.Identity)
+	rec.PlayRecording(gp.layers[0].Finish())
 }
 
 func (f *Font) GlyphOutline(gid int32) curve.BezPath {
@@ -1218,7 +1208,7 @@ func (pb *ParagraphBuilder) Build(fdb *fontdb.Faces, fl *FontLoader) *Paragraph 
 	up := &Paragraph{
 		style:            pb.style,
 		text:             pb.text,
-		filledGlyphCache: make(map[filledGlyphCacheKey]*jello.Scene),
+		filledGlyphCache: make(map[filledGlyphCacheKey]gfx.Recording),
 	}
 	up.init()
 	return up
