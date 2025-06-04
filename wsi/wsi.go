@@ -7,8 +7,10 @@ package wsi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"os"
+	"slices"
 	"sync"
 	"time"
 	"unsafe"
@@ -74,6 +76,7 @@ type waylandDsp struct {
 	dcm     *wl.XdgDecorationManager
 	pres    *wl.WpPresentation
 	porter  *wl.WpViewporter
+	shm     *wl.Shm
 
 	// seat waylandSeat
 }
@@ -93,6 +96,8 @@ func clampVersion(minDesired, maxDesired, supported uint32) uint32 {
 }
 
 func newWaylandDsp() (*waylandDsp, error) {
+	// XXX properly disconnect when we return an error
+
 	dsp, err := wl.Connect()
 	if err != nil {
 		return nil, err
@@ -170,12 +175,56 @@ func newWaylandDsp() (*waylandDsp, error) {
 		dcm:     dcm,
 		pres:    pres,
 		porter:  porter,
+		shm:     shm,
 	}, nil
+}
+
+type Buffer struct {
+	wl   *wl.Buffer
+	busy bool
+	size PhysicalSize
+	Data []byte
+}
+
+func (buf *Buffer) destroy() {
+	buf.wl.Destroy()
+	unix.Munmap(buf.Data)
+	buf.Data = nil
+}
+
+func (dsp *waylandDsp) makeBuffer(sz PhysicalSize, format wl.ShmFormat, size, stride int) (*Buffer, error) {
+	// TODO(dh): compute size and stride from width, height, and format
+
+	fd, err := unix.MemfdCreate("window", unix.MFD_CLOEXEC)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't make buffer: %w", err)
+	}
+	defer unix.Close(fd)
+	if err := unix.Ftruncate(fd, int64(size)); err != nil {
+		return nil, fmt.Errorf("couldn't resize buffer: %w", err)
+	}
+	data, err := unix.Mmap(fd, 0, size, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't mmap buffer: %w", err)
+	}
+	pool := dsp.shm.CreatePool(int32(fd), int32(size))
+	defer pool.Destroy()
+
+	buf := &Buffer{
+		wl:   pool.CreateBuffer(0, int32(sz.Width), int32(sz.Height), int32(stride), format),
+		size: sz,
+		Data: data,
+	}
+	buf.wl.OnRelease = func() {
+		buf.busy = false
+	}
+
+	return buf, nil
 }
 
 var errPollHUP = errors.New("remote hung up")
 
-func (sys *System) poll(ctx context.Context, dsp *wl.Display, out chan pollResult, in chan struct{}) (err error) {
+func (sys *System) poll(ctx context.Context, dsp *wl.Display, results chan pollResult, trigger chan struct{}) (err error) {
 	quitR, quitW, err := os.Pipe()
 	if err != nil {
 		return err
@@ -214,12 +263,12 @@ func (sys *System) poll(ctx context.Context, dsp *wl.Display, out chan pollResul
 		}
 
 		select {
-		case out <- pollResult{fds: fds}:
+		case results <- pollResult{fds: fds}:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 		select {
-		case <-in:
+		case <-trigger:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -230,12 +279,10 @@ type pollResult struct {
 	fds []unix.PollFd
 }
 
-type pollInstruction struct{}
-
 func (sys *System) Run(ctx context.Context) (err error) {
 	dsp, err := newWaylandDsp()
 	if err != nil {
-		return err
+		return fmt.Errorf("couldn't connect to Wayland: %w", err)
 	}
 	sys.wl = dsp
 	defer sys.cleanup()
@@ -246,13 +293,13 @@ func (sys *System) Run(ctx context.Context) (err error) {
 	}
 	defer dsp.dsp.CancelReadIfPrepared()
 
-	pollOut := make(chan pollResult)
-	pollIn := make(chan struct{})
+	pollResults := make(chan pollResult)
+	pollTrigger := make(chan struct{})
 	pollErr := make(chan error, 1)
 	pollCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 	go func() {
-		err := sys.poll(pollCtx, dsp.dsp, pollOut, pollIn)
+		err := sys.poll(pollCtx, dsp.dsp, pollResults, pollTrigger)
 		switch err {
 		case context.Canceled, context.DeadlineExceeded:
 			// Do nothing. We're the reason the context got cancelled.
@@ -281,9 +328,9 @@ func (sys *System) Run(ctx context.Context) (err error) {
 			// The poll syscall failed, which is catastrophic. We'll try our
 			// best to clean up, but any pending reads and writes will get
 			// discarded.
-			return err
-		case out := <-pollOut:
-			fds := out.fds
+			return fmt.Errorf("poll failed: %w", err)
+		case res := <-pollResults:
+			fds := res.fds
 			if fds[0].Revents&unix.POLLIN != 0 {
 				// Read all available data.
 				err := dsp.dsp.ReadEvents()
@@ -301,7 +348,7 @@ func (sys *System) Run(ctx context.Context) (err error) {
 						// We've been expecting this error.
 						return ctx.Err()
 					} else {
-						return err
+						return fmt.Errorf("couldn't read events: %w", err)
 					}
 				}
 				// Dispatch all events and prepare us for the next iteration of
@@ -348,7 +395,7 @@ func (sys *System) Run(ctx context.Context) (err error) {
 			}
 
 			// Start next round of polling.
-			pollIn <- struct{}{}
+			pollTrigger <- struct{}{}
 
 		case <-done:
 			// Context was cancelled. Flush any remaining writes, read and
@@ -371,6 +418,7 @@ func (sys *System) Run(ctx context.Context) (err error) {
 			for win := range sys.requestedFrames {
 				win.requestFrameNow()
 			}
+			clear(sys.requestedFrames)
 			sys.mu.Unlock()
 			dsp.dsp.Flush()
 
@@ -441,6 +489,14 @@ func (win *WaylandWindow) redraw(d time.Duration) {
 	)
 }
 
+func (win *WaylandWindow) Present(buf *Buffer) {
+	buf.busy = true
+	win.surf.Attach(buf.wl)
+	// XXX let client decide what's damaged
+	win.surf.DamageBuffer(0, 0, int32(buf.size.Width), int32(buf.size.Height))
+	win.surf.Commit()
+}
+
 func (win *WaylandWindow) onFrame(ms uint32) {
 	// TODO(dh): libwayland should be responsible for giving us the right
 	// argument type.
@@ -476,6 +532,7 @@ func (win *WaylandWindow) requestFrameNow() {
 func (win *WaylandWindow) SetSize(sz LogicalSize) {
 	win.calledSetSize = true
 	win.size = sz
+	win.needNewBuffers = true
 	if win.port != nil {
 		win.port.SetDestination(sz.Width, sz.Height)
 	} else {
@@ -513,6 +570,15 @@ func (win *WaylandWindow) SetScale(scale float64) float64 {
 	}
 }
 
+func (win *WaylandWindow) PhysicalSize() PhysicalSize {
+	// XXX ensure Wayland and us agree on rounding behavior
+	// XXX is win.scale affected by SetScale? it doesn't seem to be
+	return PhysicalSize{
+		int(float64(win.size.Width) * win.scale),
+		int(float64(win.size.Height) * win.scale),
+	}
+}
+
 func emitResizedEvent(win *WaylandWindow, ev Resized) {
 	win.calledSetSize = false
 	win.calledSetScale = false
@@ -544,6 +610,15 @@ func (win *WaylandWindow) setup() {
 	}
 	win.xdgSurf.OnConfigure = func(serial uint32) {
 		changedSize := win.size.Width != int(newWidth) || win.size.Height != int(newHeight) || first
+
+		if !first && changedSize {
+			// Requesting a new frame requires committing the surface. We don't
+			// want to commit the viewport updates that result from changing the
+			// size, so we request the frame before we emit the resized event.
+			win.requestFrameNow()
+			win.dsp.Flush()
+		}
+
 		if changedSize {
 			lsz := LogicalSize{
 				Width:  int(newWidth),
@@ -557,15 +632,12 @@ func (win *WaylandWindow) setup() {
 				},
 			)
 		}
+
+		win.xdgSurf.AckConfigure(serial)
 		if first {
 			first = false
-			win.xdgSurf.AckConfigure(serial)
 			// XXX 0 isn't great, e.g. if the app wants to fade in when starting
 			win.redraw(0)
-		} else if changedSize {
-			win.requestFrameNow()
-			win.dsp.Flush()
-			win.xdgSurf.AckConfigure(serial)
 		}
 	}
 
@@ -579,7 +651,6 @@ func (win *WaylandWindow) setup() {
 			mem.Make(&win.sys.eventArena, CloseRequested{}),
 		)
 	}
-
 }
 
 func (sys *System) CreateWindow() Window {
@@ -626,6 +697,9 @@ type WaylandWindow struct {
 	size    LogicalSize
 	scale   float64
 
+	needNewBuffers bool
+	buffers        []*Buffer
+
 	// temporary state used by emitResizedEvent
 	calledSetSize  bool
 	calledSetScale bool
@@ -636,12 +710,47 @@ type WaylandWindow struct {
 	frameScheduled bool
 }
 
+func (w *WaylandWindow) NextBuffer() (*Buffer, error) {
+	sz := w.PhysicalSize()
+	if w.needNewBuffers {
+		w.needNewBuffers = false
+		for i, buf := range w.buffers {
+			// XXX this delays deleting currently busy buffers until the next time needNewBuffers is true
+
+			// XXX can we destroy a busy buffer and wayland will take care of it?
+			if !buf.busy && buf.size != sz {
+				buf.destroy()
+				w.buffers[i] = nil
+			}
+		}
+		w.buffers = slices.DeleteFunc(w.buffers, func(buf *Buffer) bool { return buf == nil })
+	}
+
+	for _, buf := range w.buffers {
+		if !buf.busy {
+			return buf, nil
+		}
+	}
+
+	// XXX make format configurable
+	buf, err := w.sys.wl.makeBuffer(sz, wl.ShmFormatAbgr8888, sz.Width*sz.Height*1*4, sz.Width*1*4)
+	if err != nil {
+		return nil, err
+	}
+	w.buffers = append(w.buffers, buf)
+	return buf, nil
+}
+
 func (w *WaylandWindow) Display() unsafe.Pointer {
 	return w.dsp.Handle()
 }
 
 func (w *WaylandWindow) Surface() unsafe.Pointer {
 	return w.surf.Handle()
+}
+
+func (w *WaylandWindow) Attach(buf *wl.Buffer) {
+	w.surf.Attach(buf)
 }
 
 func (sys *System) EmitEvent(win Window, ev any) {
@@ -652,6 +761,7 @@ type Window interface {
 	RequestFrame()
 	SetSize(LogicalSize)
 	SetScale(float64) float64
+	PhysicalSize() PhysicalSize
 }
 
 type EventInitialized struct{}

@@ -62,5 +62,9 @@ honnef.co/go/jello v0.0.0-20250521161253-6b746b01ce5a h1:SdhriEBTebDFUBoEncl3VCl
 honnef.co/go/jello v0.0.0-20250521161253-6b746b01ce5a/go.mod h1:kxj80J9QERcJRB+U4SdxNzMekK7WsK+2NuqHVGwtUjg=
 honnef.co/go/libwayland v0.0.0-20240816012442-83394039f572 h1:CokiuyockpxOzZ7zFJNXS1ilIP3TKuf0emo4j5iOZes=
 honnef.co/go/libwayland v0.0.0-20240816012442-83394039f572/go.mod h1:c5RTW6EvHWvEOchxyz4999S79O3vukA53bDmH2iXXZs=
+honnef.co/go/libwayland v0.0.0-20241105193046-1a745b4bf6fe h1:C54lX08Dw66tDl+d7ATSsMddl4dk17blimG2RGACLks=
+honnef.co/go/libwayland v0.0.0-20241105193046-1a745b4bf6fe/go.mod h1:c5RTW6EvHWvEOchxyz4999S79O3vukA53bDmH2iXXZs=
+honnef.co/go/libwayland v0.0.0-20250604131836-2b956ec1bdb1 h1:ckGf9yz5u1gwH3ZqlmQMOXUX2G8GGzW4TatloMjKn28=
+honnef.co/go/libwayland v0.0.0-20250604131836-2b956ec1bdb1/go.mod h1:c5RTW6EvHWvEOchxyz4999S79O3vukA53bDmH2iXXZs=
 honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2 h1:EdPfUaQ2twptNroHDLF0kACfXJB0LbEyHzw8iJwoT+8=
 honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2/go.mod h1:6TmSwH8eepkcwN0dPPAkTpxwjEJzgJq5Bv2HD3HHAP8=
