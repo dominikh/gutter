@@ -489,11 +489,11 @@ func (win *WaylandWindow) redraw(d time.Duration) {
 	)
 }
 
-func (win *WaylandWindow) Present(buf *Buffer) {
+func (win *WaylandWindow) Present(buf *Buffer, x0, y0, x1, y1 int) {
 	buf.busy = true
 	win.surf.Attach(buf.wl)
-	// XXX let client decide what's damaged
-	win.surf.DamageBuffer(0, 0, int32(buf.size.Width), int32(buf.size.Height))
+	// TODO(dh): we should probably support multiple damage regions per buffer
+	win.surf.DamageBuffer(int32(x0), int32(y0), int32(x1), int32(y1))
 	win.surf.Commit()
 }
 

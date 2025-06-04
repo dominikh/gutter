@@ -110,7 +110,7 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 		app.renderer.Render(uint16(sz.Width), uint16(sz.Height), packer)
 		log.Printf("rendered to pixmap in: %s", time.Since(t))
 
-		app.win.Present(buf)
+		app.win.Present(buf, 0, 0, sz.Width, sz.Height)
 	case widgets.CallbackEvent:
 	default:
 		panic(fmt.Sprintf("internal error: unhandled event type %T", ev))
