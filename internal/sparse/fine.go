@@ -195,7 +195,7 @@ func (f *fine) runCmd(cmd cmd) {
 		f.fill(int(cmd.x), int(cmd.width), cmd.paint)
 	case cmdAlphaFill:
 		f.alphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.paint)
-	case cmdPushClip:
+	case cmdPushLayer:
 		f.stats.pushClips++
 		var scratch *fineScratch
 		if len(f.freeScratches) > 0 {
@@ -207,16 +207,15 @@ func (f *fine) runCmd(cmd cmd) {
 		f.layers = append(f.layers, fineLayer{
 			scratch: scratch,
 		})
-	case cmdPopClip:
+	case cmdPopLayer:
 		f.stats.popClips++
 		f.freeScratches = append(f.freeScratches, f.layers[len(f.layers)-1].scratch)
 		f.layers = f.layers[:len(f.layers)-1]
-	case cmdClipFill:
-		// OPT(dh): we should probably just pass *cmd to clipFill and
-		// clipAlphaFill
-		f.clipFill(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
-	case cmdClipAlphaFill:
-		f.clipAlphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.blend, cmd.opacity)
+	case cmdBlend:
+		// OPT(dh): we should probably just pass *cmd to blend and alphaBlend
+		f.blend(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
+	case cmdAlphaBlend:
+		f.alphaBlend(int(cmd.x), int(cmd.width), cmd.alphas, cmd.blend, cmd.opacity)
 	default:
 		panic(fmt.Sprintf("unreachable: %T", cmd))
 	}
@@ -308,7 +307,7 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 	}
 }
 
-func (f *fine) clipFill(x, width int, blend gfx.BlendMode, opacity float32) {
+func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 	if n := len(f.layers); n < 2 {
 		panic(fmt.Sprintf("internal error: trying to clipFill but we only have %d layers", n))
 	}
@@ -341,7 +340,7 @@ func (f *fine) clipFill(x, width int, blend gfx.BlendMode, opacity float32) {
 	}
 }
 
-func (f *fine) clipAlphaFill(x, width int, alphas [][stripHeight]uint8, blend gfx.BlendMode, opacity float32) {
+func (f *fine) alphaBlend(x, width int, alphas [][stripHeight]uint8, blend gfx.BlendMode, opacity float32) {
 	f.stats.clipAlphaFills++
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]

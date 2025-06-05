@@ -398,7 +398,7 @@ func (ctx *Renderer) popLayer() {
 			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
 			cmd := cmd{
-				typ:     cmdClipAlphaFill,
+				typ:     cmdAlphaBlend,
 				x:       xTileRel,
 				width:   width,
 				blend:   lastLayer.blend,
@@ -407,7 +407,7 @@ func (ctx *Renderer) popLayer() {
 			}
 			x += width
 			col += uint32(width)
-			ctx.tiles[tileY][xtile].clipAlphaFill(cmd)
+			ctx.tiles[tileY][xtile].alphaBlend(cmd)
 			tileX = xtile
 			popPending = true
 		}
@@ -434,7 +434,7 @@ func (ctx *Renderer) popLayer() {
 					continue
 				}
 				x += width
-				ctx.tiles[tileY][xtile].clipFill(xTileRel, width, lastLayer.blend, lastLayer.opacity)
+				ctx.tiles[tileY][xtile].blend(xTileRel, width, lastLayer.blend, lastLayer.opacity)
 				tileX = xtile
 				popPending = true
 			}
