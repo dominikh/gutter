@@ -585,6 +585,11 @@ type EncodedGradient struct {
 // isEncodedPaint implements encodedPaint.
 func (e *EncodedGradient) isEncodedPaint() {}
 
+// Opaque implements encodedPaint.
+func (e *EncodedGradient) Opaque() bool {
+	return !e.HasOpacities
+}
+
 type GradientRange struct {
 	// The start value of the range.
 	X0 float32
@@ -686,3 +691,4 @@ func encodeStops(stops []GradientStop, start, end float32, pad bool, space *colo
 		return stopRanges
 	}
 }
+func (*EncodedGradient) String() string { return "Gradient" }

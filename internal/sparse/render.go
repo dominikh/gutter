@@ -44,10 +44,12 @@ type layer struct {
 	// The intersected bounding box after clip
 	bbox tileBbox
 	// The rendered path in sparse strip representation
-	strips  []strip
-	alphas  [][stripHeight]uint8
-	opacity float32
-	blend   gfx.BlendMode
+	strips     []strip
+	alphas     [][stripHeight]uint8
+	opacity    float32
+	blend      gfx.BlendMode
+	nonempty   bool
+	blackholed int
 }
 
 type Renderer struct {
@@ -57,6 +59,8 @@ type Renderer struct {
 	tiles      [][]wideTile
 	stateStack []gfxState
 	layerStack []layer
+
+	cmds []cmd
 }
 
 func NewRenderer(width, height uint16) *Renderer {
@@ -72,6 +76,20 @@ func NewRenderer(width, height uint16) *Renderer {
 		height:     height,
 		tiles:      tiles,
 		stateStack: []gfxState{{0}},
+		layerStack: []layer{
+			{
+				bbox: tileBbox{
+					tileMin: tileCoord{0, 0},
+					tileMax: tileCoord{widthTiles, heightTiles},
+				},
+				opacity: 1,
+			},
+		},
+		cmds: []cmd{
+			0: {},
+			1: {typ: cmdPopLayer},
+			2: {typ: cmdPushLayer},
+		},
 	}
 }
 
@@ -115,6 +133,11 @@ func (ctx *Renderer) Reset() {
 			tile.cmds = tile.cmds[:0]
 		}
 	}
+	clear(ctx.cmds)
+	ctx.cmds = ctx.cmds[:3]
+	ctx.cmds[0] = cmd{}
+	ctx.cmds[1] = cmd{typ: cmdPopLayer}
+	ctx.cmds[2] = cmd{typ: cmdPushLayer}
 }
 
 // Finish the coarse rasterization prior to fine rendering.
@@ -127,7 +150,9 @@ func (ctx *Renderer) finish() {
 
 func (ctx *Renderer) Render(width, height uint16, packer Packer) {
 	ctx.finish()
+
 	distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
+		stackScratch := make([]optLayer, 0, 32)
 		fine := newFine(width, height, packer)
 		for y, row := range subitems {
 			y += group * step
@@ -144,9 +169,13 @@ func (ctx *Renderer) Render(width, height uint16, packer Packer) {
 					log.Println()
 				}
 
-				for i := range tile.cmds {
-					cmd := tile.cmds[i]
-					fine.runCmd(cmd)
+				// log.Println(x, y)
+				newCmdIdxs, newStackScratch := optimizeCommands(ctx.cmds, tile.cmds, stackScratch[:0])
+				tile.cmds = newCmdIdxs
+				stackScratch = newStackScratch
+
+				for _, cmdIdx := range tile.cmds {
+					fine.runCmd(ctx.cmds[cmdIdx])
 				}
 				switch len(fine.layers) {
 				case 0:
@@ -231,6 +260,13 @@ func CompileStrokedPath(
 }
 
 func (ctx *Renderer) renderPath(p CompiledPath, paint gfx.EncodedPaint) {
+	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
+	if topLayer.blackholed > 0 {
+		return
+	}
+
+	topLayer.nonempty = true
+
 	stripBuf := p.strips
 	alphas := p.alphas
 
@@ -276,12 +312,25 @@ func (ctx *Renderer) renderPath(p CompiledPath, paint gfx.EncodedPaint) {
 				paint:  paint,
 				alphas: alphas[col:],
 			}
+			if width <= alphaValueCutoff {
+				allOne := true
+				for _, a := range c.alphas[:c.width] {
+					if a != [4]uint8{255, 255, 255, 255} {
+						allOne = false
+						break
+					}
+				}
+				if allOne {
+					if c.paint.Opaque() {
+						c.typ = cmdClear
+					} else {
+						c.typ = cmdFill
+					}
+				}
+			}
 			x += width
 			col += uint32(width)
-			wt := &ctx.tiles[stripY][xtile]
-			if !wt.isZeroClip() {
-				wt.cmds = append(wt.cmds, c)
-			}
+			ctx.tiles[stripY][xtile].alphaFill(&ctx.cmds, c)
 		}
 
 		var activeFill bool
@@ -304,7 +353,7 @@ func (ctx *Renderer) renderPath(p CompiledPath, paint gfx.EncodedPaint) {
 				xTileRel := x % wideTileWidth
 				width := min(x2, (xtile+1)*wideTileWidth) - x
 				x += width
-				ctx.tiles[stripY][xtile].fill(xTileRel, width, paint)
+				ctx.tiles[stripY][xtile].fill(&ctx.cmds, xTileRel, width, paint)
 			}
 		}
 	}
@@ -324,8 +373,15 @@ func (ctx *Renderer) bbox() tileBbox {
 }
 
 func (ctx *Renderer) popLayer() {
+	const popLayerCmdIdx = 1
+
+	lastLayer := &ctx.layerStack[len(ctx.layerStack)-1]
+	if lastLayer.blackholed > 0 {
+		lastLayer.blackholed--
+		return
+	}
+
 	ctx.stateStack[len(ctx.stateStack)-1].numLayers--
-	lastLayer := ctx.layerStack[len(ctx.layerStack)-1]
 	ctx.layerStack = ctx.layerStack[:len(ctx.layerStack)-1]
 	bbox := lastLayer.bbox
 	strips := lastLayer.strips
@@ -349,7 +405,7 @@ func (ctx *Renderer) popLayer() {
 		}
 		for tileY < min(stripY, bbox.tileMax.tileY) {
 			if popPending {
-				ctx.tiles[tileY][tileX].popLayer()
+				ctx.tiles[tileY][tileX].popLayer(ctx.cmds, popLayerCmdIdx)
 				tileX++
 				popPending = false
 			}
@@ -366,7 +422,7 @@ func (ctx *Renderer) popLayer() {
 		xClamped := min(x0/wideTileWidth, bbox.tileMax.tileX)
 		if tileX < xClamped {
 			if popPending {
-				ctx.tiles[tileY][tileX].popLayer()
+				ctx.tiles[tileY][tileX].popLayer(ctx.cmds, popLayerCmdIdx)
 				tileX++
 				popPending = false
 			}
@@ -392,22 +448,37 @@ func (ctx *Renderer) popLayer() {
 		}
 		for xtile := tileX; xtile < xtile1; xtile++ {
 			if xtile > tileX && popPending {
-				ctx.tiles[tileY][tileX].popLayer()
+				ctx.tiles[tileY][tileX].popLayer(ctx.cmds, popLayerCmdIdx)
 				popPending = false
 			}
 			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
-			cmd := cmd{
-				typ:     cmdAlphaBlend,
-				x:       xTileRel,
-				width:   width,
-				blend:   lastLayer.blend,
-				opacity: lastLayer.opacity,
-				alphas:  alphas[col:],
+			allOne := false
+			if width <= alphaValueCutoff {
+				allOne = true
+				for _, a := range alphas[col:][:width] {
+					if a != [4]uint8{255, 255, 255, 255} {
+						allOne = false
+						break
+					}
+				}
+			}
+			if allOne {
+				ctx.tiles[tileY][xtile].blend(&ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
+			} else {
+				cmd := cmd{
+					typ:     cmdAlphaBlend,
+					x:       xTileRel,
+					width:   width,
+					blend:   lastLayer.blend,
+					opacity: lastLayer.opacity,
+					alphas:  alphas[col:],
+				}
+				ctx.cmds = append(ctx.cmds, cmd)
+				ctx.tiles[tileY][xtile].alphaBlend(ctx.cmds, int32(len(ctx.cmds)-1))
 			}
 			x += width
 			col += uint32(width)
-			ctx.tiles[tileY][xtile].alphaBlend(cmd)
 			tileX = xtile
 			popPending = true
 		}
@@ -422,7 +493,7 @@ func (ctx *Renderer) popLayer() {
 
 			for xtile := fxt0; xtile < fxt1; xtile++ {
 				if xtile > fxt0 && popPending {
-					ctx.tiles[tileY][tileX].popLayer()
+					ctx.tiles[tileY][tileX].popLayer(ctx.cmds, popLayerCmdIdx)
 					popPending = false
 				}
 				xTileRel := x % wideTileWidth
@@ -434,7 +505,7 @@ func (ctx *Renderer) popLayer() {
 					continue
 				}
 				x += width
-				ctx.tiles[tileY][xtile].blend(xTileRel, width, lastLayer.blend, lastLayer.opacity)
+				ctx.tiles[tileY][xtile].blend(&ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
 				tileX = xtile
 				popPending = true
 			}
@@ -442,7 +513,7 @@ func (ctx *Renderer) popLayer() {
 	}
 
 	if popPending {
-		ctx.tiles[tileY][tileX].popLayer()
+		ctx.tiles[tileY][tileX].popLayer(ctx.cmds, popLayerCmdIdx)
 		tileX++
 		popPending = false
 	}
@@ -534,6 +605,16 @@ func stripsBoundingBox(strips []strip) tileBbox {
 }
 
 func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
+	const pushLayerCmdIdx = 2
+
+	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
+	if topLayer.blackholed > 0 || (l.BlendMode.Compose == gfx.ComposeSrcIn && !topLayer.nonempty) {
+		topLayer.blackholed++
+		return
+	}
+
+	topLayer.nonempty = true
+
 	strips := l.Clip.strips
 
 	bbox := ctx.bbox()
@@ -548,6 +629,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 	// If contains one or more strips: push a clip
 	tileX := bbox.tileMin.tileX
 	tileY := bbox.tileMin.tileY
+
 	for i := range len(strips) - 1 {
 		strip := &strips[i]
 		stripY := strip.stripY()
@@ -582,7 +664,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		xtile1 := min(divCeil(x1, wideTileWidth), bbox.tileMax.tileX)
 		if tileX < xtile1 {
 			for xtile := tileX; xtile < xtile1; xtile++ {
-				ctx.tiles[tileY][xtile].pushLayer()
+				ctx.tiles[tileY][xtile].pushLayer(pushLayerCmdIdx)
 			}
 			tileX = xtile1
 		}
@@ -596,7 +678,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 			fxt0 := tileX
 			fxt1 := x2
 			for xtile := fxt0; xtile < fxt1; xtile++ {
-				ctx.tiles[tileY][xtile].pushLayer()
+				ctx.tiles[tileY][xtile].pushLayer(pushLayerCmdIdx)
 			}
 			tileX = fxt1
 		}

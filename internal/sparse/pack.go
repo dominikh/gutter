@@ -13,11 +13,14 @@ type PackerUint8SRGB struct {
 	PremulAlpha bool
 }
 
-func clamp(x float32, min, max float32) float32 {
-	if x < min {
-		return min
-	} else if x > max {
-		return max
+func clamp(x float32, lo, hi float32) float32 {
+	// This is faster than max(min(x, hi), lo), but still produces more
+	// instructions than necessary. Ideally, this would just be MINSS and MAXSS.
+	// See https://golang.org/issue/72831
+	if x < lo {
+		return lo
+	} else if x > hi {
+		return hi
 	} else {
 		return x
 	}

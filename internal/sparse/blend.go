@@ -3,9 +3,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-//go:generate go tool stringer -type=Mix -trimprefix=Mix
-//go:generate go tool stringer -type=Compose -trimprefix=Compose
-
 package sparse
 
 import (

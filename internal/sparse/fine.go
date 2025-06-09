@@ -216,8 +216,26 @@ func (f *fine) runCmd(cmd cmd) {
 		f.blend(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
 	case cmdAlphaBlend:
 		f.alphaBlend(int(cmd.x), int(cmd.width), cmd.alphas, cmd.blend, cmd.opacity)
+	case cmdClear:
+		if p, ok := cmd.paint.(gfx.PlainColor); ok {
+			f.clear(int(cmd.x), int(cmd.width), p)
+		} else {
+			f.fill(int(cmd.x), int(cmd.width), cmd.paint)
+		}
+	case cmdNop:
 	default:
 		panic(fmt.Sprintf("unreachable: %T", cmd))
+	}
+}
+
+func (f *fine) clear(x, width int, paint gfx.PlainColor) {
+	l := f.topLayer()
+	if x == 0 && width == wideTileWidth {
+		l.clear(paint)
+	} else {
+		f.materialize(l)
+		buf := l.scratch[x : x+width]
+		memsetColumnsFp(buf, paint)
 	}
 }
 
