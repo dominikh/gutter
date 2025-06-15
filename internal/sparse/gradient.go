@@ -1,23 +1,21 @@
+// SPDX-FileCopyrightText: 2012 Google Inc.
 // SPDX-FileCopyrightText: 2025 the Piet Authors
+// SPDX-FileCopyrightText: 2025 the Vello Authors
 // SPDX-FileCopyrightText: 2025 Dominik Honnef and contributors
 //
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT AND BSD-3-Clause
 
 package sparse
 
 import (
-	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/gmath"
 )
 
 type gradientFiller struct {
 	curPos   curve.Point
-	rangeIdx int
 	gradient *gfx.EncodedGradient
-
-	prevC  color.Color
-	prevPC gfx.PlainColor
 }
 
 func newGradientFiller(
@@ -31,29 +29,12 @@ func newGradientFiller(
 	}
 }
 
-func (gf *gradientFiller) colorToInternal(c color.Color) gfx.PlainColor {
-	if gf.prevC == c {
-		return gf.prevPC
+func (gf *gradientFiller) advanceTo(targetPos float32) *gfx.GradientRange {
+	idx := 0
+	for targetPos > gf.gradient.Ranges[idx].X1 {
+		idx++
 	}
-	pc := gfx.ColorToInternal(c)
-	gf.prevC = c
-	gf.prevPC = pc
-	return pc
-}
-
-func (gf *gradientFiller) curRange() *gfx.GradientRange {
-	// OPT(dh): cache the current range to avoid repeated bounds checks
-	return &gf.gradient.Ranges[gf.rangeIdx]
-}
-
-func (gf *gradientFiller) advanceTo(targetPos float32) {
-	for targetPos > gf.curRange().X1 || targetPos < gf.curRange().X0 {
-		if gf.rangeIdx == 0 {
-			gf.rangeIdx = len(gf.gradient.Ranges) - 1
-		} else {
-			gf.rangeIdx--
-		}
-	}
+	return &gf.gradient.Ranges[idx]
 }
 
 func (gf *gradientFiller) run(dst [][stripHeight]gfx.PlainColor) {
@@ -82,21 +63,20 @@ func (gf *gradientFiller) run(dst [][stripHeight]gfx.PlainColor) {
 func (gf *gradientFiller) runColumn(col *[stripHeight]gfx.PlainColor) {
 	pos := gf.curPos
 	extend := func(val float32) float32 {
-		return extend(val, gf.gradient.Pad, gf.gradient.ClampRange)
+		return extend(val, gf.gradient.Pad)
 	}
 	for y := range col {
 		px := &col[y]
-		extendedPos := extend(gf.gradient.Kind.CurPos(pos))
-		gf.advanceTo(extendedPos)
-		rng := gf.curRange()
+		t := gf.gradient.Kind.CurPos(pos)
+		t = extend(t)
+		rng := gf.advanceTo(t)
 
-		c := rng.C0
-
-		for compIdx := range px {
-			factor := (rng.Factors[compIdx] * (extendedPos - rng.X0))
-			c.Values[compIdx] += float64(factor)
+		*px = gfx.PlainColor{
+			rng.Bias[0] + rng.Scale[0]*t,
+			rng.Bias[1] + rng.Scale[1]*t,
+			rng.Bias[2] + rng.Scale[2]*t,
+			rng.Bias[3] + rng.Scale[3]*t,
 		}
-		*px = gf.colorToInternal(c)
 		pos = pos.Translate(gf.gradient.YAdvance)
 	}
 }
@@ -116,19 +96,16 @@ func (gf *gradientFiller) runUndefined(dst [][stripHeight]gfx.PlainColor) {
 	}
 }
 
-func extend(val float32, pad bool, clampRange [2]float32) float32 {
+func extend(val float32, pad bool) float32 {
 	if pad {
 		return val
 	}
 
-	start := clampRange[0]
-	end := clampRange[1]
-
-	for val < start {
-		val += end - start
+	if val < 0 {
+		return val - gmath.Floor32(val)
 	}
-	for val > end {
-		val -= end - start
+	if val > 1 {
+		return val - gmath.Ceil32(val-1)
 	}
 	return val
 }

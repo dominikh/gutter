@@ -38,3 +38,7 @@ func Sign32(f float32) float32 {
 		return 1
 	}
 }
+
+func IsNaN(f float32) bool {
+	return f != f
+}
