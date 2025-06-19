@@ -22,11 +22,10 @@ var (
 	// Colors in Lottie files are in sRGB
 	ParsedColorSpace = color.SRGB
 
-	// Lottie files are authored for sRGB blending and gradients. However, we
-	// already don't support blending in any color space other than the global
-	// one, so we might as well render gradients in the global one, and avoid a
-	// bunch of color space conversions.
-	WorkingColorSpace = color.LinearSRGB
+	// Lottie files are authored for sRGB blending and gradients. We don't
+	// currently support blending in a non-linear color space, but we can
+	// interpolate gradients in any color space we want.
+	WorkingColorSpace = color.SRGB
 )
 
 type Composition struct {
