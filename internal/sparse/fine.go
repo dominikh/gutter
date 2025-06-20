@@ -9,7 +9,6 @@ package sparse
 
 import (
 	"fmt"
-	"strings"
 	"unsafe"
 
 	"honnef.co/go/gutter/gfx"
@@ -18,60 +17,6 @@ import (
 
 // [x][y]Color
 type fineScratch = [wideTileWidth][stripHeight]gfx.PlainColor
-
-type fineStats struct {
-	simplePacks  uint64
-	complexPacks uint64
-	pushClips    uint64
-	popClips     uint64
-
-	fullWidthOpaqueClearFills      uint64
-	fullWidthComplexFills          uint64
-	fullWidthTranslucentClearFills uint64
-	opaqueFills                    uint64
-	simpleFills                    uint64
-	complexFills                   uint64
-
-	simpleAlphaFills  uint64
-	complexAlphaFills uint64
-
-	simpleSimpleClipFills   uint64
-	complexComplexClipFills uint64
-
-	clipAlphaFills uint64
-
-	materializedLayers uint64
-}
-
-func (s *fineStats) String() string {
-	lines := []string{
-
-		fmt.Sprintf("Full-width opaque clear fills: %d", s.fullWidthOpaqueClearFills),
-		fmt.Sprintf("Full-width translucent clear fills: %d", s.fullWidthTranslucentClearFills),
-		fmt.Sprintf("Full-width complex fills: %d", s.fullWidthComplexFills),
-		fmt.Sprintf("Partial opaque fills: %d", s.opaqueFills),
-		fmt.Sprintf("Partial simple fills: %d", s.simpleFills),
-		fmt.Sprintf("Partial complex fills: %d", s.complexFills),
-
-		fmt.Sprintf("Simple alpha fills: %d", s.simpleAlphaFills),
-		fmt.Sprintf("Complex alpha fills: %d", s.complexAlphaFills),
-
-		fmt.Sprintf("PushClips: %d", s.pushClips),
-		fmt.Sprintf("PopClips: %d", s.popClips),
-
-		fmt.Sprintf("simple+simple clip fills: %d", s.simpleSimpleClipFills),
-		fmt.Sprintf("complex+complex clip fills: %d", s.complexComplexClipFills),
-
-		fmt.Sprintf("Clip alpha fills: %d", s.clipAlphaFills),
-
-		fmt.Sprintf("Materialized layers: %d", s.materializedLayers),
-
-		fmt.Sprintf("Simple packs: %d", s.simplePacks),
-		fmt.Sprintf("Complex packs: %d", s.complexPacks),
-	}
-
-	return strings.Join(lines, "\n")
-}
 
 type fine struct {
 	// the width and height of the output image, in pixels
@@ -83,8 +28,6 @@ type fine struct {
 
 	// free list of scratch space
 	freeScratches []*fineScratch
-
-	stats fineStats
 }
 
 type fineLayer struct {
@@ -147,7 +90,6 @@ func (f *fine) pack() {
 }
 
 func (f *fine) packSimple(l *fineLayer, tileX, tileY uint16) {
-	f.stats.simplePacks++
 	outWidth := uint16(wideTileWidth)
 	outHeight := uint16(stripHeight)
 	x0 := tileX * wideTileWidth
@@ -158,7 +100,6 @@ func (f *fine) packSimple(l *fineLayer, tileX, tileY uint16) {
 }
 
 func (f *fine) packComplex(l *fineLayer, tileX, tileY uint16) {
-	f.stats.complexPacks++
 	outWidth := uint16(wideTileWidth)
 	outHeight := uint16(stripHeight)
 
@@ -184,7 +125,6 @@ func (f *fine) materialize(l *fineLayer) {
 		return
 	}
 
-	f.stats.materializedLayers++
 	memsetColumnsFp(l.scratch[:], l.singleColor)
 	l.complex = true
 }
@@ -196,7 +136,6 @@ func (f *fine) runCmd(cmd cmd) {
 	case cmdAlphaFill:
 		f.alphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.paint)
 	case cmdPushLayer:
-		f.stats.pushClips++
 		var scratch *fineScratch
 		if len(f.freeScratches) > 0 {
 			scratch = f.freeScratches[len(f.freeScratches)-1]
@@ -208,7 +147,6 @@ func (f *fine) runCmd(cmd cmd) {
 			scratch: scratch,
 		})
 	case cmdPopLayer:
-		f.stats.popClips++
 		f.freeScratches = append(f.freeScratches, f.layers[len(f.layers)-1].scratch)
 		f.layers = f.layers[:len(f.layers)-1]
 	case cmdBlend:
@@ -249,13 +187,10 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 		color := gfx.PlainColor(paint)
 		if x == 0 && width == wideTileWidth {
 			if color[3] == 1.0 {
-				f.stats.fullWidthOpaqueClearFills++
 				l.clear(color)
 			} else if l.complex {
-				f.stats.fullWidthComplexFills++
 				fillComplexFp(buf, color)
 			} else {
-				f.stats.fullWidthTranslucentClearFills++
 				oneMinusAlpha := 1.0 - color[3]
 				color = gfx.PlainColor{
 					0: l.singleColor[0]*oneMinusAlpha + color[0],
@@ -272,12 +207,10 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 			f.materialize(l)
 
 			if color[3] == 1.0 {
-				f.stats.opaqueFills++
 				// The fill color is opaque, so we use a fill function that doesn't care
 				// about the background color.
 				memsetColumnsFp(buf, color)
 			} else if !complex {
-				f.stats.simpleFills++
 				// The tile is simple, which means the fill only has to blend colors
 				// once, not for every pixel.
 				oneMinusAlpha := 1.0 - color[3]
@@ -289,7 +222,6 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 				}
 				memsetColumnsFp(buf, color)
 			} else {
-				f.stats.complexFills++
 				// Do the general, per-pixel fill.
 				fillComplexFp(buf, color)
 			}
@@ -344,7 +276,6 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
 	if !nosComplex && !tos.complex {
-		f.stats.simpleSimpleClipFills++
 		c := tos.singleColor
 		c[0] *= opacity
 		c[1] *= opacity
@@ -353,13 +284,11 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 		blendSimpleSimple(dst, nos.singleColor, c, blend)
 	} else {
 		f.materialize(tos)
-		f.stats.complexComplexClipFills++
 		blendComplexComplex(dst, src, nil, blend, opacity)
 	}
 }
 
 func (f *fine) alphaBlend(x, width int, alphas [][stripHeight]uint8, blend gfx.BlendMode, opacity float32) {
-	f.stats.clipAlphaFills++
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
 
@@ -407,7 +336,6 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 		}
 
 		if l.complex {
-			f.stats.complexAlphaFills++
 			for x := range dst {
 				col := &dst[x]
 				a := &alphas[x]
@@ -428,7 +356,6 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 				}
 			}
 		} else {
-			f.stats.simpleAlphaFills++
 			bg := l.singleColor
 			f.materialize(l)
 
