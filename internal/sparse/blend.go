@@ -61,8 +61,10 @@ func mixSoftLight(dst, src float32) float32 {
 func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][stripHeight]uint8, blend gfx.BlendMode, opacity float32) {
 	switch blend.Compose {
 	case gfx.ComposeClear:
-		clear(dst)
-		return
+		if alphas == nil {
+			clear(dst)
+			return
+		}
 	case gfx.ComposeDest:
 		return
 	case gfx.ComposeCopy:
@@ -77,9 +79,9 @@ func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][strip
 	}
 	getAlpha := func(i, j int) float32 {
 		if alphas == nil {
-			return opacity
+			return 1
 		} else {
-			return (float32(safeish.Index(alphas, i)[j]) / 255.0) * opacity
+			return (float32(safeish.Index(alphas, i)[j]) / 255.0)
 		}
 	}
 
@@ -91,28 +93,32 @@ func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][strip
 			var fa, fb float32
 			switch blend.Compose {
 			case gfx.ComposeClear:
-				fa, fb = 0, 0
+				fa = 0
+				fb = 0
 			case gfx.ComposeCopy:
-				fa, fb = 1, 0
+				fa = 1
+				fb = 0
 			case gfx.ComposeDest:
-				fa, fb = 0, 1
+				fa = 0
+				fb = 1
 			case gfx.ComposePlus:
-				fa, fb = 1, 1
+				fa = 1
+				fb = 1
 			case gfx.ComposeDestAtop:
 				fa = 1 - dstCol[j][3]
-				fb = tosCol[j][3] * getAlpha(i, j)
+				fb = tosCol[j][3] * opacity
 			case gfx.ComposeDestIn:
 				fa = 0
-				fb = tosCol[j][3] * getAlpha(i, j)
+				fb = tosCol[j][3] * opacity
 			case gfx.ComposeDestOut:
 				fa = 0
-				fb = 1 - tosCol[j][3]*getAlpha(i, j)
+				fb = 1 - tosCol[j][3]*opacity
 			case gfx.ComposeDestOver:
 				fa = 1 - dstCol[j][3]
 				fb = 1
 			case gfx.ComposeSrcAtop:
 				fa = dstCol[j][3]
-				fb = 1 - tosCol[j][3]*getAlpha(i, j)
+				fb = 1 - tosCol[j][3]*opacity
 			case gfx.ComposeSrcIn:
 				fa = dstCol[j][3]
 				fb = 0
@@ -121,10 +127,10 @@ func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][strip
 				fb = 0
 			case gfx.ComposeSrcOver:
 				fa = 1
-				fb = 1 - tosCol[j][3]*getAlpha(i, j)
+				fb = 1 - tosCol[j][3]*opacity
 			case gfx.ComposeXor:
 				fa = 1 - dstCol[j][3]
-				fb = 1 - tosCol[j][3]*getAlpha(i, j)
+				fb = 1 - tosCol[j][3]*opacity
 			}
 
 			var Cr0, Cr1, Cr2 float32
@@ -194,23 +200,66 @@ func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][strip
 				Cr2 = (1-dstCol[j][3])*Cs2 + dstCol[j][3]*Cm2
 			}
 
-			if fa == 0 {
-				dstCol[j][0] = dstCol[j][0] * fb
-				dstCol[j][1] = dstCol[j][1] * fb
-				dstCol[j][2] = dstCol[j][2] * fb
-				dstCol[j][3] = min(dstCol[j][3]*fb, 1)
+			// The general composition formula is
+			//
+			// 	outₖ = srcₖ × opacity × fa + dstₖ × fb
+			//
+			// The result of compositing then has to be SrcOver-blended with
+			// dst using the clip's alpha:
+			//
+			// 	aadₖ = α × outₖ + (1-α) × dstₖ
+			//
+			// Substituting out, we get:
+			//
+			// 	aadₖ = α × (srcₖ × opacity × fa + dstₖ × fb) + (1-α) × dstₖ
+			// 	     = α × srcₖ × opacity × fa + α × dstₖ × fb + (1-α) × dstₖ
+			//
+			// α, opacity, fa, and fb don't vary per color channel, so to avoid
+			// unnecessary multiplications, we let
+			//
+			// 	ma = α × opacity × fa
+			// 	mb = α × fb
+			//
+			// and use
+			//
+			// 	aadₖ = srcₖ × ma + dstₖ × mb + (1-α) × dstₖ
+			a := getAlpha(i, j)
+			ma := a * opacity * fa
+			mb := a * fb
+			oneMinusAlpha := 1 - a
+			if ma == 0 {
+				dstCol[j] = [4]float32{
+					dstCol[j][0]*mb + oneMinusAlpha*dstCol[j][0],
+					dstCol[j][1]*mb + oneMinusAlpha*dstCol[j][1],
+					dstCol[j][2]*mb + oneMinusAlpha*dstCol[j][2],
+					clamp(
+						dstCol[j][3]*mb+oneMinusAlpha*dstCol[j][3],
+						0,
+						1,
+					),
+				}
 			} else if blend.Mix == gfx.MixNormal {
-				fa *= getAlpha(i, j)
-				dstCol[j][0] = tosCol[j][0]*fa + dstCol[j][0]*fb
-				dstCol[j][1] = tosCol[j][1]*fa + dstCol[j][1]*fb
-				dstCol[j][2] = tosCol[j][2]*fa + dstCol[j][2]*fb
-				dstCol[j][3] = min(tosCol[j][3]*fa+dstCol[j][3]*fb, 1)
+				dstCol[j] = [4]float32{
+					tosCol[j][0]*ma + dstCol[j][0]*mb + oneMinusAlpha*dstCol[j][0],
+					tosCol[j][1]*ma + dstCol[j][1]*mb + oneMinusAlpha*dstCol[j][1],
+					tosCol[j][2]*ma + dstCol[j][2]*mb + oneMinusAlpha*dstCol[j][2],
+					clamp(
+						tosCol[j][3]*ma+dstCol[j][3]*mb+oneMinusAlpha*dstCol[j][3],
+						0,
+						1,
+					),
+				}
 			} else {
-				fa *= getAlpha(i, j)
-				dstCol[j][0] = (Cr0*tosCol[j][3])*fa + dstCol[j][0]*fb
-				dstCol[j][1] = (Cr1*tosCol[j][3])*fa + dstCol[j][1]*fb
-				dstCol[j][2] = (Cr2*tosCol[j][3])*fa + dstCol[j][2]*fb
-				dstCol[j][3] = min(tosCol[j][3]*fa+dstCol[j][3]*fb, 1)
+				dstCol[j] = [4]float32{
+					(Cr0*tosCol[j][3])*ma + dstCol[j][0]*mb + oneMinusAlpha*dstCol[j][0],
+					(Cr1*tosCol[j][3])*ma + dstCol[j][1]*mb + oneMinusAlpha*dstCol[j][1],
+					(Cr2*tosCol[j][3])*ma + dstCol[j][2]*mb + oneMinusAlpha*dstCol[j][2],
+					clamp(
+						tosCol[j][3]*ma+dstCol[j][3]*mb+oneMinusAlpha*dstCol[j][3],
+						0,
+						1,
+					),
+				}
 			}
 		}
 	}
@@ -342,21 +391,21 @@ func blendSimpleSimple(dst [][stripHeight]gfx.PlainColor, nos, tos gfx.PlainColo
 			nos[0] * fb,
 			nos[1] * fb,
 			nos[2] * fb,
-			min(nos[3]*fb, 1),
+			clamp(nos[3]*fb, 0, 1),
 		}
 	} else if blend.Mix == gfx.MixNormal {
 		nc = gfx.PlainColor{
 			tos[0]*fa + nos[0]*fb,
 			tos[1]*fa + nos[1]*fb,
 			tos[2]*fa + nos[2]*fb,
-			min(tos[3]*fa+nos[3]*fb, 1),
+			clamp(tos[3]*fa+nos[3]*fb, 0, 1),
 		}
 	} else {
 		nc = gfx.PlainColor{
 			(Cr0*tos[3])*fa + nos[0]*fb,
 			(Cr1*tos[3])*fa + nos[1]*fb,
 			(Cr2*tos[3])*fa + nos[2]*fb,
-			min(tos[3]*fa+nos[3]*fb, 1),
+			clamp(tos[3]*fa+nos[3]*fb, 0, 1),
 		}
 	}
 
