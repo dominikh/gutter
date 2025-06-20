@@ -44,12 +44,13 @@ type layer struct {
 	// The intersected bounding box after clip
 	bbox tileBbox
 	// The rendered path in sparse strip representation
-	strips     []strip
-	alphas     [][stripHeight]uint8
-	opacity    float32
-	blend      gfx.BlendMode
-	nonempty   bool
-	blackholed int
+	strips       []strip
+	alphas       [][stripHeight]uint8
+	opacity      float32
+	blend        gfx.BlendMode
+	copyBackdrop bool
+	nonempty     bool
+	blackholed   int
 }
 
 type Renderer struct {
@@ -89,6 +90,7 @@ func NewRenderer(width, height uint16) *Renderer {
 			0: {},
 			1: {typ: cmdPopLayer},
 			2: {typ: cmdPushLayer},
+			3: {typ: cmdCopyBackdrop},
 		},
 	}
 }
@@ -134,10 +136,11 @@ func (ctx *Renderer) Reset() {
 		}
 	}
 	clear(ctx.cmds)
-	ctx.cmds = ctx.cmds[:3]
+	ctx.cmds = ctx.cmds[:4]
 	ctx.cmds[0] = cmd{}
 	ctx.cmds[1] = cmd{typ: cmdPopLayer}
 	ctx.cmds[2] = cmd{typ: cmdPushLayer}
+	ctx.cmds[3] = cmd{typ: cmdCopyBackdrop}
 }
 
 // Finish the coarse rasterization prior to fine rendering.
@@ -565,20 +568,29 @@ type Layer struct {
 	Clip          gfx.Shape
 	ClipTransform curve.Affine
 	ClipFillRule  gfx.FillRule
+	CopyBackdrop  bool
 }
 
 type LayerCompiled struct {
-	BlendMode gfx.BlendMode
-	Opacity   float32
-	Clip      CompiledPath
+	BlendMode    gfx.BlendMode
+	Opacity      float32
+	Clip         CompiledPath
+	CopyBackdrop bool
 }
 
 func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.FillRule) {
-	ctx.PushLayer(Layer{Opacity: 1, Clip: shape, ClipFillRule: fill, ClipTransform: transform})
+	ctx.PushLayer(Layer{
+		Opacity:       1,
+		Clip:          shape,
+		ClipFillRule:  fill,
+		ClipTransform: transform,
+		CopyBackdrop:  true,
+		BlendMode:     gfx.BlendMode{Compose: gfx.ComposeCopy},
+	})
 }
 
 func (ctx *Renderer) PushClipCompiled(p CompiledPath) {
-	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: p})
+	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: p, CopyBackdrop: true})
 }
 
 func stripsBoundingBox(strips []strip) tileBbox {
@@ -606,6 +618,7 @@ func stripsBoundingBox(strips []strip) tileBbox {
 
 func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 	const pushLayerCmdIdx = 2
+	const copyBackdropIdx = 3
 
 	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
 	if topLayer.blackholed > 0 || (l.BlendMode.Compose == gfx.ComposeSrcIn && !topLayer.nonempty) {
@@ -614,7 +627,6 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 	}
 
 	topLayer.nonempty = true
-
 	strips := l.Clip.strips
 
 	bbox := ctx.bbox()
@@ -665,6 +677,9 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		if tileX < xtile1 {
 			for xtile := tileX; xtile < xtile1; xtile++ {
 				ctx.tiles[tileY][xtile].pushLayer(pushLayerCmdIdx)
+				if l.CopyBackdrop {
+					ctx.tiles[tileY][xtile].copyBackdrop(copyBackdropIdx)
+				}
 			}
 			tileX = xtile1
 		}
@@ -679,6 +694,9 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 			fxt1 := x2
 			for xtile := fxt0; xtile < fxt1; xtile++ {
 				ctx.tiles[tileY][xtile].pushLayer(pushLayerCmdIdx)
+				if l.CopyBackdrop {
+					ctx.tiles[tileY][xtile].copyBackdrop(copyBackdropIdx)
+				}
 			}
 			tileX = fxt1
 		}
@@ -695,11 +713,13 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 	}
 
 	clip := layer{
-		bbox:    bbox,
-		strips:  strips,
-		opacity: l.Opacity,
-		blend:   l.BlendMode,
-		alphas:  l.Clip.alphas,
+		bbox:         bbox,
+		strips:       strips,
+		opacity:      l.Opacity,
+		blend:        l.BlendMode,
+		alphas:       l.Clip.alphas,
+		copyBackdrop: l.CopyBackdrop,
+		nonempty:     l.CopyBackdrop && topLayer.nonempty,
 	}
 	ctx.layerStack = append(ctx.layerStack, clip)
 	ctx.stateStack[len(ctx.stateStack)-1].numLayers++
@@ -720,9 +740,10 @@ func (ctx *Renderer) PushLayer(l Layer) {
 
 	p := CompileFillPath(l.Clip, l.ClipTransform, l.ClipFillRule, ctx.width, ctx.height)
 	ctx.PushLayerCompiled(LayerCompiled{
-		BlendMode: l.BlendMode,
-		Opacity:   l.Opacity,
-		Clip:      p,
+		BlendMode:    l.BlendMode,
+		Opacity:      l.Opacity,
+		Clip:         p,
+		CopyBackdrop: l.CopyBackdrop,
 	})
 
 }

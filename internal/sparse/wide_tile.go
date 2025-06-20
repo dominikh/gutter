@@ -32,6 +32,7 @@ const (
 	cmdAlphaFill
 	cmdPushLayer
 	cmdPopLayer
+	cmdCopyBackdrop
 	cmdBlend
 	cmdAlphaBlend
 	// cmdClear sets all pixels to the specified color
@@ -62,6 +63,8 @@ func (cmd cmd) String() string {
 		return fmt.Sprintf("PushLayer()")
 	case cmdPopLayer:
 		return "PopLayer()"
+	case cmdCopyBackdrop:
+		return "CopyBackdrop()"
 	case cmdBlend:
 		return fmt.Sprintf("Blend(x=%v, width=%v, blend=%s, opacity=%v)", cmd.x, cmd.width, cmd.blend, cmd.opacity)
 	case cmdAlphaBlend:
@@ -104,6 +107,14 @@ func (wt *wideTile) pushLayer(idx int32 /* blend gfx.BlendMode, opacity float32 
 	// wt.cmds = append(wt.cmds, cmd{typ: cmdPushLayer, blend: blend, opacity: opacity})
 	wt.cmds = append(wt.cmds, idx)
 	wt.numLayers++
+}
+
+func (wt *wideTile) copyBackdrop(idx int32 /* blend gfx.BlendMode, opacity float32 */) {
+	if wt.isZeroClip() {
+		return
+	}
+
+	wt.cmds = append(wt.cmds, idx)
 }
 
 func (wt *wideTile) popLayer(allCmds []cmd, idx int32) {

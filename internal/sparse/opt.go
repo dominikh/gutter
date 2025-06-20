@@ -47,6 +47,16 @@ const extraSafetyChecks = true
 //
 // 	Clear(x=68, width=28, paint=[0.3509753 0.017603893 0.015928429 1])
 
+// TODO(dh): this
+//
+// 	PushLayer()
+// 	  Fill(x=0, width=256, paint=[0 0.5 0 0.5])
+//
+// could optimize to PushLayer + Clear
+
+// TODO(dh): some layers with Clear blend mode could just be Clear commands in
+// the parent
+
 // TODO(dh): when only part of the layer gets blended back into its parent then
 // we don't have to fill the rest of the layer. this would especially help the
 // performance of gradients. at the same time we should be careful that this
@@ -353,6 +363,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 			case cmdClear:
 			case cmdFill:
 			case cmdNop:
+			case cmdCopyBackdrop:
 			case cmdPopLayer:
 				layers[top].pop = i
 				top = layers[top].parent
@@ -440,6 +451,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 				case cmdPopLayer:
 					// TODO maintain a stack of tighter bounds as we descend the layer tree
 				case cmdPushLayer:
+				case cmdCopyBackdrop:
 				default:
 					panic(fmt.Sprintf("unexpected sparse.cmd: %s", c))
 				}
@@ -572,6 +584,13 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 					}
 
 					l.blendedNonZeroAlpha.And(l.maybeNotTransparent)
+				case cmdCopyBackdrop:
+					// We're processing layers inside out and have no idea what
+					// the parent looks like yet. We must assume that all pixels
+					// may be set.
+					//
+					// TODO(dh): should we switch from DFS to top-down processing?
+					l.maybeNotTransparent = optBitset{math.MaxUint64, math.MaxUint64, math.MaxUint64, math.MaxUint64}
 				case cmdPushLayer:
 					child := &layers[l.children[numPushes]]
 					numPushes++
@@ -690,6 +709,30 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 								// possible, however. The only way to cut out a
 								// shape is by using compositing; we don't
 								// expose cmdClear to the user.
+							}
+						}
+
+					case gfx.ComposeCopy:
+						if child.opacity == 1 && allCmds[cmds[child.push+1]].typ == cmdCopyBackdrop && child.numAlphaBlends == 0 {
+							unwrappable := true
+							for j := child.footer; j < child.pop; j++ {
+								c2 := allCmds[cmds[j]]
+								if c2.typ != cmdBlend || c2.x != 0 || c2.width != wideTileWidth {
+									unwrappable = false
+									break
+								}
+							}
+							if unwrappable {
+								// This is a pure clip layer covering the whole
+								// wide tile. The layer is unnecessary.
+								//
+								// OPT(dh): it'd be smarter to never generate
+								// this layer in the first place, by adjusting
+								// the logic in render.go
+								cmds[child.push] = 0
+								cmds[child.push+1] = 0
+								clear(cmds[child.footer : child.pop+1])
+								changed = true
 							}
 						}
 					}

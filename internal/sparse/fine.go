@@ -149,6 +149,19 @@ func (f *fine) runCmd(cmd cmd) {
 	case cmdPopLayer:
 		f.freeScratches = append(f.freeScratches, f.layers[len(f.layers)-1].scratch)
 		f.layers = f.layers[:len(f.layers)-1]
+	case cmdCopyBackdrop:
+		if len(f.layers) < 2 {
+			panic(fmt.Sprintf("internal error: trying to copy from parent layer, but there are only %d layers",
+				len(f.layers)))
+		}
+		parent := f.layers[len(f.layers)-2]
+		l := f.topLayer()
+		if parent.complex {
+			l.complex = true
+			copy(l.scratch[:], parent.scratch[:])
+		} else {
+			l.clear(parent.singleColor)
+		}
 	case cmdBlend:
 		// OPT(dh): we should probably just pass *cmd to blend and alphaBlend
 		f.blend(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
@@ -277,6 +290,7 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 	src := tos.scratch[x : x+width]
 	if !nosComplex && !tos.complex {
 		c := tos.singleColor
+
 		c[0] *= opacity
 		c[1] *= opacity
 		c[2] *= opacity
@@ -296,8 +310,6 @@ func (f *fine) alphaBlend(x, width int, alphas [][stripHeight]uint8, blend gfx.B
 	f.materialize(tos)
 	f.materialize(nos)
 
-	// OPT(dh): instead of modifying the source in place, teach blend functions
-	// how to apply alpha values.
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
 	blendComplexComplex(dst, src, alphas, blend, opacity)
