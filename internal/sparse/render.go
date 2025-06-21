@@ -398,7 +398,7 @@ func (ctx *Renderer) renderPath(p CompiledPath, paint gfx.EncodedPaint) {
 			}
 			x += width
 			col += uint32(width)
-			ctx.tiles[stripY][xtile].alphaFill(&ctx.cmds, c)
+			ctx.cmds = ctx.tiles[stripY][xtile].alphaFill(ctx.cmds, c)
 		}
 
 		var activeFill bool
@@ -421,7 +421,7 @@ func (ctx *Renderer) renderPath(p CompiledPath, paint gfx.EncodedPaint) {
 				xTileRel := x % wideTileWidth
 				width := min(x2, (xtile+1)*wideTileWidth) - x
 				x += width
-				ctx.tiles[stripY][xtile].fill(&ctx.cmds, xTileRel, width, paint)
+				ctx.cmds = ctx.tiles[stripY][xtile].fill(ctx.cmds, xTileRel, width, paint)
 			}
 		}
 	}
@@ -460,8 +460,8 @@ func (ctx *Renderer) popLayer() {
 		// clip on it will make sure to discard those pixels.
 		for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
 			for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
-				ctx.tiles[tileY][tileX].blend(
-					&ctx.cmds,
+				ctx.cmds = ctx.tiles[tileY][tileX].blend(
+					ctx.cmds,
 					0,
 					wideTileWidth,
 					lastLayer.blend,
@@ -553,7 +553,7 @@ func (ctx *Renderer) popLayer() {
 				}
 			}
 			if allOne {
-				ctx.tiles[tileY][xtile].blend(&ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
+				ctx.cmds = ctx.tiles[tileY][xtile].blend(ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
 			} else {
 				cmd := cmd{
 					typ:     cmdAlphaBlend,
@@ -594,7 +594,7 @@ func (ctx *Renderer) popLayer() {
 					continue
 				}
 				x += width
-				ctx.tiles[tileY][xtile].blend(&ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
+				ctx.cmds = ctx.tiles[tileY][xtile].blend(ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
 				tileX = xtile
 				popPending = true
 			}

@@ -79,24 +79,26 @@ func (cmd cmd) String() string {
 	}
 }
 
-func (wt *wideTile) fill(allCmds *[]cmd, x, width uint16, paint gfx.EncodedPaint) {
+func (wt *wideTile) fill(allCmds []cmd, x, width uint16, paint gfx.EncodedPaint) []cmd {
 	if wt.isZeroClip() {
-		return
+		return allCmds
 	}
 	t := cmdFill
 	if paint.Opaque() {
 		t = cmdClear
 	}
-	*allCmds = append(*allCmds, cmd{typ: t, x: x, width: width, paint: paint})
-	wt.cmds = append(wt.cmds, int32(len(*allCmds)-1))
+	allCmds = append(allCmds, cmd{typ: t, x: x, width: width, paint: paint})
+	wt.cmds = append(wt.cmds, int32(len(allCmds)-1))
+	return allCmds
 }
 
-func (wt *wideTile) alphaFill(allCmds *[]cmd, c cmd) {
+func (wt *wideTile) alphaFill(allCmds []cmd, c cmd) []cmd {
 	if wt.isZeroClip() {
-		return
+		return allCmds
 	}
-	*allCmds = append(*allCmds, c)
-	wt.cmds = append(wt.cmds, int32(len(*allCmds)-1))
+	allCmds = append(allCmds, c)
+	wt.cmds = append(wt.cmds, int32(len(allCmds)-1))
+	return allCmds
 }
 
 func (wt *wideTile) pushLayer(idx int32 /* blend gfx.BlendMode, opacity float32 */) {
@@ -156,33 +158,34 @@ func (wt *wideTile) alphaBlend(allCmds []cmd, idx int32) {
 	wt.cmds = append(wt.cmds, idx)
 }
 
-func (wt *wideTile) blend(allCmds *[]cmd, x, width uint16, blend gfx.BlendMode, opacity float32) {
+func (wt *wideTile) blend(allCmds []cmd, x, width uint16, blend gfx.BlendMode, opacity float32) []cmd {
 	if wt.isZeroClip() {
-		return
+		return allCmds
 	}
-	if !disableWideTileOpts && len(wt.cmds) > 0 && (*allCmds)[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer && blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
+	if !disableWideTileOpts && len(wt.cmds) > 0 && allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer && blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
 		// Blending when nothing has been drawn in the layer yet has no visible
 		// effect for some compose operators, notably SrcOver.
-		return
+		return allCmds
 	}
 	if len(wt.cmds) == 0 {
 		panic("internal error: called blend without pushing a layer")
 	}
 
-	prevCmd := &(*allCmds)[wt.cmds[len(wt.cmds)-1]]
+	prevCmd := &allCmds[wt.cmds[len(wt.cmds)-1]]
 	// We don't check that the blend mode and opacity match, because at command
 	// generation time, an uninterrupted run of blends is only possible while
 	// popping a layer.
 	if !disableWideTileOpts && prevCmd.typ == cmdBlend && x == prevCmd.x+prevCmd.width {
 		prevCmd.width += width
-		return
+		return allCmds
 	}
-	*allCmds = append(*allCmds, cmd{
+	allCmds = append(allCmds, cmd{
 		typ:     cmdBlend,
 		x:       x,
 		width:   width,
 		blend:   blend,
 		opacity: opacity,
 	})
-	wt.cmds = append(wt.cmds, int32(len(*allCmds)-1))
+	wt.cmds = append(wt.cmds, int32(len(allCmds)-1))
+	return allCmds
 }
