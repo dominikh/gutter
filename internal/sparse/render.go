@@ -13,6 +13,7 @@ import (
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/maybe"
 )
 
 type gfxState struct {
@@ -51,6 +52,7 @@ type layer struct {
 	copyBackdrop bool
 	nonempty     bool
 	blackholed   int
+	noclip       bool
 }
 
 type Renderer struct {
@@ -387,6 +389,27 @@ func (ctx *Renderer) popLayer() {
 	ctx.stateStack[len(ctx.stateStack)-1].numLayers--
 	ctx.layerStack = ctx.layerStack[:len(ctx.layerStack)-1]
 	bbox := lastLayer.bbox
+
+	if lastLayer.noclip {
+		// The layer didn't add a new clip, so we can just blend and pop all
+		// layers in the bounding box. It doesn't matter that we might blend
+		// pixels that lie outside the clip, the parent layer with the actual
+		// clip on it will make sure to discard those pixels.
+		for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
+			for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
+				ctx.tiles[tileY][tileX].blend(
+					&ctx.cmds,
+					0,
+					wideTileWidth,
+					lastLayer.blend,
+					lastLayer.opacity,
+				)
+				ctx.tiles[tileY][tileX].popLayer(ctx.cmds, popLayerCmdIdx)
+			}
+		}
+		return
+	}
+
 	strips := lastLayer.strips
 	alphas := lastLayer.alphas
 
@@ -574,7 +597,7 @@ type Layer struct {
 type LayerCompiled struct {
 	BlendMode    gfx.BlendMode
 	Opacity      float32
-	Clip         CompiledPath
+	Clip         maybe.Option[CompiledPath]
 	CopyBackdrop bool
 }
 
@@ -590,7 +613,7 @@ func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.
 }
 
 func (ctx *Renderer) PushClipCompiled(p CompiledPath) {
-	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: p, CopyBackdrop: true})
+	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: maybe.Some(p), CopyBackdrop: true})
 }
 
 func stripsBoundingBox(strips []strip) tileBbox {
@@ -627,10 +650,39 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 	}
 
 	topLayer.nonempty = true
-	strips := l.Clip.strips
 
 	bbox := ctx.bbox()
+
+	if !l.Clip.Set() {
+		// When there is no new clip, all tiles that need to be zero-clipped
+		// already have been by the last clip. We can just push layers for all
+		// tiles in the bounding box; tiles that have been zero-clipped will
+		// ignore the new layer.
+		for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
+			for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
+				ctx.tiles[tileY][tileX].pushLayer(pushLayerCmdIdx)
+				if l.CopyBackdrop {
+					ctx.tiles[tileY][tileX].copyBackdrop(copyBackdropIdx)
+				}
+			}
+		}
+		clip := layer{
+			bbox:         bbox,
+			strips:       nil,
+			opacity:      l.Opacity,
+			blend:        l.BlendMode,
+			alphas:       nil,
+			copyBackdrop: l.CopyBackdrop,
+			nonempty:     l.CopyBackdrop && topLayer.nonempty,
+			noclip:       true,
+		}
+		ctx.layerStack = append(ctx.layerStack, clip)
+		ctx.stateStack[len(ctx.stateStack)-1].numLayers++
+		return
+	}
+
 	// intersect clip bounding box
+	strips := l.Clip.Unwrap().strips
 	bbox = bbox.intersect(stripsBoundingBox(strips))
 
 	// The next bit of code accomplishes the following. For each tile in
@@ -717,7 +769,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		strips:       strips,
 		opacity:      l.Opacity,
 		blend:        l.BlendMode,
-		alphas:       l.Clip.alphas,
+		alphas:       l.Clip.Unwrap().alphas,
 		copyBackdrop: l.CopyBackdrop,
 		nonempty:     l.CopyBackdrop && topLayer.nonempty,
 	}
@@ -726,19 +778,11 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 }
 
 func (ctx *Renderer) PushLayer(l Layer) {
-	if l.Clip == nil {
-		// OPT(dh): instead of going through the whole clipping logic (computing
-		// and processing strips), we should have a special case for layers
-		// without clips that just processes all tiles in the current bounding
-		// box.
-		l.Clip = curve.NewRectFromOrigin(
-			curve.Pt(0, 0),
-			curve.Sz(float64(ctx.width), float64(ctx.height)),
-		)
-		l.ClipTransform = curve.Identity
+	var p maybe.Option[CompiledPath]
+	if l.Clip != nil {
+		p = maybe.Some(CompileFillPath(l.Clip, l.ClipTransform, l.ClipFillRule, ctx.width, ctx.height))
 	}
 
-	p := CompileFillPath(l.Clip, l.ClipTransform, l.ClipFillRule, ctx.width, ctx.height)
 	ctx.PushLayerCompiled(LayerCompiled{
 		BlendMode:    l.BlendMode,
 		Opacity:      l.Opacity,
