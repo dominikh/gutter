@@ -97,7 +97,69 @@ func NewRenderer(width, height uint16) *Renderer {
 	}
 }
 
+func optimizeRecording(cmds gfx.Recording) {
+	type layer struct {
+		push               int
+		needBackdrop       bool
+		childNeedsBackdrop bool
+	}
+
+	const debug = false
+
+	if debug {
+		log.Println("before:")
+		for _, cmd := range cmds {
+			log.Printf("%T", cmd)
+			if cmd, ok := cmd.(gfx.CommandPushLayer); ok {
+				log.Println(cmd.Layer.BlendMode, cmd.Layer.Clip == nil, cmd.Layer.Opacity)
+			}
+		}
+		log.Println()
+	}
+
+	var layers []layer
+	for i, cmd := range cmds {
+		switch cmd := cmd.(type) {
+		case gfx.CommandFill:
+		case gfx.CommandPlayRecording:
+		case gfx.CommandPopLayer:
+			l := layers[len(layers)-1]
+			if !l.needBackdrop && !l.childNeedsBackdrop {
+				cmds[i] = nil
+				cmds[l.push] = nil
+			}
+			layers = layers[:len(layers)-1]
+		case gfx.CommandPushLayer:
+			// TODO(dh): investigate if there are more than the default blend
+			// mode that don't care about the backdrop as such.
+			l := layer{
+				push: i,
+				needBackdrop: cmd.Layer.BlendMode != gfx.BlendMode{} ||
+					cmd.Layer.Opacity != 1 ||
+					cmd.Layer.Clip != nil,
+			}
+			if len(layers) > 0 && cmd.Layer.BlendMode != (gfx.BlendMode{}) {
+				layers[len(layers)-1].childNeedsBackdrop = true
+			}
+			layers = append(layers, l)
+		case gfx.CommandStroke:
+		default:
+			panic(fmt.Sprintf("unexpected gfx.Command: %#v", cmd))
+		}
+	}
+
+	if debug {
+		log.Println("after:")
+		for _, cmd := range cmds {
+			log.Printf("%T", cmd)
+		}
+		log.Println()
+	}
+}
+
 func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
+	optimizeRecording(cmds)
+
 	// OPT parallelism
 
 	for _, cmd := range cmds {
@@ -119,6 +181,7 @@ func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
 			r.Stroke(cmd.Shape, aff.Mul(cmd.Transform), cmd.Stroke, cmd.Paint)
 		case gfx.CommandPlayRecording:
 			PlayRecording(cmd.Recording, r, aff.Mul(cmd.Transform))
+		case nil:
 		default:
 			panic(fmt.Sprintf("unexpected Command: %#v", cmd))
 		}
