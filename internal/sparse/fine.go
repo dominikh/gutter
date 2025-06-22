@@ -139,6 +139,7 @@ func (f *fine) runCmd(cmd cmd) {
 		var scratch *fineScratch
 		if len(f.freeScratches) > 0 {
 			scratch = f.freeScratches[len(f.freeScratches)-1]
+			clear(scratch[:])
 			f.freeScratches = f.freeScratches[:len(f.freeScratches)-1]
 		} else {
 			scratch = f.newScratch()
