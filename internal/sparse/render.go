@@ -89,7 +89,7 @@ func NewRenderer(width, height uint16) *Renderer {
 			},
 		},
 		cmds: []cmd{
-			0: {},
+			0: {typ: cmdNop},
 			1: {typ: cmdPopLayer},
 			2: {typ: cmdPushLayer},
 			3: {typ: cmdCopyBackdrop},
@@ -202,7 +202,7 @@ func (ctx *Renderer) Reset() {
 	}
 	clear(ctx.cmds)
 	ctx.cmds = ctx.cmds[:4]
-	ctx.cmds[0] = cmd{}
+	ctx.cmds[0] = cmd{typ: cmdNop}
 	ctx.cmds[1] = cmd{typ: cmdPopLayer}
 	ctx.cmds[2] = cmd{typ: cmdPushLayer}
 	ctx.cmds[3] = cmd{typ: cmdCopyBackdrop}
