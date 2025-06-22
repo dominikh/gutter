@@ -401,6 +401,8 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 		log.Println()
 	}
 
+	// clearColor exists to avoid repeated calls to runtime.convTnoptr
+	clearColor := gfx.EncodedPaint(gfx.PlainColor{})
 	changed := true
 	for changed {
 		changed = false
@@ -471,7 +473,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 				}
 			}
 
-			for i := l.push + 1; i <= lastCmd(l); i++ {
+			for i, lastCmd := l.push+1, lastCmd(l); i <= lastCmd; i++ {
 				c := &allCmds[cmds[i]]
 				switch c.typ {
 				case cmdAlphaFill:
@@ -523,7 +525,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 					}
 				case cmdClear:
 					// Merge adjacent clears
-					for j := i + 1; j <= lastCmd(l); j++ {
+					for j := i + 1; j <= lastCmd; j++ {
 						c2 := &allCmds[cmds[j]]
 						if c2.typ != cmdClear || c2.paint != c.paint || c2.x != c.x+c.width {
 							break
@@ -564,7 +566,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 					// this doesn't change the transparency.
 
 					// Merge adjacent fills
-					for j := i + 1; j <= lastCmd(l); j++ {
+					for j := i + 1; j <= lastCmd; j++ {
 						c2 := &allCmds[cmds[j]]
 						if c2.typ != cmdFill || c2.paint != c.paint || c2.x != c.x+c.width {
 							break
@@ -609,7 +611,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 							case cmdBlend:
 								c2.typ = cmdClear
 								// TODO(dh): do the values of the rgb channels matter?
-								c2.paint = gfx.PlainColor{}
+								c2.paint = clearColor
 							default:
 								panic(fmt.Sprintf("internal error: unexpected sparse.cmdType: %s", c2.typ))
 							}
@@ -627,7 +629,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 							for j := child.footer; j < child.pop; j++ {
 								c2 := &allCmds[cmds[j]]
 								c2.typ = cmdClear
-								c2.paint = gfx.PlainColor{}
+								c2.paint = clearColor
 							}
 							cmds[child.pop] = 0
 							changed = true
