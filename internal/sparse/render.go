@@ -198,6 +198,8 @@ func (ctx *Renderer) Reset() {
 			tile.bg = gfx.PlainColor{}
 			clear(tile.cmds)
 			tile.cmds = tile.cmds[:0]
+			tile.numZeroClips = 0
+			tile.numLayers = 0
 		}
 	}
 	clear(ctx.cmds)
