@@ -340,6 +340,45 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 	l := f.topLayer()
 	dst := l.scratch[x : x+width]
 
+	alphaFillInnerSingleColor := func(color gfx.PlainColor) {
+		// Scale color by 1/255 because our alpha values are in [0, 255]
+		color[0] *= (1.0 / 255.0)
+		color[1] *= (1.0 / 255.0)
+		color[2] *= (1.0 / 255.0)
+		color[3] *= (1.0 / 255.0)
+
+		if l.complex {
+			for x := range dst {
+				col := &dst[x]
+				a := &alphas[x]
+				for y := range col {
+					maskAlpha := float32(a[y])
+					oneMinusAlpha := 1.0 - maskAlpha*color[3]
+					col[y][0] = maskAlpha*color[0] + col[y][0]*oneMinusAlpha
+					col[y][1] = maskAlpha*color[1] + col[y][1]*oneMinusAlpha
+					col[y][2] = maskAlpha*color[2] + col[y][2]*oneMinusAlpha
+					col[y][3] = maskAlpha*color[3] + col[y][3]*oneMinusAlpha
+				}
+			}
+		} else {
+			bg := l.singleColor
+			f.materialize(l)
+
+			for x := range dst {
+				col := &dst[x]
+				a := &alphas[x]
+				for y := range col {
+					maskAlpha := float32(a[y])
+					oneMinusAlpha := 1.0 - maskAlpha*color[3]
+					col[y][0] = maskAlpha*color[0] + bg[0]*oneMinusAlpha
+					col[y][1] = maskAlpha*color[1] + bg[1]*oneMinusAlpha
+					col[y][2] = maskAlpha*color[2] + bg[2]*oneMinusAlpha
+					col[y][3] = maskAlpha*color[3] + bg[3]*oneMinusAlpha
+				}
+			}
+		}
+	}
+
 	alphaFillInner := func(colors []gfx.PlainColor) {
 		colorIdx := 0
 		nextColor := func() gfx.PlainColor {
@@ -354,8 +393,6 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 				a := &alphas[x]
 				for y := range col {
 					color := nextColor()
-					// OPT(dh): optimize for alphaFill with solid color, where
-					// we only have to scale by 1/255 once.
 					color[0] *= (1.0 / 255.0)
 					color[1] *= (1.0 / 255.0)
 					color[2] *= (1.0 / 255.0)
@@ -394,8 +431,7 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 
 	switch paint := paint.(type) {
 	case gfx.PlainColor:
-		// OPT(dh): make sure the slice doesn't escape
-		alphaFillInner([]gfx.PlainColor{paint})
+		alphaFillInnerSingleColor(paint)
 
 	case *gfx.EncodedGradient:
 		startX := f.tileX*wideTileWidth + uint16(x)
