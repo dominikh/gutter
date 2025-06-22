@@ -303,7 +303,13 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 	}
 }
 
-func (f *fine) alphaBlend(x, width int, alphas [][stripHeight]uint8, blend gfx.BlendMode, opacity float32) {
+func (f *fine) alphaBlend(
+	x int,
+	width int,
+	alphas [][stripHeight]uint8,
+	blend gfx.BlendMode,
+	opacity float32,
+) {
 	tos := &f.layers[len(f.layers)-1]
 	nos := &f.layers[len(f.layers)-2]
 

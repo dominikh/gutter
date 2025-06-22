@@ -60,20 +60,22 @@ func (cmd cmd) String() string {
 		return fmt.Sprintf("AlphaFill(x=%v, width=%v, paint=%v)",
 			cmd.x, cmd.width, cmd.paint)
 	case cmdPushLayer:
-		return fmt.Sprintf("PushLayer()")
+		return "PushLayer()"
 	case cmdPopLayer:
 		return "PopLayer()"
 	case cmdCopyBackdrop:
 		return "CopyBackdrop()"
 	case cmdBlend:
-		return fmt.Sprintf("Blend(x=%v, width=%v, blend=%s, opacity=%v)", cmd.x, cmd.width, cmd.blend, cmd.opacity)
+		return fmt.Sprintf("Blend(x=%v, width=%v, blend=%s, opacity=%v)",
+			cmd.x, cmd.width, cmd.blend, cmd.opacity)
 	case cmdAlphaBlend:
 		return fmt.Sprintf("AlphaBlend(x=%v, width=%v, blend=%s, opacity=%v)",
 			cmd.x, cmd.width, cmd.blend, cmd.opacity)
 	case cmdNop:
 		return "Nop()"
 	case cmdClear:
-		return fmt.Sprintf("Clear(x=%v, width=%v, paint=%v)", cmd.x, cmd.width, cmd.paint)
+		return fmt.Sprintf("Clear(x=%v, width=%v, paint=%v)",
+			cmd.x, cmd.width, cmd.paint)
 	default:
 		panic(fmt.Sprintf("invalid command type %v", cmd.typ))
 	}
@@ -101,17 +103,16 @@ func (wt *wideTile) alphaFill(allCmds []cmd, c cmd) []cmd {
 	return allCmds
 }
 
-func (wt *wideTile) pushLayer(idx int32 /* blend gfx.BlendMode, opacity float32 */) {
+func (wt *wideTile) pushLayer(idx int32) {
 	if wt.isZeroClip() {
 		return
 	}
 
-	// wt.cmds = append(wt.cmds, cmd{typ: cmdPushLayer, blend: blend, opacity: opacity})
 	wt.cmds = append(wt.cmds, idx)
 	wt.numLayers++
 }
 
-func (wt *wideTile) copyBackdrop(idx int32 /* blend gfx.BlendMode, opacity float32 */) {
+func (wt *wideTile) copyBackdrop(idx int32) {
 	if wt.isZeroClip() {
 		return
 	}
@@ -123,7 +124,9 @@ func (wt *wideTile) popLayer(allCmds []cmd, idx int32) {
 	if wt.isZeroClip() {
 		return
 	}
-	if !disableWideTileOpts && len(wt.cmds) > 0 && allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer {
+	if !disableWideTileOpts &&
+		len(wt.cmds) > 0 &&
+		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer {
 		// Nothing was drawn inside the layer, elide it.
 		wt.cmds = wt.cmds[:len(wt.cmds)-1]
 	} else {
@@ -152,17 +155,29 @@ func (wt *wideTile) alphaBlend(allCmds []cmd, idx int32) {
 		return
 	}
 	c := allCmds[idx]
-	if !disableWideTileOpts && len(wt.cmds) > 0 && allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer && c.blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
+	if !disableWideTileOpts &&
+		len(wt.cmds) > 0 &&
+		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer &&
+		c.blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
 		return
 	}
 	wt.cmds = append(wt.cmds, idx)
 }
 
-func (wt *wideTile) blend(allCmds []cmd, x, width uint16, blend gfx.BlendMode, opacity float32) []cmd {
+func (wt *wideTile) blend(
+	allCmds []cmd,
+	x uint16,
+	width uint16,
+	blend gfx.BlendMode,
+	opacity float32,
+) []cmd {
 	if wt.isZeroClip() {
 		return allCmds
 	}
-	if !disableWideTileOpts && len(wt.cmds) > 0 && allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer && blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
+	if !disableWideTileOpts &&
+		len(wt.cmds) > 0 &&
+		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer &&
+		blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
 		// Blending when nothing has been drawn in the layer yet has no visible
 		// effect for some compose operators, notably SrcOver.
 		return allCmds

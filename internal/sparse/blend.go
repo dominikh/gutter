@@ -58,7 +58,13 @@ func mixSoftLight(dst, src float32) float32 {
 	}
 }
 
-func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][stripHeight]uint8, blend gfx.BlendMode, opacity float32) {
+func blendComplexComplex(
+	dst [][stripHeight]gfx.PlainColor,
+	tos [][stripHeight]gfx.PlainColor,
+	alphas [][stripHeight]uint8,
+	blend gfx.BlendMode,
+	opacity float32,
+) {
 	switch blend.Compose {
 	case gfx.ComposeClear:
 		if alphas == nil {
@@ -265,7 +271,12 @@ func blendComplexComplex(dst, tos [][stripHeight]gfx.PlainColor, alphas [][strip
 	}
 }
 
-func blendSimpleSimple(dst [][stripHeight]gfx.PlainColor, nos, tos gfx.PlainColor, blend gfx.BlendMode) {
+func blendSimpleSimple(
+	dst [][stripHeight]gfx.PlainColor,
+	nos gfx.PlainColor,
+	tos gfx.PlainColor,
+	blend gfx.BlendMode,
+) {
 	switch blend.Compose {
 	case gfx.ComposeClear:
 		clear(dst)
