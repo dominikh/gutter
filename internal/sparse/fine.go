@@ -207,10 +207,10 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 			} else {
 				oneMinusAlpha := 1.0 - color[3]
 				color = gfx.PlainColor{
-					0: l.singleColor[0]*oneMinusAlpha + color[0],
-					1: l.singleColor[1]*oneMinusAlpha + color[1],
-					2: l.singleColor[2]*oneMinusAlpha + color[2],
-					3: l.singleColor[3]*oneMinusAlpha + color[3],
+					color[0] + l.singleColor[0]*oneMinusAlpha,
+					color[1] + l.singleColor[1]*oneMinusAlpha,
+					color[2] + l.singleColor[2]*oneMinusAlpha,
+					color[3] + l.singleColor[3]*oneMinusAlpha,
 				}
 				l.clear(color)
 			}
@@ -229,10 +229,10 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 				// once, not for every pixel.
 				oneMinusAlpha := 1.0 - color[3]
 				color = gfx.PlainColor{
-					0: l.singleColor[0]*oneMinusAlpha + color[0],
-					1: l.singleColor[1]*oneMinusAlpha + color[1],
-					2: l.singleColor[2]*oneMinusAlpha + color[2],
-					3: l.singleColor[3]*oneMinusAlpha + color[3],
+					color[0] + l.singleColor[0]*oneMinusAlpha,
+					color[1] + l.singleColor[1]*oneMinusAlpha,
+					color[2] + l.singleColor[2]*oneMinusAlpha,
+					color[3] + l.singleColor[3]*oneMinusAlpha,
 				}
 				memsetColumnsFp(buf, color)
 			} else {
@@ -321,10 +321,12 @@ func fineFillComplexNative(buf [][stripHeight]gfx.PlainColor, color gfx.PlainCol
 	for x := range buf {
 		col := &buf[x]
 		for y := range col {
-			col[y][0] = col[y][0]*oneMinusAlpha + color[0]
-			col[y][1] = col[y][1]*oneMinusAlpha + color[1]
-			col[y][2] = col[y][2]*oneMinusAlpha + color[2]
-			col[y][3] = col[y][3]*oneMinusAlpha + color[3]
+			col[y] = gfx.PlainColor{
+				color[0] + col[y][0]*oneMinusAlpha,
+				color[1] + col[y][1]*oneMinusAlpha,
+				color[2] + col[y][2]*oneMinusAlpha,
+				color[3] + col[y][3]*oneMinusAlpha,
+			}
 		}
 	}
 }
@@ -354,10 +356,12 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 				for y := range col {
 					maskAlpha := float32(a[y])
 					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y][0] = maskAlpha*color[0] + col[y][0]*oneMinusAlpha
-					col[y][1] = maskAlpha*color[1] + col[y][1]*oneMinusAlpha
-					col[y][2] = maskAlpha*color[2] + col[y][2]*oneMinusAlpha
-					col[y][3] = maskAlpha*color[3] + col[y][3]*oneMinusAlpha
+					col[y] = gfx.PlainColor{
+						color[0]*maskAlpha + col[y][0]*oneMinusAlpha,
+						color[1]*maskAlpha + col[y][1]*oneMinusAlpha,
+						color[2]*maskAlpha + col[y][2]*oneMinusAlpha,
+						color[3]*maskAlpha + col[y][3]*oneMinusAlpha,
+					}
 				}
 			}
 		} else {
@@ -370,10 +374,12 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 				for y := range col {
 					maskAlpha := float32(a[y])
 					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y][0] = maskAlpha*color[0] + bg[0]*oneMinusAlpha
-					col[y][1] = maskAlpha*color[1] + bg[1]*oneMinusAlpha
-					col[y][2] = maskAlpha*color[2] + bg[2]*oneMinusAlpha
-					col[y][3] = maskAlpha*color[3] + bg[3]*oneMinusAlpha
+					col[y] = gfx.PlainColor{
+						color[0]*maskAlpha + bg[0]*oneMinusAlpha,
+						color[1]*maskAlpha + bg[1]*oneMinusAlpha,
+						color[2]*maskAlpha + bg[2]*oneMinusAlpha,
+						color[3]*maskAlpha + bg[3]*oneMinusAlpha,
+					}
 				}
 			}
 		}
@@ -399,10 +405,12 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 					color[3] *= (1.0 / 255.0)
 					maskAlpha := float32(a[y])
 					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y][0] = col[y][0]*oneMinusAlpha + maskAlpha*color[0]
-					col[y][1] = col[y][1]*oneMinusAlpha + maskAlpha*color[1]
-					col[y][2] = col[y][2]*oneMinusAlpha + maskAlpha*color[2]
-					col[y][3] = col[y][3]*oneMinusAlpha + maskAlpha*color[3]
+					col[y] = gfx.PlainColor{
+						color[0]*maskAlpha + col[y][0]*oneMinusAlpha,
+						color[1]*maskAlpha + col[y][1]*oneMinusAlpha,
+						color[2]*maskAlpha + col[y][2]*oneMinusAlpha,
+						color[3]*maskAlpha + col[y][3]*oneMinusAlpha,
+					}
 				}
 			}
 		} else {
@@ -420,10 +428,12 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 					color[3] *= (1.0 / 255.0)
 					maskAlpha := float32(a[y])
 					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y][0] = bg[0]*oneMinusAlpha + maskAlpha*color[0]
-					col[y][1] = bg[1]*oneMinusAlpha + maskAlpha*color[1]
-					col[y][2] = bg[2]*oneMinusAlpha + maskAlpha*color[2]
-					col[y][3] = bg[3]*oneMinusAlpha + maskAlpha*color[3]
+					col[y] = gfx.PlainColor{
+						color[0]*maskAlpha + bg[0]*oneMinusAlpha,
+						color[1]*maskAlpha + bg[1]*oneMinusAlpha,
+						color[2]*maskAlpha + bg[2]*oneMinusAlpha,
+						color[3]*maskAlpha + bg[3]*oneMinusAlpha,
+					}
 				}
 			}
 		}
