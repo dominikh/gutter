@@ -20,7 +20,7 @@ import (
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
-	"honnef.co/go/gutter/gmath"
+	"honnef.co/go/stuff/math/math32"
 )
 
 // TODO(dh): Allow specifying whether gradients should be interpolated with
@@ -491,7 +491,7 @@ func (g EncodedStripGradient) posInner(pos curve.Point) (float32, bool) {
 	if p1 < 0 {
 		return 0, false
 	} else {
-		return float32(pos.X) + gmath.Sqrt32(p1), true
+		return float32(pos.X) + math32.Sqrt(p1), true
 	}
 }
 
@@ -508,18 +508,18 @@ func (g EncodedFocalGradient) posInner(pos curve.Point) (float32, bool) {
 		t = x + y*y/x
 	} else if g.focalData.wellBehaved() {
 		// xy_to_2pt_conical_well_behaved
-		t = gmath.Sqrt32(x*x+y*y) - x*fp0
+		t = math32.Sqrt(x*x+y*y) - x*fp0
 	} else if g.focalData.swapped() || (1.0-g.focalData.fFocalX < 0.0) {
 		// xy_to_2pt_conical_smaller
-		t = -gmath.Sqrt32(x*x-y*y) - x*fp0
+		t = -math32.Sqrt(x*x-y*y) - x*fp0
 	} else {
 		// xy_to_2pt_conical_greater
-		t = gmath.Sqrt32(x*x-y*y) - x*fp0
+		t = math32.Sqrt(x*x-y*y) - x*fp0
 	}
 
 	if !g.focalData.wellBehaved() {
 		// mask_2pt_conical_degenerates
-		degenerate := t <= 0.0 || gmath.IsNaN(t)
+		degenerate := t <= 0.0 || math32.IsNaN(t)
 
 		if degenerate {
 			return 0, false
@@ -591,7 +591,7 @@ func degeneratePoint(p1 curve.Point, p2 curve.Point) bool {
 }
 
 func degenerateVal(v1 float32, v2 float32) bool {
-	return gmath.Abs32(v2-v1) <= degenerateThreshold
+	return math32.Abs(v2-v1) <= degenerateThreshold
 }
 
 // Extend the stops so that we can treat a repeated gradient like a reflected
@@ -863,7 +863,7 @@ func createFocalData(r0, r1 float32, matrix curve.Affine) (FocalData, curve.Affi
 	)
 	matrix = focalMatrix.Mul(matrix)
 
-	fr1 := r1 / gmath.Abs32(1.0-fFocalX)
+	fr1 := r1 / math32.Abs(1.0-fFocalX)
 
 	data := FocalData{
 		fr1,
@@ -891,5 +891,5 @@ func isNearlyZero(f float64) bool {
 }
 
 func isNearlyZero32(f float32) bool {
-	return gmath.Abs32(f) <= 1.0/(1<<12)
+	return math32.Abs(f) <= 1.0/(1<<12)
 }

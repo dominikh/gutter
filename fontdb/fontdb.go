@@ -15,11 +15,11 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"syscall"
 
 	"honnef.co/go/gutter/opentype"
 	"honnef.co/go/gutter/opentype/opentypehl"
+	"honnef.co/go/stuff/syncutil"
 
 	"github.com/go-text/typesetting/fontscan"
 	"golang.org/x/text/language"
@@ -311,54 +311,13 @@ func dmap[S ~[]E, E, R any](items S, limit int, out []R, fn func(subitems S) (R,
 	}
 
 	out = slices.Grow(out, limit)[:len(out)+limit]
-	err := distribute(items, limit, func(group int, step int, subitems S) error {
+	err := syncutil.Distribute(items, limit, func(group int, step int, subitems S) error {
 		res, err := fn(subitems)
 		out[group] = res
 		return err
 	})
 
 	return out, err
-}
-
-func distribute[S ~[]E, E any](items S, limit int, fn func(group int, step int, subitems S) error) error {
-	if len(items) == 0 {
-		return nil
-	}
-
-	if limit <= 0 {
-		limit = runtime.GOMAXPROCS(0)
-	}
-
-	if limit > len(items) {
-		limit = len(items)
-	}
-
-	step := len(items) / limit
-	var muGerr sync.Mutex
-	var gerr error
-	var wg sync.WaitGroup
-	wg.Add(limit)
-	for g := 0; g < limit; g++ {
-		g := g
-		go func() {
-			defer wg.Done()
-			var subset S
-			if g < limit-1 {
-				subset = items[g*step : (g+1)*step]
-			} else {
-				subset = items[g*step:]
-			}
-			if err := fn(g, step, subset); err != nil {
-				muGerr.Lock()
-				if gerr == nil {
-					gerr = err
-				}
-				muGerr.Unlock()
-			}
-		}()
-	}
-	wg.Wait()
-	return gerr
 }
 
 func (f *Faces) Match(family string, query map[opentype.Tag]float64) (*FontVariation, bool) {

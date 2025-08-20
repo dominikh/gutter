@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	xlanguage "honnef.co/go/gutter/internal/language"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 )
 
 // TODO Document how

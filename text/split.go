@@ -11,9 +11,9 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/fontdb"
 	xlanguage "honnef.co/go/gutter/internal/language"
-	"honnef.co/go/gutter/internal/tinylfu"
 	"honnef.co/go/gutter/opentype"
 	"honnef.co/go/gutter/text/bidi"
+	"honnef.co/go/stuff/container/tinylfu"
 
 	"github.com/go-text/typesetting/language"
 )

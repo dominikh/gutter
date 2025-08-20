@@ -16,7 +16,8 @@ import (
 	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/lottie/lottie_model"
 	"honnef.co/go/gutter/lottie/lottie_renderer"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
+	"honnef.co/go/stuff/math/mathutil"
 )
 
 var _ Object = (*FillColor)(nil)
@@ -99,10 +100,10 @@ func NewInset(v float64) Inset {
 
 func (start Inset) Lerp(end Inset, t float64) Inset {
 	return Inset{
-		Left:   animation.Lerp(start.Left, end.Left, t),
-		Top:    animation.Lerp(start.Top, end.Top, t),
-		Right:  animation.Lerp(start.Right, end.Right, t),
-		Bottom: animation.Lerp(start.Bottom, end.Bottom, t),
+		Left:   mathutil.Lerp(start.Left, end.Left, t),
+		Top:    mathutil.Lerp(start.Top, end.Top, t),
+		Right:  mathutil.Lerp(start.Right, end.Right, t),
+		Bottom: mathutil.Lerp(start.Bottom, end.Bottom, t),
 	}
 }
 
@@ -171,8 +172,8 @@ type Alignment struct {
 
 func (a Alignment) Lerp(b Alignment, t float64) Alignment {
 	return Alignment{
-		X: animation.Lerp(a.X, b.X, t),
-		Y: animation.Lerp(a.Y, b.Y, t),
+		X: mathutil.Lerp(a.X, b.X, t),
+		Y: mathutil.Lerp(a.Y, b.Y, t),
 	}
 }
 

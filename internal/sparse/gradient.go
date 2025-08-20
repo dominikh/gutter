@@ -10,7 +10,7 @@ package sparse
 import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/gmath"
+	"honnef.co/go/stuff/math/math32"
 )
 
 type gradientFiller struct {
@@ -102,10 +102,10 @@ func extend(val float32, pad bool) float32 {
 	}
 
 	if val < 0 {
-		return val - gmath.Floor32(val)
+		return val - math32.Floor(val)
 	}
 	if val > 1 {
-		return val - gmath.Ceil32(val-1)
+		return val - math32.Ceil(val-1)
 	}
 	return val
 }

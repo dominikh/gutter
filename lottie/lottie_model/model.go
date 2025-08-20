@@ -15,7 +15,7 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 )
 
 var (

@@ -6,7 +6,7 @@
 package widgets
 
 import (
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
 )

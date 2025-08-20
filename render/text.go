@@ -7,7 +7,7 @@ package render
 
 import (
 	"honnef.co/go/curve"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 	"honnef.co/go/gutter/paint"
 	"honnef.co/go/gutter/text"
 	"honnef.co/go/gutter/text/bidi"

@@ -12,7 +12,7 @@ import (
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/gfx"
 	model "honnef.co/go/gutter/lottie/lottie_model"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 )
 
 type Renderer struct {

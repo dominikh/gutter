@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 )
 
 type StatusListener uint64

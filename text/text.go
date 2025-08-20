@@ -123,11 +123,11 @@ import (
 	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/internal/harfbuzz"
 	xlanguage "honnef.co/go/gutter/internal/language"
-	"honnef.co/go/gutter/internal/tinylfu"
-	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/opentype"
 	"honnef.co/go/gutter/text/bidi"
 	"honnef.co/go/gutter/text/linebreak"
+	"honnef.co/go/stuff/container/maybe"
+	"honnef.co/go/stuff/container/tinylfu"
 )
 
 // XXX make this a dynamic setting

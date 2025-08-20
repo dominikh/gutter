@@ -13,7 +13,7 @@ import (
 	"honnef.co/go/gutter/application"
 	"honnef.co/go/gutter/lottie/lottie_converter"
 	"honnef.co/go/gutter/lottie/lottie_encoding"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 	"honnef.co/go/gutter/widget"
 	"honnef.co/go/gutter/widget/widgets"
 	"honnef.co/go/gutter/wsi"

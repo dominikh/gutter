@@ -5,7 +5,7 @@
 
 package base
 
-import "honnef.co/go/gutter/maybe"
+import "honnef.co/go/stuff/container/maybe"
 
 type Listener uint64
 

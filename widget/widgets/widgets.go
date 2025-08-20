@@ -15,10 +15,11 @@ import (
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/io/pointer"
-	"honnef.co/go/gutter/maybe"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
 	"honnef.co/go/gutter/wsi"
+	"honnef.co/go/stuff/container/maybe"
+	"honnef.co/go/stuff/math/mathutil"
 )
 
 var _ widget.KeyedWidget = (*KeyedSubtree)(nil)
@@ -243,7 +244,7 @@ type opacityAnimations struct {
 func (a *AnimatedOpacity) CreateState() widget.State[*AnimatedOpacity] {
 	return NewAutomaticAnimatedState(
 		map[string]any{
-			"Opacity": NewAnimatedField(animation.Lerp[float32]),
+			"Opacity": NewAnimatedField(mathutil.Lerp[float32]),
 		},
 		func(ctx widget.BuildContext, s widget.State[*AnimatedOpacity], anims *opacityAnimations) widget.Widget {
 			return &FadeTransition{

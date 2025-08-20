@@ -13,7 +13,8 @@ import (
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
+	"honnef.co/go/stuff/syncutil"
 )
 
 type gfxState struct {
@@ -221,7 +222,7 @@ func (ctx *Renderer) finish() {
 func (ctx *Renderer) Render(width, height uint16, packer Packer) {
 	ctx.finish()
 
-	distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
+	syncutil.Distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
 		stackScratch := make([]optLayer, 0, 32)
 		fine := newFine(width, height, packer)
 		for y, row := range subitems {

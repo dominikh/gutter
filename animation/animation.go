@@ -7,15 +7,14 @@ package animation
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"sort"
 
 	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/gmath"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
+	"honnef.co/go/stuff/math/mathutil"
 
 	"golang.org/x/exp/constraints"
 )
@@ -175,22 +174,6 @@ func (e *CurvedAnimation) Value() float64 {
 	return ease.Transform(t)
 }
 
-// Lerp linearly interpolates between integer and float types.
-func Lerp[T constraints.Integer | constraints.Float](start, end T, t float64) T {
-	switch t {
-	case 0:
-		return start
-	case 1:
-		return end
-	default:
-		if rv := reflect.ValueOf(start); rv.CanInt() || rv.CanUint() {
-			return (T(math.Round(float64(start) + float64(end-start)*t)))
-		} else {
-			return (T(float64(start) + float64(end-start)*t))
-		}
-	}
-}
-
 // MaybeLerp linearly interpolates between integer and float types wrapped in
 // [maybe.Option]. None values default to the zero value.
 func MaybeLerp[T constraints.Integer | constraints.Float](start, end maybe.Option[T], t float64) maybe.Option[T] {
@@ -254,31 +237,31 @@ func (v *Keyframes[T]) Evaluate(frame float64) T {
 		case Lerper[T]:
 			return v1.Lerp(v2, t)
 		case float64:
-			return any(Lerp(v1, any(v2).(float64), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(float64), t)).(T)
 		case float32:
-			return any(Lerp(v1, any(v2).(float32), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(float32), t)).(T)
 		case int64:
-			return any(Lerp(v1, any(v2).(int64), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(int64), t)).(T)
 		case int32:
-			return any(Lerp(v1, any(v2).(int32), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(int32), t)).(T)
 		case int16:
-			return any(Lerp(v1, any(v2).(int16), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(int16), t)).(T)
 		case int8:
-			return any(Lerp(v1, any(v2).(int8), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(int8), t)).(T)
 		case int:
-			return any(Lerp(v1, any(v2).(int), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(int), t)).(T)
 		case uint64:
-			return any(Lerp(v1, any(v2).(uint64), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(uint64), t)).(T)
 		case uint32:
-			return any(Lerp(v1, any(v2).(uint32), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(uint32), t)).(T)
 		case uint16:
-			return any(Lerp(v1, any(v2).(uint16), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(uint16), t)).(T)
 		case uint8:
-			return any(Lerp(v1, any(v2).(uint8), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(uint8), t)).(T)
 		case uint:
-			return any(Lerp(v1, any(v2).(uint), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(uint), t)).(T)
 		case uintptr:
-			return any(Lerp(v1, any(v2).(uintptr), t)).(T)
+			return any(mathutil.Lerp(v1, any(v2).(uintptr), t)).(T)
 		default:
 			panic(fmt.Sprintf("nil Lerp function and unsupported type %T", v1))
 		}
@@ -308,7 +291,7 @@ func (kfs Keyframes[T]) ComputeFramesAndWeight(frame float64) (startValue, endVa
 	if t1 <= t0 {
 		t = 0
 	}
-	return kfs.Values[idx0], kfs.Values[idx1], easing.Transform(gmath.Clamp(t, 0, 1)), true
+	return kfs.Values[idx0], kfs.Values[idx1], easing.Transform(mathutil.Clamp(t, 0, 1)), true
 }
 
 type KeyframedTransform struct {
@@ -334,7 +317,7 @@ func (t KeyframedTransform) Evaluate(frame float64) curve.Affine {
 	skewMatrix := curve.Identity
 	if skew != 0.0 {
 		const SKEW_LIMIT = 85.0
-		skew := gmath.Clamp(-skew, -SKEW_LIMIT, SKEW_LIMIT)
+		skew := mathutil.Clamp(-skew, -SKEW_LIMIT, SKEW_LIMIT)
 		// skew = toRadians(skew)
 		angle := skewAngle
 		// angle := toRadians(skewAngle)
@@ -448,13 +431,13 @@ func (s KeyframedColorStops) Evaluate(frame float64) []gfx.GradientStop {
 	var stops []gfx.GradientStop
 	for i := range min(len(v0), len(v1)) {
 		j := i
-		offset := Lerp(v0[j].Offset, v1[j].Offset, t)
+		offset := mathutil.Lerp(v0[j].Offset, v1[j].Offset, t)
 		v0c := v0[j].Color.Convert(s.ColorSpace)
 		v1c := v1[j].Color.Convert(s.ColorSpace)
-		r := Lerp(v0c.Values[0], v1c.Values[0], t)
-		g := Lerp(v0c.Values[1], v1c.Values[1], t)
-		b := Lerp(v0c.Values[2], v1c.Values[2], t)
-		a := Lerp(v0c.Values[3], v1c.Values[3], t)
+		r := mathutil.Lerp(v0c.Values[0], v1c.Values[0], t)
+		g := mathutil.Lerp(v0c.Values[1], v1c.Values[1], t)
+		b := mathutil.Lerp(v0c.Values[2], v1c.Values[2], t)
+		a := mathutil.Lerp(v0c.Values[3], v1c.Values[3], t)
 		stops = append(stops, gfx.GradientStop{
 			Offset: float32(offset),
 			Color:  color.Make(s.ColorSpace, r, g, b, a),

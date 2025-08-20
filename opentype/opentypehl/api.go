@@ -8,7 +8,7 @@ import (
 	"errors"
 	"iter"
 
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 	"honnef.co/go/gutter/opentype"
 
 	"golang.org/x/text/language"

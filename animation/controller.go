@@ -16,7 +16,7 @@ import (
 
 	"honnef.co/go/gutter/base"
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/gutter/gmath"
+	"honnef.co/go/stuff/math/mathutil"
 )
 
 var _ Animation[float64] = (*Controller)(nil)
@@ -100,7 +100,7 @@ func (c *Controller) SetValue(v float64) {
 }
 
 func (c *Controller) setValue(v float64) {
-	c.value = gmath.Clamp(v, c.LowerBound, c.UpperBound)
+	c.value = mathutil.Clamp(v, c.LowerBound, c.UpperBound)
 	switch c.value {
 	case c.LowerBound:
 		c.status = StatusDismissed
@@ -186,7 +186,7 @@ func (c *Controller) animateTo(v float64, curve Curve) {
 	c.Stop()
 	if simulationDuration == 0 {
 		if c.value != v {
-			c.value = gmath.Clamp(v, c.LowerBound, c.UpperBound)
+			c.value = mathutil.Clamp(v, c.LowerBound, c.UpperBound)
 			c.notifyListeners()
 		}
 		if c.direction == animationDirectionForward {
@@ -233,7 +233,7 @@ func (c *Controller) startSimulation(sim Simulation) {
 	debug.Assert(!c.Animating())
 	c.simulation = sim
 	c.lastElapsedDuration = 0
-	c.value = gmath.Clamp(sim.X(0), c.LowerBound, c.UpperBound)
+	c.value = mathutil.Clamp(sim.X(0), c.LowerBound, c.UpperBound)
 	c.ticker.Start()
 	if c.direction == animationDirectionForward {
 		c.status = StatusForward
@@ -277,7 +277,7 @@ func (c *Controller) notifyStatusListeners(status Status) {
 
 func (c *Controller) tick(elapsed time.Duration) {
 	c.lastElapsedDuration = elapsed
-	c.value = gmath.Clamp(c.simulation.X(elapsed), c.LowerBound, c.UpperBound)
+	c.value = mathutil.Clamp(c.simulation.X(elapsed), c.LowerBound, c.UpperBound)
 	if c.simulation.Done(elapsed) {
 		if c.direction == animationDirectionForward {
 			c.status = StatusCompleted

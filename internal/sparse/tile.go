@@ -8,7 +8,7 @@ package sparse
 import (
 	"fmt"
 
-	"honnef.co/go/gutter/gmath"
+	"honnef.co/go/stuff/math/math32"
 )
 
 const (
@@ -90,7 +90,7 @@ func makeTiles(lineBuf []flatLine, width, height uint16) []tile {
 		// For ease of logic, special-case purely vertical tiles.
 		if lineLeftX == lineRightX {
 			yTopTiles := min(satConv[uint16](lineTopY), tileRows)
-			yBottomTiles := min(satConv[uint16](gmath.Ceil32(lineBottomY)), tileRows)
+			yBottomTiles := min(satConv[uint16](math32.Ceil(lineBottomY)), tileRows)
 
 			x := satConv[uint16](lineLeftX)
 			for yIdx := yTopTiles; yIdx < yBottomTiles; yIdx++ {
@@ -99,7 +99,7 @@ func makeTiles(lineBuf []flatLine, width, height uint16) []tile {
 		} else {
 			xSlope := (p1x - p0x) / (p1y - p0y)
 			yTopTiles := min(satConv[uint16](lineTopY), tileRows)
-			yBottomTiles := min(satConv[uint16](gmath.Ceil32(lineBottomY)), tileRows)
+			yBottomTiles := min(satConv[uint16](math32.Ceil(lineBottomY)), tileRows)
 
 			for yIdx := yTopTiles; yIdx < yBottomTiles; yIdx++ {
 				y := float32(yIdx)

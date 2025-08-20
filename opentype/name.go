@@ -11,7 +11,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 
 	"golang.org/x/text/language"
 )

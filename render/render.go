@@ -14,7 +14,7 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/debug"
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/gmath"
+	"honnef.co/go/stuff/math/mathutil"
 )
 
 // TODO implement support for multiple layers
@@ -146,20 +146,20 @@ func (c Constraints) Tight() bool {
 func (c Constraints) Enforce(oc Constraints) Constraints {
 	return Constraints{
 		Min: curve.Size{
-			Width:  gmath.Clamp(c.Min.Width, oc.Min.Width, oc.Max.Width),
-			Height: gmath.Clamp(c.Min.Height, oc.Min.Height, oc.Max.Height),
+			Width:  mathutil.Clamp(c.Min.Width, oc.Min.Width, oc.Max.Width),
+			Height: mathutil.Clamp(c.Min.Height, oc.Min.Height, oc.Max.Height),
 		},
 		Max: curve.Size{
-			Width:  gmath.Clamp(c.Max.Width, oc.Min.Width, oc.Max.Width),
-			Height: gmath.Clamp(c.Max.Height, oc.Min.Height, oc.Max.Height),
+			Width:  mathutil.Clamp(c.Max.Width, oc.Min.Width, oc.Max.Width),
+			Height: mathutil.Clamp(c.Max.Height, oc.Min.Height, oc.Max.Height),
 		},
 	}
 }
 
 // Constrain a size so each dimension is in the range [min, max].
 func (c Constraints) Constrain(size curve.Size) curve.Size {
-	size.Width = gmath.Clamp(size.Width, c.Min.Width, c.Max.Width)
-	size.Height = gmath.Clamp(size.Height, c.Min.Height, c.Max.Height)
+	size.Width = mathutil.Clamp(size.Width, c.Min.Width, c.Max.Width)
+	size.Height = mathutil.Clamp(size.Height, c.Min.Height, c.Max.Height)
 	return size
 }
 
@@ -197,8 +197,8 @@ func (c Constraints) ConstrainWithAspectRatio(size curve.Size) curve.Size {
 	}
 
 	return curve.Sz(
-		gmath.Clamp(width, c.Min.Width, c.Max.Height),
-		gmath.Clamp(height, c.Min.Height, c.Max.Height),
+		mathutil.Clamp(width, c.Min.Width, c.Max.Height),
+		mathutil.Clamp(height, c.Min.Height, c.Max.Height),
 	)
 }
 

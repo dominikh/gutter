@@ -9,8 +9,8 @@ import (
 	"math"
 
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/gmath"
 	"honnef.co/go/safeish"
+	"honnef.co/go/stuff/math/math32"
 )
 
 func mixColorDodge(dst, src float32) float32 {
@@ -165,9 +165,9 @@ func blendComplexComplex(
 					Cm1 = min(Cs1, Cd1)
 					Cm2 = min(Cs2, Cd2)
 				case gfx.MixDifference:
-					Cm0 = gmath.Abs32(Cd0 - Cs0)
-					Cm1 = gmath.Abs32(Cd1 - Cs1)
-					Cm2 = gmath.Abs32(Cd2 - Cs2)
+					Cm0 = math32.Abs(Cd0 - Cs0)
+					Cm1 = math32.Abs(Cd1 - Cs1)
+					Cm2 = math32.Abs(Cd2 - Cs2)
 				case gfx.MixExclusion:
 					Cm0 = Cd0 + Cs0 - 2*Cd0*Cs0
 					Cm1 = Cd1 + Cs1 - 2*Cd1*Cs1
@@ -355,9 +355,9 @@ func blendSimpleSimple(
 			Cm1 = min(Cs1, Cd1)
 			Cm2 = min(Cs2, Cd2)
 		case gfx.MixDifference:
-			Cm0 = gmath.Abs32(Cd0 - Cs0)
-			Cm1 = gmath.Abs32(Cd1 - Cs1)
-			Cm2 = gmath.Abs32(Cd2 - Cs2)
+			Cm0 = math32.Abs(Cd0 - Cs0)
+			Cm1 = math32.Abs(Cd1 - Cs1)
+			Cm2 = math32.Abs(Cd2 - Cs2)
 		case gfx.MixExclusion:
 			Cm0 = Cd0 + Cs0 - 2*Cd0*Cs0
 			Cm1 = Cd1 + Cs1 - 2*Cd1*Cs1

@@ -14,10 +14,10 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/gmath"
 	encoding "honnef.co/go/gutter/lottie/lottie_encoding"
 	model "honnef.co/go/gutter/lottie/lottie_model"
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
+	"honnef.co/go/stuff/math/mathutil"
 )
 
 func ConvertAnimation(source *encoding.Animation) *model.Composition {
@@ -320,7 +320,7 @@ func convertTransform(value *encoding.Transform) (animation.KeyframedTransform, 
 		transform.Rotation.Values[i] = toRadians(v)
 	}
 	for i, v := range transform.Skew.Values {
-		v = gmath.Clamp(-v, -85, 85)
+		v = mathutil.Clamp(-v, -85, 85)
 		transform.Skew.Values[i] = toRadians(v)
 	}
 	for i, v := range transform.SkewAngle.Values {
@@ -842,7 +842,7 @@ func convertStops(value []float64, count int) []gfx.GradientStop {
 						case x >= a && x <= b && t >= 0.75 && x >= 0.9:
 							alphaInterp = alphaB
 						default:
-							alphaInterp = animation.Lerp(alphaA, alphaB, t)
+							alphaInterp = mathutil.Lerp(alphaA, alphaB, t)
 						}
 						stop.Color.Values[3] = min(stop.Color.Values[3], alphaInterp)
 					}

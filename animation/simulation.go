@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"honnef.co/go/gutter/gmath"
+	"honnef.co/go/stuff/math/mathutil"
 )
 
 type Tolerance struct {
@@ -41,7 +41,7 @@ type interpolationSimulation struct {
 }
 
 func (sim *interpolationSimulation) X(d time.Duration) float64 {
-	t := gmath.Clamp(float64(d)/float64(sim.Duration), 0, 1)
+	t := mathutil.Clamp(float64(d)/float64(sim.Duration), 0, 1)
 	switch t {
 	case 0:
 		return sim.Begin
@@ -86,7 +86,7 @@ func newRepeatingSimulation(
 ) *repeatingSimulation {
 	var initialTime float64
 	if min != max {
-		initialTime = ((gmath.Clamp(initial, min, max) - min) / (max - min)) * period.Seconds()
+		initialTime = ((mathutil.Clamp(initial, min, max) - min) / (max - min)) * period.Seconds()
 	}
 	var exitTime float64
 	if count > 0 {
@@ -112,10 +112,10 @@ func (sim *repeatingSimulation) X(d time.Duration) float64 {
 
 	if sim.Reverse && isPlayingReverse {
 		sim.DirectionSetter(animationDirectionReverse)
-		return Lerp(sim.Max, sim.Min, t)
+		return mathutil.Lerp(sim.Max, sim.Min, t)
 	} else {
 		sim.DirectionSetter(animationDirectionForward)
-		return Lerp(sim.Min, sim.Max, t)
+		return mathutil.Lerp(sim.Min, sim.Max, t)
 	}
 }
 

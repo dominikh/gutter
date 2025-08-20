@@ -17,7 +17,8 @@ require (
 	honnef.co/go/curve v0.0.0-20250325031802-e021cd9ef495
 	honnef.co/go/jello v0.0.0-20250521161253-6b746b01ce5a
 	honnef.co/go/libwayland v0.0.0-20250604131836-2b956ec1bdb1
-	honnef.co/go/safeish v0.0.0-20240804135137-5a7027a64ab2
+	honnef.co/go/safeish v0.0.0-20241114181457-67c0a2c357ad
+	honnef.co/go/stuff v0.0.0-20250719175023-de3141074b7c
 )
 
 require (

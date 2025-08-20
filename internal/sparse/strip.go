@@ -13,7 +13,7 @@ import (
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/gutter/gmath"
+	"honnef.co/go/stuff/math/math32"
 )
 
 // The height of a strip.
@@ -119,7 +119,7 @@ func renderStripsScalar(
 					var alphas [stripHeight]uint8
 					for y := range tileHeight {
 						area := locationWinding[x][y]
-						coverage := gmath.Abs32(area - 2.0*gmath.Floor32((0.5*area)+0.5))
+						coverage := math32.Abs(area - 2.0*math32.Floor((0.5*area)+0.5))
 						areaU8 := satConv[uint8](coverage*255.0 + 0.5)
 						alphas[y] = areaU8
 					}
@@ -185,7 +185,7 @@ func renderStripsScalar(
 
 		// Lines moving upwards (in a y-down coordinate system) add to winding; lines moving
 		// downwards subtract from winding.
-		sign := gmath.Sign32(p0y - p1y)
+		sign := math32.Sign(p0y - p1y)
 
 		// Calculate winding / pixel area coverage.
 		//
@@ -284,7 +284,7 @@ func computeAlphasNonZeroNative(tail *[tileWidth][tileHeight]uint8, locationWind
 	for x := range tileWidth {
 		for y := range tileHeight {
 			area := locationWinding[x][y]
-			coverage := min32(gmath.Abs32(area), 1.0)
+			coverage := min32(math32.Abs(area), 1.0)
 			// We don't need to use satConv here. coverage ∈ [0, 1]
 			// and uint8(255.5) == uint8(255).
 			tail[x][y] = uint8(coverage*255.0 + 0.5)
@@ -360,7 +360,7 @@ func computeWindingNative(
 			// `x_slope` is always finite, as horizontal geometry is elided.
 			linePxLeftYX := lineTopX + (linePxLeftY-lineTopY)*xSlope
 			linePxRightYX := lineTopX + (linePxRightY-lineTopY)*xSlope
-			h := gmath.Abs32(linePxRightY - linePxLeftY)
+			h := math32.Abs(linePxRightY - linePxLeftY)
 
 			// The trapezoidal area enclosed between the line and the right edge of the pixel
 			// square.
@@ -416,8 +416,8 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 	bottomStripIdx := min(height-1, uint16(y1)) / tileHeight
 	bottomStripY := bottomStripIdx * tileHeight
 
-	x0Floored := gmath.Floor32(x0)
-	x1Floored := gmath.Floor32(x1)
+	x0Floored := math32.Floor(x0)
+	x1Floored := math32.Floor(x1)
 
 	xStart := uint16(x0Floored)
 	// Inclusive, i.e. the pixel at column `xEnd` is the very right border (possibly only anti-aliased)

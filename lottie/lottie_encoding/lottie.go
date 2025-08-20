@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"honnef.co/go/gutter/maybe"
+	"honnef.co/go/stuff/container/maybe"
 
 	"github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
