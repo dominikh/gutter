@@ -125,7 +125,7 @@ func (f *fine) materialize(l *fineLayer) {
 		return
 	}
 
-	memsetColumnsFp(l.scratch[:], l.singleColor)
+	memsetColumns(l.scratch[:], l.singleColor)
 	l.complex = true
 }
 
@@ -187,7 +187,7 @@ func (f *fine) clear(x, width int, paint gfx.PlainColor) {
 	} else {
 		f.materialize(l)
 		buf := l.scratch[x : x+width]
-		memsetColumnsFp(buf, paint)
+		memsetColumns(buf, paint)
 	}
 }
 
@@ -203,7 +203,7 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 			if color[3] == 1.0 {
 				l.clear(color)
 			} else if l.complex {
-				fillComplexFp(buf, color)
+				fineFillComplex(buf, color)
 			} else {
 				oneMinusAlpha := 1.0 - color[3]
 				color = gfx.PlainColor{
@@ -223,7 +223,7 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 			if color[3] == 1.0 {
 				// The fill color is opaque, so we use a fill function that doesn't care
 				// about the background color.
-				memsetColumnsFp(buf, color)
+				memsetColumns(buf, color)
 			} else if !complex {
 				// The tile is simple, which means the fill only has to blend colors
 				// once, not for every pixel.
@@ -234,10 +234,10 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 					color[2] + l.singleColor[2]*oneMinusAlpha,
 					color[3] + l.singleColor[3]*oneMinusAlpha,
 				}
-				memsetColumnsFp(buf, color)
+				memsetColumns(buf, color)
 			} else {
 				// Do the general, per-pixel fill.
-				fillComplexFp(buf, color)
+				fineFillComplex(buf, color)
 			}
 		}
 

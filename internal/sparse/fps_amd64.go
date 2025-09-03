@@ -6,24 +6,92 @@
 
 package sparse
 
-import "golang.org/x/sys/cpu"
+import (
+	"golang.org/x/sys/cpu"
+	"honnef.co/go/gutter/gfx"
+)
 
-func init() {
-	memsetColumnsFp = memsetColumnsSSE
-	fillComplexFp = fineFillComplexSSE
-	computeWindingFp = computeWindingSSE
-	processOutOfBoundsWindingFp = processOutOfBoundsWindingSSE
-	computeAlphasNonZeroFp = computeAlphasNonZeroSSE
-
+func memsetColumns(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
 	if cpu.X86.HasAVX {
-		memsetColumnsFp = memsetColumnsAVX
-		fillComplexFp = fineFillComplexAVX
-		computeWindingFp = computeWindingAVX
+		memsetColumnsAVX(buf, c)
+	} else {
+		memsetColumnsSSE(buf, c)
 	}
-	if cpu.X86.HasAVX && cpu.X86.HasFMA {
-		computeWindingFp = computeWindingAVXFMA
+}
+
+func fineFillComplex(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
+	if cpu.X86.HasAVX {
+		fineFillComplexAVX(buf, color)
+	} else {
+		fineFillComplexSSE(buf, color)
 	}
+}
+
+func computeWinding(
+	lineTopY float32,
+	lineTopX float32,
+	lineBottomY float32,
+	sign float32,
+	xSlope float32,
+	ySlope float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
+) {
+	if cpu.X86.HasAVX {
+		if cpu.X86.HasFMA {
+			computeWindingAVXFMA(
+				lineTopY,
+				lineTopX,
+				lineBottomY,
+				sign,
+				xSlope,
+				ySlope,
+				locationWinding,
+				accumulatedWinding,
+			)
+		} else {
+			computeWindingAVX(
+				lineTopY,
+				lineTopX,
+				lineBottomY,
+				sign,
+				xSlope,
+				ySlope,
+				locationWinding,
+				accumulatedWinding,
+			)
+		}
+	} else {
+		computeWindingSSE(
+			lineTopY,
+			lineTopX,
+			lineBottomY,
+			sign,
+			xSlope,
+			ySlope,
+			locationWinding,
+			accumulatedWinding,
+		)
+	}
+}
+
+func processOutOfBoundsWinding(
+	ymin float32,
+	ymax float32,
+	sign float32,
+	locationWinding *[tileWidth][tileHeight]float32,
+	accumulatedWinding *[tileHeight]float32,
+) {
+	processOutOfBoundsWindingSSE(ymin, ymax, sign, locationWinding, accumulatedWinding)
+}
+
+func computeAlphasNonZero(
+	tail *[tileWidth][tileHeight]uint8,
+	locationWinding *[tileWidth][tileHeight]float32,
+) {
 	if cpu.X86.HasAVX && cpu.X86.HasAVX2 {
-		computeAlphasNonZeroFp = computeAlphasNonZeroAVX
+		computeAlphasNonZeroAVX(tail, locationWinding)
+	} else {
+		computeAlphasNonZeroSSE(tail, locationWinding)
 	}
 }

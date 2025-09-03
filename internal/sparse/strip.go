@@ -113,7 +113,7 @@ func renderStripsScalar(
 				// OPT(dh): slicing alphaBuf and tail introduces unnecessary bounds checks
 				alphaBuf = slices.Grow(alphaBuf, tileWidth)[:len(alphaBuf)+tileWidth]
 				tail := alphaBuf[len(alphaBuf)-tileWidth:][:tileWidth]
-				computeAlphasNonZeroFp((*[tileWidth][tileHeight]uint8)(tail), &locationWinding)
+				computeAlphasNonZero((*[tileWidth][tileHeight]uint8)(tail), &locationWinding)
 			case gfx.EvenOdd:
 				for x := range tileWidth {
 					var alphas [stripHeight]uint8
@@ -257,7 +257,7 @@ func renderStripsScalar(
 				ymax = max32(lineLeftY, lineViewportLeftY)
 			}
 
-			processOutOfBoundsWindingFp(ymin, ymax, sign, &locationWinding, &accumulatedWinding)
+			processOutOfBoundsWinding(ymin, ymax, sign, &locationWinding, &accumulatedWinding)
 
 			if lineRightX < 0.0 {
 				// Early exit, as no part of the line is inside the tile.
@@ -265,7 +265,7 @@ func renderStripsScalar(
 			}
 		}
 
-		computeWindingFp(
+		computeWinding(
 			lineTopY,
 			lineTopX,
 			lineBottomY,

@@ -285,7 +285,7 @@ func blendSimpleSimple(
 		return
 	case gfx.ComposeCopy:
 		if blend.Mix == gfx.MixNormal {
-			memsetColumnsFp(dst, tos)
+			memsetColumns(dst, tos)
 			return
 		}
 	}
@@ -420,5 +420,5 @@ func blendSimpleSimple(
 		}
 	}
 
-	memsetColumnsFp(dst, nc)
+	memsetColumns(dst, nc)
 }
