@@ -272,7 +272,7 @@ func renderPathCommon(lineBuf []flatLine, fillRule gfx.FillRule, width, height u
 	return stripBuf, alphas
 }
 
-type CompiledPath struct {
+type Path struct {
 	strips   []strip
 	alphas   [][stripHeight]uint8
 	fillRule gfx.FillRule
@@ -284,7 +284,7 @@ func CompileFillPath(
 	fillRule gfx.FillRule,
 	width uint16,
 	height uint16,
-) CompiledPath {
+) Path {
 	// The transformation mustn't skew the shape for our optimizations to apply.
 	if affine.N1 == 0 && affine.N2 == 0 {
 		switch shape := shape.(type) {
@@ -302,7 +302,7 @@ func CompileFillPath(
 			}
 
 			strips, alphas := renderRect(shape, width, height)
-			return CompiledPath{
+			return Path{
 				strips:   strips,
 				alphas:   alphas,
 				fillRule: gfx.NonZero,
@@ -313,7 +313,7 @@ func CompileFillPath(
 	// TODO(dh): scale precision based on transformation
 	lines := fill(shape.PathElements(0.1), affine)
 	strips, alphas := renderPathCommon(lines, fillRule, width, height)
-	return CompiledPath{strips, alphas, fillRule}
+	return Path{strips, alphas, fillRule}
 }
 
 func CompileStrokedPath(
@@ -322,15 +322,15 @@ func CompileStrokedPath(
 	stroke_ curve.Stroke,
 	width uint16,
 	height uint16,
-) CompiledPath {
+) Path {
 	// TODO(dh): scale precision based on transformation
 	path := shape.PathElements(0.1)
 	lines := stroke(path, stroke_, affine)
 	strips, alphas := renderPathCommon(lines, gfx.NonZero, width, height)
-	return CompiledPath{strips, alphas, gfx.NonZero}
+	return Path{strips, alphas, gfx.NonZero}
 }
 
-func (ctx *Renderer) renderPath(p CompiledPath, paint gfx.EncodedPaint) {
+func (ctx *Renderer) renderPath(p Path, paint gfx.EncodedPaint) {
 	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
 	if topLayer.blackholed > 0 {
 		return
@@ -627,7 +627,7 @@ func (ctx *Renderer) popLayers() {
 	}
 }
 
-func (ctx *Renderer) FillCompiled(p CompiledPath, transform curve.Affine, paint gfx.Paint) {
+func (ctx *Renderer) FillCompiled(p Path, transform curve.Affine, paint gfx.Paint) {
 	ctx.renderPath(p, paint.Encode(transform))
 }
 
@@ -663,7 +663,7 @@ type Layer struct {
 type LayerCompiled struct {
 	BlendMode    gfx.BlendMode
 	Opacity      float32
-	Clip         maybe.Option[CompiledPath]
+	Clip         maybe.Option[Path]
 	CopyBackdrop bool
 }
 
@@ -678,7 +678,7 @@ func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.
 	})
 }
 
-func (ctx *Renderer) PushClipCompiled(p CompiledPath) {
+func (ctx *Renderer) PushClipCompiled(p Path) {
 	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: maybe.Some(p), CopyBackdrop: true})
 }
 
@@ -844,7 +844,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 }
 
 func (ctx *Renderer) PushLayer(l Layer) {
-	var p maybe.Option[CompiledPath]
+	var p maybe.Option[Path]
 	if l.Clip != nil {
 		p = maybe.Some(CompileFillPath(l.Clip, l.ClipTransform, l.ClipFillRule, ctx.width, ctx.height))
 	}

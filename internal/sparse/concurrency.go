@@ -27,7 +27,7 @@ const (
 )
 
 type renderTask struct {
-	path      chan CompiledPath
+	path      chan Path
 	kind      renderTaskKind
 	transform curve.Affine
 	paint     gfx.Paint
@@ -84,7 +84,7 @@ func (r *ConcurrentRenderer) Fill(
 	paint gfx.Paint,
 ) {
 	t := renderTask{
-		path:      make(chan CompiledPath, 1),
+		path:      make(chan Path, 1),
 		kind:      fillRenderTask,
 		transform: transform,
 		paint:     paint,
@@ -102,7 +102,7 @@ func (r *ConcurrentRenderer) Stroke(
 	paint gfx.Paint,
 ) {
 	t := renderTask{
-		path:      make(chan CompiledPath, 1),
+		path:      make(chan Path, 1),
 		kind:      fillRenderTask,
 		transform: transform,
 		paint:     paint,
@@ -119,7 +119,7 @@ func (r *ConcurrentRenderer) PushClip(
 	fill gfx.FillRule,
 ) {
 	t := renderTask{
-		path: make(chan CompiledPath, 1),
+		path: make(chan Path, 1),
 		kind: clipRenderTask,
 	}
 	r.tasks <- t
@@ -134,7 +134,7 @@ func (r *ConcurrentRenderer) PushLayer(l gfx.Layer) {
 
 func (r *ConcurrentRenderer) Save() {
 	t := renderTask{
-		path: make(chan CompiledPath),
+		path: make(chan Path),
 		kind: saveRenderTask,
 	}
 	close(t.path)
@@ -143,7 +143,7 @@ func (r *ConcurrentRenderer) Save() {
 
 func (r *ConcurrentRenderer) Restore() {
 	t := renderTask{
-		path: make(chan CompiledPath),
+		path: make(chan Path),
 		kind: restoreRenderTask,
 	}
 	close(t.path)
