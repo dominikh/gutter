@@ -394,16 +394,7 @@ func (ctx *Renderer) renderPath(p Path, paint gfx.EncodedPaint) {
 }
 
 func (ctx *Renderer) bbox() tileBbox {
-	if len(ctx.layerStack) > 0 {
-		return ctx.layerStack[len(ctx.layerStack)-1].bbox
-	} else {
-		widthTiles := divCeil(ctx.width, wideTileWidth)
-		heightTiles := divCeil(ctx.height, stripHeight)
-		return tileBbox{
-			tileMin: tileCoord{0, 0},
-			tileMax: tileCoord{widthTiles, heightTiles},
-		}
-	}
+	return ctx.layerStack[len(ctx.layerStack)-1].bbox
 }
 
 func (ctx *Renderer) popLayer() {
