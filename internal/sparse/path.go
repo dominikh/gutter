@@ -15,9 +15,8 @@ import (
 )
 
 type Path struct {
-	strips   []strip
-	alphas   [][stripHeight]uint8
-	fillRule gfx.FillRule
+	strips []strip
+	alphas [][stripHeight]uint8
 }
 
 func CompileFillPath(
@@ -45,9 +44,8 @@ func CompileFillPath(
 
 			strips, alphas := renderRect(shape, width, height)
 			return Path{
-				strips:   strips,
-				alphas:   alphas,
-				fillRule: gfx.NonZero,
+				strips: strips,
+				alphas: alphas,
 			}
 		}
 	}
@@ -55,7 +53,7 @@ func CompileFillPath(
 	// TODO(dh): scale precision based on transformation
 	lines := fill(shape.PathElements(0.1), affine)
 	strips, alphas := renderPathCommon(lines, fillRule, width, height)
-	return Path{strips, alphas, fillRule}
+	return Path{strips, alphas}
 }
 
 func CompileStrokedPath(
@@ -69,7 +67,7 @@ func CompileStrokedPath(
 	path := shape.PathElements(0.1)
 	lines := stroke(path, stroke_, affine)
 	strips, alphas := renderPathCommon(lines, gfx.NonZero, width, height)
-	return Path{strips, alphas, gfx.NonZero}
+	return Path{strips, alphas}
 }
 
 type region struct {
@@ -110,14 +108,7 @@ func (it *regionIter) next(out *region) bool {
 
 		curStrip, nextStrip := &p.strips[it.curIdx], &p.strips[it.curIdx+1]
 		it.curIdx++
-		var shouldFill bool
-		switch p.fillRule {
-		case gfx.NonZero:
-			shouldFill = nextStrip.winding != 0
-		case gfx.EvenOdd:
-			shouldFill = nextStrip.winding%2 != 0
-		}
-		if shouldFill {
+		if nextStrip.fillGap {
 			x := curStrip.x + uint16((nextStrip.col - curStrip.col))
 			width := nextStrip.x - x
 			*out = region{kind: fillRegionKind, start: x, width: width}
@@ -163,11 +154,7 @@ func (p Path) Intersect(o Path) Path {
 		return Path{}
 	}
 
-	out := Path{
-		// In theory any fill rule is fine since all filled regions are marked
-		// with a winding number of 1.
-		fillRule: gfx.NonZero,
-	}
+	var out Path
 
 	curStripY := min(
 		p.strips[0].stripY(),
@@ -199,17 +186,17 @@ func (p Path) Intersect(o Path) Path {
 				x:       state.x,
 				y:       curStripY * tileHeight,
 				col:     state.col,
-				winding: state.winding,
+				fillGap: state.fillGap,
 			})
 		}
 	}
 
-	startStrip := func(x uint16, winding int32) {
+	startStrip := func(x uint16, fillGap bool) {
 		flushStrip()
 		unflushedStrip = maybe.Some(strip{
 			x:       x,
 			col:     uint32(len(out.alphas)),
-			winding: winding,
+			fillGap: fillGap,
 		})
 	}
 
@@ -239,7 +226,7 @@ func (p Path) Intersect(o Path) Path {
 					// one at the end of the overlap region setting the winding number to
 					// one, so that the whole area before that will be filled with a sparse
 					// fill.
-					startStrip(overlapEnd, 1)
+					startStrip(overlapEnd, true)
 
 				case (regionP.kind == stripRegionKind && regionO.kind == fillRegionKind) ||
 					// One fill one strip, so we simply use the alpha mask from the strip region.
@@ -252,7 +239,7 @@ func (p Path) Intersect(o Path) Path {
 					}
 					// If possible, don't create a new strip but just extend the current one.
 					if shouldStartNewStrip(overlapStart) {
-						startStrip(overlapStart, 0)
+						startStrip(overlapStart, false)
 					}
 
 					stripAlphas := s.alphas[overlapStart-s.start:][:overlapWidth]
@@ -263,7 +250,7 @@ func (p Path) Intersect(o Path) Path {
 					//
 					// Once again, only create a new strip if we can't extend the current one.
 					if shouldStartNewStrip(overlapStart) {
-						startStrip(overlapStart, 0)
+						startStrip(overlapStart, false)
 					}
 
 					// Get the right alpha values for the specific position.
@@ -305,10 +292,9 @@ func (p Path) Intersect(o Path) Path {
 
 	// Push the sentinel strip.
 	out.strips = append(out.strips, strip{
-		x:       math.MaxUint16,
-		y:       lastStripY * tileHeight,
-		col:     uint32(len(out.alphas)),
-		winding: 0,
+		x:   math.MaxUint16,
+		y:   lastStripY * tileHeight,
+		col: uint32(len(out.alphas)),
 	})
 
 	return out

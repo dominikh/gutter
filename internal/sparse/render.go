@@ -367,17 +367,7 @@ func (ctx *Renderer) renderPath(p Path, paint gfx.EncodedPaint) {
 			ctx.cmds = ctx.tiles[stripY][xtile].alphaFill(ctx.cmds, c)
 		}
 
-		var activeFill bool
-		switch p.fillRule {
-		case gfx.NonZero:
-			activeFill = nextStrip.winding != 0
-		case gfx.EvenOdd:
-			activeFill = nextStrip.winding%2 != 0
-		default:
-			panic(fmt.Sprintf("unexpected sparse.FillRule: %#v", p.fillRule))
-		}
-
-		if activeFill && stripY == nextStrip.stripY() {
+		if nextStrip.fillGap && stripY == nextStrip.stripY() {
 			x = max(x1, bbox.tileMin.tileX*wideTileWidth)
 			uproundedWidth := divCeil(ctx.width, wideTileWidth) * wideTileWidth
 			x2 := min(nextStrip.x, uproundedWidth)
@@ -481,7 +471,7 @@ func (ctx *Renderer) popLayer() {
 			}
 			// The winding check is probably not needed; if there was a fill,
 			// the logic below should have advanced tileX.
-			if strip.winding == 0 {
+			if !strip.fillGap {
 				for x := tileX; x < xClamped; x++ {
 					ctx.tiles[tileY][x].popZeroClip()
 				}
@@ -536,8 +526,7 @@ func (ctx *Renderer) popLayer() {
 			popPending = true
 		}
 
-		// XXX add even/odd winding rule support
-		if nextStrip.winding != 0 && stripY == nextStrip.stripY() {
+		if nextStrip.fillGap && stripY == nextStrip.stripY() {
 			x = max(x1, bbox.tileMin.tileX*wideTileWidth)
 			uproundedWidth := divCeil(ctx.width, wideTileWidth) * wideTileWidth
 			x2 := min(nextStrip.x, uproundedWidth)
@@ -755,7 +744,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		x0 := strip.x
 		xClamped := min(x0/wideTileWidth, bbox.tileMax.tileX)
 		if tileX < xClamped {
-			if strip.winding == 0 {
+			if !strip.fillGap {
 				for x := tileX; x < xClamped; x++ {
 					ctx.tiles[tileY][x].pushZeroClip()
 				}
@@ -780,9 +769,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 
 		// Push layers for all tiles covered by solid fill (except for the one
 		// already covered by alpha, if any)
-		//
-		// XXX support even/odd fill rule
-		if nextStrip.winding != 0 && tileY == nextStrip.stripY() {
+		if nextStrip.fillGap && tileY == nextStrip.stripY() {
 			x2 := min(divCeil(nextStrip.x, wideTileWidth), bbox.tileMax.tileX)
 			fxt0 := tileX
 			fxt1 := x2

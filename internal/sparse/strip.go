@@ -27,7 +27,7 @@ type strip struct {
 	x       uint16
 	y       uint16
 	col     uint32
-	winding int32
+	fillGap bool
 }
 
 func (s *strip) stripY() uint16 {
@@ -35,8 +35,8 @@ func (s *strip) stripY() uint16 {
 }
 
 func (s strip) String() string {
-	return fmt.Sprintf("strip(x=%v, y=%v, col=%v, winding=%v)",
-		s.x, s.y, s.col, s.winding)
+	return fmt.Sprintf("strip(x=%v, y=%v, col=%v, fillGap=%t)",
+		s.x, s.y, s.col, s.fillGap)
 }
 
 func min32(a, b float32) float32 {
@@ -66,6 +66,17 @@ func renderStripsScalar(
 		return nil, nil
 	}
 
+	shouldFillGap := func(winding int32) bool {
+		switch fillRule {
+		case gfx.NonZero:
+			return winding != 0
+		case gfx.EvenOdd:
+			return winding%2 != 0
+		default:
+			panic("unreachable")
+		}
+	}
+
 	// The accumulated tile winding delta. A line that crosses the top edge of a tile
 	// increments the delta if the line is directed upwards, and decrements it if goes
 	// downwards. Horizontal lines leave it unchanged.
@@ -83,10 +94,9 @@ func renderStripsScalar(
 	var accumulatedWinding [tileHeight]float32
 
 	strip_ := strip{
-		x:       prevTile.x() * tileWidth,
-		y:       prevTile.y() * tileHeight,
-		col:     0,
-		winding: 0,
+		x:   prevTile.x() * tileWidth,
+		y:   prevTile.y() * tileHeight,
+		col: 0,
 	}
 
 	for i := range len(tiles) + 1 {
@@ -150,7 +160,7 @@ func renderStripsScalar(
 						x:       math.MaxUint16,
 						y:       prevTile.y() * tileHeight,
 						col:     uint32(len(alphaBuf)),
-						winding: windingDelta,
+						fillGap: shouldFillGap(windingDelta),
 					})
 				}
 
@@ -166,7 +176,7 @@ func renderStripsScalar(
 				x:       tile_.x() * tileWidth,
 				y:       tile_.y() * tileHeight,
 				col:     uint32(len(alphaBuf)),
-				winding: windingDelta,
+				fillGap: shouldFillGap(windingDelta),
 			}
 
 			// Note: this fill is mathematically not necessary. It provides a way to reduce
@@ -511,10 +521,9 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 
 		// Push the actual strip.
 		stripBuf = append(stripBuf, strip{
-			x:       uint16(x0Floored),
-			y:       stripY,
-			col:     alphaIdx,
-			winding: 0,
+			x:   uint16(x0Floored),
+			y:   stripY,
+			col: alphaIdx,
 		})
 
 		return alphaBuf, stripBuf
@@ -545,10 +554,9 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 			})
 
 			stripBuf = append(stripBuf, strip{
-				x:       uint16(x0Floored),
-				y:       i * tileHeight,
-				col:     alphaIdx,
-				winding: 0,
+				x:   uint16(x0Floored),
+				y:   i * tileHeight,
+				col: alphaIdx,
 			})
 
 			if xEnd > xStart {
@@ -565,7 +573,7 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 					x:       uint16(x1Floored),
 					y:       i * tileHeight,
 					col:     alphaIdx,
-					winding: 1,
+					fillGap: true,
 				})
 			}
 		}
@@ -577,10 +585,9 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 
 	// Push sentinel strip.
 	stripBuf = append(stripBuf, strip{
-		x:       math.MaxUint16,
-		y:       bottomStripY,
-		col:     uint32(len(alphaBuf)),
-		winding: 0,
+		x:   math.MaxUint16,
+		y:   bottomStripY,
+		col: uint32(len(alphaBuf)),
 	})
 
 	return stripBuf, alphaBuf
