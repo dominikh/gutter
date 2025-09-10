@@ -65,6 +65,11 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 			app.resized = false
 		}
 
+		const (
+			printFrameTimes      = true
+			printDetailedTimings = false
+		)
+
 		// XXX DPI scale and whatnot
 		// OPT reuse recorders
 		sz := app.win.PhysicalSize()
@@ -75,9 +80,11 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 		// XXX use actual scale, not 2
 		rec.PushTransform(curve.Scale(2, 2))
 		t := time.Now()
-		_ = t
+		startTime := t
 		app.widgetBinding.DrawFrame(ev, rec.Checkpoint())
-		log.Printf("recorded frame in: %s", time.Since(t))
+		if printDetailedTimings {
+			log.Printf("recorded frame in: %s", time.Since(t))
+		}
 
 		t = time.Now()
 		app.renderer.Reset()
@@ -90,7 +97,9 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 			log.Println("---REPLAY END---")
 		}
 		sparse.PlayRecording(cmds, app.renderer, curve.Identity)
-		log.Printf("played recording in: %s", time.Since(t))
+		if printDetailedTimings {
+			log.Printf("played recording in: %s", time.Since(t))
+		}
 
 		buf, err := app.win.NextBuffer()
 		if err != nil {
@@ -108,7 +117,13 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 			PremulAlpha: true,
 		}
 		app.renderer.Render(uint16(sz.Width), uint16(sz.Height), packer)
-		log.Printf("rendered to pixmap in: %s", time.Since(t))
+		if printDetailedTimings {
+			log.Printf("rendered to pixmap in: %s", time.Since(t))
+		}
+
+		if printFrameTimes {
+			log.Printf("rendered frame in: %s", time.Since(startTime))
+		}
 
 		app.win.Present(buf, 0, 0, sz.Width, sz.Height)
 	case widgets.CallbackEvent:
