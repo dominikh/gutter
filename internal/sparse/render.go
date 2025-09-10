@@ -19,6 +19,7 @@ import (
 
 type gfxState struct {
 	numLayers int
+	numClips  int
 }
 
 type tileCoord struct {
@@ -80,7 +81,7 @@ func NewRenderer(width, height uint16) *Renderer {
 		width:      width,
 		height:     height,
 		tiles:      tiles,
-		stateStack: []gfxState{{0}},
+		stateStack: []gfxState{{0, 0}},
 		layerStack: []layer{
 			{
 				bbox: tileBbox{
@@ -633,6 +634,7 @@ func (ctx *Renderer) PushClipCompiled(p Path) {
 	if len(ctx.clipStack) != 0 {
 		p = ctx.clipStack[len(ctx.clipStack)-1].Intersect(p)
 	}
+	ctx.stateStack[len(ctx.stateStack)-1].numClips++
 	ctx.clipStack = append(ctx.clipStack, p)
 }
 
@@ -640,6 +642,7 @@ func (ctx *Renderer) PushClipCompiled(p Path) {
 func (ctx *Renderer) PopClip() {
 	if len(ctx.clipStack) != 0 {
 		ctx.clipStack = ctx.clipStack[:len(ctx.clipStack)-1]
+		ctx.stateStack[len(ctx.stateStack)-1].numClips--
 	}
 }
 
@@ -832,12 +835,16 @@ func (ctx *Renderer) PopLayer() {
 }
 
 func (ctx *Renderer) Save() {
-	ctx.stateStack = append(ctx.stateStack, gfxState{0})
+	ctx.stateStack = append(ctx.stateStack, gfxState{0, 0})
 }
 
 func (ctx *Renderer) Restore() {
-	for ctx.stateStack[len(ctx.stateStack)-1].numLayers > 0 {
+	state := &ctx.stateStack[len(ctx.stateStack)-1]
+	for state.numLayers > 0 {
 		ctx.popLayer()
+	}
+	for state.numClips > 0 {
+		ctx.PopClip()
 	}
 	ctx.stateStack = ctx.stateStack[:len(ctx.stateStack)-1]
 }
