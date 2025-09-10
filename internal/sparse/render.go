@@ -223,7 +223,9 @@ func (ctx *Renderer) Reset() {
 // At the moment, this mostly involves resolving any open layers, but
 // might extend to other things.
 func (ctx *Renderer) finish() {
-	ctx.popLayers()
+	for len(ctx.stateStack) > 0 {
+		ctx.Restore()
+	}
 }
 
 func (ctx *Renderer) Render(width, height uint16, packer Packer) {
@@ -574,12 +576,6 @@ func (ctx *Renderer) popLayer() {
 	}
 }
 
-func (ctx *Renderer) popLayers() {
-	for ctx.stateStack[len(ctx.stateStack)-1].numLayers > 0 {
-		ctx.popLayer()
-	}
-}
-
 func (ctx *Renderer) FillCompiled(p Path, transform curve.Affine, paint gfx.Paint) {
 	ctx.renderPath(p, paint.Encode(transform))
 }
@@ -840,6 +836,8 @@ func (ctx *Renderer) Save() {
 }
 
 func (ctx *Renderer) Restore() {
-	ctx.popLayers()
+	for ctx.stateStack[len(ctx.stateStack)-1].numLayers > 0 {
+		ctx.popLayer()
+	}
 	ctx.stateStack = ctx.stateStack[:len(ctx.stateStack)-1]
 }
