@@ -678,7 +678,11 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 						} else if child.opacity == 1 &&
 							child.blend.Mix == gfx.MixNormal &&
 							child.numAlphaBlends == 0 &&
-							!childNeedsBackdrop(layers, child) {
+							!childNeedsBackdrop(layers, child) &&
+							// TODO(dh): future-proof code would look for
+							// CopyBackdrop anywhere in the layer, not just at
+							// the beginning.
+							allCmds[cmds[child.push+1]].typ != cmdCopyBackdrop {
 
 							// If the layer has opaque pixels that aren't being
 							// blended into the parent, then we can't unwrap the
