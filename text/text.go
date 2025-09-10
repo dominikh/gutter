@@ -913,7 +913,7 @@ func (g *glyphPainter) PushClipRect(rect curve.Rect) {
 // PopClip implements harfbuzz.GlyphPainter.
 func (g *glyphPainter) PopClip() {
 	// XXX guard against empty layers
-	g.layers[len(g.layers)-1].PopLayer()
+	g.layers[len(g.layers)-1].PopClip()
 }
 
 // PushGroup implements harfbuzz.GlyphPainter.

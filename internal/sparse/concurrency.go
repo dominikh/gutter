@@ -126,6 +126,8 @@ func (r *ConcurrentRenderer) PushClip(
 	go func(width, height uint16) {
 		t.path <- CompileFillPath(shape, transform, fill, width, height)
 	}(r.Width(), r.Height())
+
+	// XXX need a PopClip function
 }
 
 func (r *ConcurrentRenderer) PushLayer(l gfx.Layer) {

@@ -50,7 +50,7 @@ func (w *Clip) PerformLayout() curve.Size {
 // PerformPaint implements Object.
 func (w *Clip) PerformPaint(p *Painter) {
 	p.Canvas.PushClip(curve.NewRectFromOrigin(curve.Point{}, w.Handle().Size()))
-	defer p.Canvas.PopLayer()
+	defer p.Canvas.PopClip()
 
 	p.PaintAt(w.Child, curve.Point{})
 }

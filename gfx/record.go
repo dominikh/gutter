@@ -28,6 +28,14 @@ type CommandPushLayer struct {
 
 type CommandPopLayer struct{}
 
+type CommandPushClip struct {
+	Clip      Shape
+	FillRule  FillRule
+	Transform curve.Affine
+}
+
+type CommandPopClip struct{}
+
 type CommandFill struct {
 	Shape     Shape
 	Paint     Paint
@@ -54,6 +62,8 @@ func (cmd CommandFill) GoString() string {
 
 func (CommandPushLayer) isCommand()     {}
 func (CommandPopLayer) isCommand()      {}
+func (CommandPushClip) isCommand()      {}
+func (CommandPopClip) isCommand()       {}
 func (CommandFill) isCommand()          {}
 func (CommandStroke) isCommand()        {}
 func (CommandPlayRecording) isCommand() {}
@@ -66,6 +76,7 @@ type Recorder interface {
 	SetFillRule(FillRule)
 
 	PushClip(Shape)
+	PopClip()
 	PushLayer(Layer)
 	PopLayer()
 
@@ -128,10 +139,16 @@ func (s *SimpleRecorder) PlayRecording(rec Recording) {
 
 // PushClip implements Recorder.
 func (s *SimpleRecorder) PushClip(shape Shape) {
-	s.PushLayer(Layer{
-		Opacity: 1,
-		Clip:    shape,
+	*s.commands = append(*s.commands, CommandPushClip{
+		Clip:      shape,
+		FillRule:  s.fillRule,
+		Transform: s.transform,
 	})
+}
+
+// PopClip implements Recorder.
+func (s *SimpleRecorder) PopClip() {
+	*s.commands = append(*s.commands, CommandPopClip{})
 }
 
 // PushLayer implements Recorder.

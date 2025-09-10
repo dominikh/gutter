@@ -80,7 +80,7 @@ func (r *Renderer) renderLayer(
 	trans = r.computeTransform(layerSet, layer, parentTransform, frame)
 	if maskIndex, ok := layer.MaskLayerID.Get(); ok {
 		if mode, ok := layer.MaskLayerMode.Get(); ok {
-			// OPT(dh): is this layer necessary for correct rendering?
+			// OPT(dh): Can this layer be pushed into the branch that follows?
 			rec.PushLayer(gfx.Layer{
 				Opacity: 1,
 			})
@@ -133,7 +133,7 @@ func (r *Renderer) renderLayer(
 
 			rec.PushTransform(trans)
 			rec.PushClip(curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(layer.Width, layer.Height)))
-			defer rec.PopLayer()
+			defer rec.PopClip()
 			rec.PopTransform()
 
 			for i := len(assetLayers) - 1; i >= 0; i-- {
@@ -157,8 +157,7 @@ func (r *Renderer) renderLayer(
 		r.batch.reset(r)
 	}
 
-	n := len(layer.Masks)
-	for range n {
+	for range len(layer.Masks) {
 		rec.PopLayer()
 	}
 }

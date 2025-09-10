@@ -63,6 +63,7 @@ type Renderer struct {
 	tiles      [][]wideTile
 	stateStack []gfxState
 	layerStack []layer
+	clipStack  []Path
 
 	cmds []cmd
 }
@@ -143,6 +144,9 @@ func optimizeRecording(cmds gfx.Recording) {
 				layers[len(layers)-1].childNeedsBackdrop = true
 			}
 			layers = append(layers, l)
+		case gfx.CommandPushClip:
+			// TODO(dh): should we handle empty clip paths here?
+		case gfx.CommandPopClip:
 		case gfx.CommandStroke:
 		default:
 			panic(fmt.Sprintf("unexpected gfx.Command: %#v", cmd))
@@ -178,6 +182,10 @@ func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
 				ClipTransform: aff.Mul(cmd.Transform),
 				ClipFillRule:  cmd.FillRule,
 			})
+		case gfx.CommandPopClip:
+			r.PopClip()
+		case gfx.CommandPushClip:
+			r.PushClip(cmd.Clip, cmd.Transform, cmd.FillRule)
 		case gfx.CommandStroke:
 			r.Stroke(cmd.Shape, aff.Mul(cmd.Transform), cmd.Stroke, cmd.Paint)
 		case gfx.CommandPlayRecording:
@@ -276,6 +284,10 @@ func (ctx *Renderer) renderPath(p Path, paint gfx.EncodedPaint) {
 	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
 	if topLayer.blackholed > 0 {
 		return
+	}
+
+	if len(ctx.clipStack) > 0 {
+		p = ctx.clipStack[len(ctx.clipStack)-1].Intersect(p)
 	}
 
 	topLayer.nonempty = true
@@ -609,19 +621,31 @@ type LayerCompiled struct {
 	CopyBackdrop bool
 }
 
+// PushClip pushes a new clip to the clip stack. The provided shape gets
+// intersected with the current clip path, if any.
+//
+// All uses of [PushClip], [PushClipCompiled], [Fill], [FillCompiled], [Stroke],
+// and [StrokeCompiled] have their shapes and paths intersected with the
+// currently active clip path, if any.
+//
+// The clip stack is independent of the layer stack.
 func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.FillRule) {
-	ctx.PushLayer(Layer{
-		Opacity:       1,
-		Clip:          shape,
-		ClipFillRule:  fill,
-		ClipTransform: transform,
-		CopyBackdrop:  true,
-		BlendMode:     gfx.BlendMode{Compose: gfx.ComposeCopy},
-	})
+	ctx.PushClipCompiled(CompileFillPath(shape, transform, fill, ctx.width, ctx.height))
 }
 
+// PushClipCompiled is like [PushClip] but using an already compiled [Path].
 func (ctx *Renderer) PushClipCompiled(p Path) {
-	ctx.PushLayerCompiled(LayerCompiled{Opacity: 1, Clip: maybe.Some(p), CopyBackdrop: true})
+	if len(ctx.clipStack) != 0 {
+		p = ctx.clipStack[len(ctx.clipStack)-1].Intersect(p)
+	}
+	ctx.clipStack = append(ctx.clipStack, p)
+}
+
+// PopClip pops one element off the clip stack.
+func (ctx *Renderer) PopClip() {
+	if len(ctx.clipStack) != 0 {
+		ctx.clipStack = ctx.clipStack[:len(ctx.clipStack)-1]
+	}
 }
 
 func stripsBoundingBox(strips []strip) tileBbox {
