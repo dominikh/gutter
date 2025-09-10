@@ -217,6 +217,13 @@ func (ctx *Renderer) Reset() {
 	ctx.cmds[1] = cmd{typ: cmdPopLayer}
 	ctx.cmds[2] = cmd{typ: cmdPushLayer}
 	ctx.cmds[3] = cmd{typ: cmdCopyBackdrop}
+
+	clear(ctx.layerStack[1:])
+	ctx.layerStack = ctx.layerStack[:1]
+	ctx.stateStack = ctx.stateStack[:1]
+	ctx.stateStack[0] = gfxState{0, 0}
+	clear(ctx.clipStack)
+	ctx.clipStack = ctx.clipStack[:0]
 }
 
 // Finish the coarse rasterization prior to fine rendering.
