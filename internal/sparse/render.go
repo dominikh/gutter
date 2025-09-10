@@ -172,9 +172,8 @@ func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
 		case gfx.CommandFill:
 			r.Fill(cmd.Shape, aff.Mul(cmd.Transform), cmd.FillRule, cmd.Paint)
 		case gfx.CommandPopLayer:
-			r.Restore()
+			r.PopLayer()
 		case gfx.CommandPushLayer:
-			r.Save()
 			r.PushLayer(Layer{
 				BlendMode:     cmd.Layer.BlendMode,
 				Opacity:       cmd.Layer.Opacity,
@@ -713,7 +712,13 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		return
 	}
 
-	// intersect clip bounding box
+	// Intersect clip bounding box.
+	//
+	// Note that we do not intersect the layer's clip path with the clip stack.
+	// The clip stack can be popped independently of the layer stack and the
+	// layer's full clip path should apply when that happens.
+	//
+	// TODO(dh): should PushLayer be affected by the current clip?
 	strips := l.Clip.Unwrap().strips
 	bbox = bbox.intersect(stripsBoundingBox(strips))
 
@@ -822,6 +827,12 @@ func (ctx *Renderer) PushLayer(l Layer) {
 		CopyBackdrop: l.CopyBackdrop,
 	})
 
+}
+
+func (ctx *Renderer) PopLayer() {
+	if ctx.stateStack[len(ctx.stateStack)-1].numLayers > 0 {
+		ctx.popLayer()
+	}
 }
 
 func (ctx *Renderer) Save() {
