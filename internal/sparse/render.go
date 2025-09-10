@@ -225,7 +225,7 @@ func (ctx *Renderer) Reset() {
 // might extend to other things.
 func (ctx *Renderer) finish() {
 	for len(ctx.stateStack) > 0 {
-		ctx.Restore()
+		ctx.restore()
 	}
 }
 
@@ -829,6 +829,11 @@ func (ctx *Renderer) PushLayer(l Layer) {
 }
 
 func (ctx *Renderer) PopLayer() {
+	if len(ctx.layerStack) == 1 {
+		// We start with one layer in the layer stack, which the user shouldn't
+		// be able to pop.
+		return
+	}
 	if ctx.stateStack[len(ctx.stateStack)-1].numLayers > 0 {
 		ctx.popLayer()
 	}
@@ -839,6 +844,16 @@ func (ctx *Renderer) Save() {
 }
 
 func (ctx *Renderer) Restore() {
+	if len(ctx.stateStack) == 1 {
+		// We start with one state in the state stack, so that PushClip and
+		// PushLayer can unconditionally increase the counts in the topmost
+		// state. This isn't a state that the user should be able to pop.
+		return
+	}
+	ctx.restore()
+}
+
+func (ctx *Renderer) restore() {
 	state := &ctx.stateStack[len(ctx.stateStack)-1]
 	for state.numLayers > 0 {
 		ctx.popLayer()
