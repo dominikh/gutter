@@ -406,6 +406,13 @@ func (ctx *Renderer) popLayer() {
 		return
 	}
 
+	defer func() {
+		// Don't hold on to any data (such as layer.strips and layer.alphas)
+		//
+		// Note that this won't errornously reset the very first layer because
+		// popLayer doesn't get called for it.
+		*lastLayer = layer{}
+	}()
 	ctx.stateStack[len(ctx.stateStack)-1].numLayers--
 	ctx.layerStack = ctx.layerStack[:len(ctx.layerStack)-1]
 	bbox := lastLayer.bbox
@@ -639,6 +646,7 @@ func (ctx *Renderer) PushClipCompiled(p Path) {
 // PopClip pops one element off the clip stack.
 func (ctx *Renderer) PopClip() {
 	if len(ctx.clipStack) != 0 {
+		ctx.clipStack[len(ctx.clipStack)-1] = Path{}
 		ctx.clipStack = ctx.clipStack[:len(ctx.clipStack)-1]
 		ctx.stateStack[len(ctx.stateStack)-1].numClips--
 	}
