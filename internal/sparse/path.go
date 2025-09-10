@@ -6,8 +6,8 @@
 package sparse
 
 import (
-	"iter"
 	"math"
+	"slices"
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
@@ -79,7 +79,7 @@ type region struct {
 	alphas [][stripHeight]uint8 // stripRegion
 }
 
-func (r region) end() uint16 {
+func (r *region) end() uint16 {
 	return r.start + r.width
 }
 
@@ -90,59 +90,71 @@ const (
 	stripRegionKind
 )
 
-func (p Path) regions(stripY uint16) iter.Seq[region] {
-	return func(yield func(region) bool) {
-		// OPT(dh): users of regions will look at consecutive rows, which makes
-		// it silly to always start looking for the first relevant strip from
-		// zero. We could be O(nlogn) instead of O(n²) by using binary search,
-		// or O(n) by simply remembering the last index.
-		curIdx := 0
-		for p.strips[curIdx].stripY() < stripY {
-			// This loop depends on the presence of a sentinel tile. Without it,
-			// the increment might wrap around and loop forever.
-			curIdx++
+// regionIter is an iterator over the regions in a path.
+//
+// We don't use iter.Seq to cut down on the amount of garbage being produced by
+// the iterator and the coroutine we use to pull from it.
+type regionIter struct {
+	path    Path
+	stripY  uint16
+	curIdx  int
+	onStrip bool
+}
+
+func (it *regionIter) next(out *region) bool {
+	p := it.path
+	stripY := it.stripY
+
+	if !it.onStrip {
+		it.onStrip = true
+
+		curStrip, nextStrip := &p.strips[it.curIdx], &p.strips[it.curIdx+1]
+		it.curIdx++
+		var shouldFill bool
+		switch p.fillRule {
+		case gfx.NonZero:
+			shouldFill = nextStrip.winding != 0
+		case gfx.EvenOdd:
+			shouldFill = nextStrip.winding%2 != 0
 		}
-
-		onStrip := true
-
-		for {
-			if !onStrip {
-				onStrip = true
-
-				curStrip, nextStrip := p.strips[curIdx], p.strips[curIdx+1]
-				curIdx++
-				var shouldFill bool
-				switch p.fillRule {
-				case gfx.NonZero:
-					shouldFill = nextStrip.winding != 0
-				case gfx.EvenOdd:
-					shouldFill = nextStrip.winding%2 != 0
-				}
-				if shouldFill {
-					x := curStrip.x + uint16((nextStrip.col - curStrip.col))
-					width := nextStrip.x - x
-					if !yield(region{kind: fillRegionKind, start: x, width: width}) {
-						return
-					}
-				}
-			}
-
-			onStrip = false
-
-			curStrip := p.strips[curIdx]
-			if curStrip.x == math.MaxUint16 || curStrip.stripY() != stripY {
-				return
-			}
-			nextStrip := p.strips[curIdx+1]
-
-			x := curStrip.x
-			width := uint16(nextStrip.col - curStrip.col)
-			alphas := p.alphas[curStrip.col:nextStrip.col]
-
-			if !yield(region{kind: stripRegionKind, start: x, width: width, alphas: alphas}) {
-				return
-			}
+		if shouldFill {
+			x := curStrip.x + uint16((nextStrip.col - curStrip.col))
+			width := nextStrip.x - x
+			*out = region{kind: fillRegionKind, start: x, width: width}
+			return true
 		}
+	}
+
+	it.onStrip = false
+
+	curStrip := &p.strips[it.curIdx]
+	if curStrip.x == math.MaxUint16 || curStrip.stripY() != stripY {
+		return false
+	}
+	nextStrip := &p.strips[it.curIdx+1]
+
+	x := curStrip.x
+	width := uint16(nextStrip.col - curStrip.col)
+	alphas := p.alphas[curStrip.col:nextStrip.col]
+
+	*out = region{kind: stripRegionKind, start: x, width: width, alphas: alphas}
+	return true
+}
+
+// regions returns an iterator over the regions (i.e. strips and fills) in the
+// path. The startStripIdx parameter is used to speed up finding the first
+// relevant strip and can be set to the final index of a previous iterator for a
+// smaller stripY.
+func (p Path) regions(stripY uint16, startStripIdx int) regionIter {
+	curIdx := max(startStripIdx, 0)
+	for ; curIdx < len(p.strips) && p.strips[curIdx].stripY() < stripY; curIdx++ {
+	}
+
+	return regionIter{
+		path:    p,
+		stripY:  stripY,
+		curIdx:  curIdx,
+		onStrip: true,
 	}
 }
 
@@ -169,8 +181,6 @@ func (p Path) Intersect(o Path) Path {
 	// The strip we're currently building, which hasn't been flushed yet.
 	var unflushedStrip maybe.Option[strip]
 
-	// OPT(dh): do these closures cause variables to escape? would this be more
-	// efficient with parameters?
 	shouldStartNewStrip := func(overlapStart uint16) bool {
 		state, ok := unflushedStrip.Get()
 		if !ok {
@@ -203,19 +213,21 @@ func (p Path) Intersect(o Path) Path {
 		})
 	}
 
+	var idxP, idxO int
 	for ; curStripY <= lastStripY; curStripY++ {
-		nextP, stopP := iter.Pull(p.regions(curStripY))
-		nextO, stopO := iter.Pull(o.regions(curStripY))
+		iterP := p.regions(curStripY, idxP)
+		iterO := o.regions(curStripY, idxO)
 
-		regionP, okP := nextP()
-		regionO, okO := nextO()
+		var regionP, regionO region
+		okP := iterP.next(&regionP)
+		okO := iterO.next(&regionO)
 
 		for okP && okO {
 			switch {
 			case regionP.end() <= regionO.start:
-				regionP, okP = nextP()
+				okP = iterP.next(&regionP)
 			case regionP.start >= regionO.end():
-				regionO, okO = nextO()
+				okO = iterO.next(&regionO)
 			default:
 				overlapStart := max(regionP.start, regionO.start)
 				overlapEnd := min(regionP.end(), regionO.end())
@@ -258,7 +270,9 @@ func (p Path) Intersect(o Path) Path {
 					stripAlphasP := regionP.alphas[overlapStart-regionP.start:][:overlapWidth]
 					stripAlphasO := regionO.alphas[overlapStart-regionO.start:][:overlapWidth]
 
-					for i := 0; i < min(len(stripAlphasP), len(stripAlphasO)); i++ {
+					numAlphas := min(len(stripAlphasP), len(stripAlphasO))
+					out.alphas = slices.Grow(out.alphas, numAlphas)
+					for i := range numAlphas {
 						// OPT(dh): this loop could trivially use SIMD
 						stripAlphaP := stripAlphasP[i]
 						stripAlphaO := stripAlphasO[i]
@@ -274,16 +288,19 @@ func (p Path) Intersect(o Path) Path {
 
 				// Advance the iterator of the path whose region's end is further behind.
 				if regionP.end() <= regionO.end() {
-					regionP, okP = nextP()
+					okP = iterP.next(&regionP)
 				} else {
-					regionO, okO = nextO()
+					okO = iterO.next(&regionO)
 				}
 			}
 		}
 
 		flushStrip()
-		stopP()
-		stopO()
+
+		// Remember indices of where we stopped, to speed up creation of next
+		// iterators.
+		idxP = iterP.curIdx
+		idxO = iterO.curIdx
 	}
 
 	// Push the sentinel strip.
