@@ -200,5 +200,4 @@ type EncodedPaint interface {
 type Layer struct {
 	BlendMode BlendMode
 	Opacity   float32
-	Clip      Shape
 }

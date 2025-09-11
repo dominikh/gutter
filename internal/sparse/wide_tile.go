@@ -141,7 +141,7 @@ func (wt *wideTile) pushZeroClip() {
 
 func (wt *wideTile) popZeroClip() {
 	if wt.numZeroClips == 0 {
-		panic("unbalanced zero clips")
+		panic("internal error: unbalanced zero clips")
 	}
 	wt.numZeroClips--
 }

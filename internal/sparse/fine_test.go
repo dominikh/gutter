@@ -497,6 +497,7 @@ func TestClipping(t *testing.T) {
 
 		ctx.PushClip(circle, curve.Identity, gfx.NonZero)
 		ctx.PushClip(triangle, curve.Identity, gfx.NonZero)
+		ctx.PushLayer(Layer{Opacity: 1})
 		ctx.Fill(triangle, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 1, 1, 1, 0.5)))
 		ctx.Stroke(circle, curve.Identity, curve.DefaultStroke.WithWidth(5), gfx.Solid(color.Make(color.SRGB, 0, 0, 1, 1)))
 		ctx.Stroke(triangle, curve.Identity, curve.DefaultStroke.WithWidth(5), gfx.Solid(color.Make(color.SRGB, 0, 0, 1, 1)))

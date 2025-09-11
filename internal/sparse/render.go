@@ -18,8 +18,8 @@ import (
 )
 
 type gfxState struct {
-	numLayers int
-	numClips  int
+	layer *layer
+	clip  maybe.Option[Path]
 }
 
 type tileCoord struct {
@@ -52,8 +52,6 @@ type layer struct {
 	opacity      float32
 	blend        gfx.BlendMode
 	copyBackdrop bool
-	nonempty     bool
-	blackholed   int
 	noclip       bool
 }
 
@@ -63,8 +61,6 @@ type Renderer struct {
 	// [y][x]wideTile
 	tiles      [][]wideTile
 	stateStack []gfxState
-	layerStack []layer
-	clipStack  []Path
 
 	cmds []cmd
 }
@@ -78,17 +74,18 @@ func NewRenderer(width, height uint16) *Renderer {
 	}
 
 	return &Renderer{
-		width:      width,
-		height:     height,
-		tiles:      tiles,
-		stateStack: []gfxState{{0, 0}},
-		layerStack: []layer{
+		width:  width,
+		height: height,
+		tiles:  tiles,
+		stateStack: []gfxState{
 			{
-				bbox: tileBbox{
-					tileMin: tileCoord{0, 0},
-					tileMax: tileCoord{widthTiles, heightTiles},
+				layer: &layer{
+					bbox: tileBbox{
+						tileMin: tileCoord{0, 0},
+						tileMax: tileCoord{widthTiles, heightTiles},
+					},
+					opacity: 1,
 				},
-				opacity: 1,
 			},
 		},
 		cmds: []cmd{
@@ -105,19 +102,7 @@ func optimizeRecording(cmds gfx.Recording) {
 		push               int
 		needBackdrop       bool
 		childNeedsBackdrop bool
-	}
-
-	const debug = false
-
-	if debug {
-		log.Println("before:")
-		for _, cmd := range cmds {
-			log.Printf("%T", cmd)
-			if cmd, ok := cmd.(gfx.CommandPushLayer); ok {
-				log.Println(cmd.Layer.BlendMode, cmd.Layer.Clip == nil, cmd.Layer.Opacity)
-			}
-		}
-		log.Println()
+		isClip             bool
 	}
 
 	var layers []layer
@@ -125,9 +110,9 @@ func optimizeRecording(cmds gfx.Recording) {
 		switch cmd := cmd.(type) {
 		case gfx.CommandFill:
 		case gfx.CommandPlayRecording:
-		case gfx.CommandPopLayer:
+		case gfx.CommandPop:
 			l := layers[len(layers)-1]
-			if !l.needBackdrop && !l.childNeedsBackdrop {
+			if !l.isClip && !l.needBackdrop && !l.childNeedsBackdrop {
 				cmds[i] = nil
 				cmds[l.push] = nil
 			}
@@ -138,8 +123,7 @@ func optimizeRecording(cmds gfx.Recording) {
 			l := layer{
 				push: i,
 				needBackdrop: cmd.Layer.BlendMode != gfx.BlendMode{} ||
-					cmd.Layer.Opacity != 1 ||
-					cmd.Layer.Clip != nil,
+					cmd.Layer.Opacity != 1,
 			}
 			if len(layers) > 0 && cmd.Layer.BlendMode != (gfx.BlendMode{}) {
 				layers[len(layers)-1].childNeedsBackdrop = true
@@ -147,24 +131,45 @@ func optimizeRecording(cmds gfx.Recording) {
 			layers = append(layers, l)
 		case gfx.CommandPushClip:
 			// TODO(dh): should we handle empty clip paths here?
-		case gfx.CommandPopClip:
+			layers = append(layers, layer{isClip: true})
 		case gfx.CommandStroke:
 		default:
 			panic(fmt.Sprintf("unexpected gfx.Command: %#v", cmd))
 		}
 	}
-
-	if debug {
-		log.Println("after:")
-		for _, cmd := range cmds {
-			log.Printf("%T", cmd)
-		}
-		log.Println()
-	}
 }
 
 func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
+	const debugPrintRecording = false
+
+	printRecording := func() {
+		var indent string
+		for _, cmd := range cmds {
+			if cmd == nil {
+				continue
+			}
+			log.Printf("%s%T", indent, cmd)
+			switch cmd.(type) {
+			case gfx.CommandPushLayer, gfx.CommandPushClip:
+				indent += "  "
+			case gfx.CommandPop:
+				indent = indent[:max(0, len(indent)-2)]
+			case gfx.CommandPlayRecording:
+				// FIXME(dh): print recordings recursively
+			}
+		}
+	}
+
+	if debugPrintRecording {
+		log.Println("Recording before optimization:")
+		printRecording()
+	}
 	optimizeRecording(cmds)
+	if debugPrintRecording {
+		log.Println()
+		log.Println("Recording after optimization:")
+		printRecording()
+	}
 
 	// OPT parallelism
 
@@ -172,20 +177,15 @@ func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
 		switch cmd := cmd.(type) {
 		case gfx.CommandFill:
 			r.Fill(cmd.Shape, aff.Mul(cmd.Transform), cmd.FillRule, cmd.Paint)
-		case gfx.CommandPopLayer:
-			r.PopLayer()
 		case gfx.CommandPushLayer:
 			r.PushLayer(Layer{
-				BlendMode:     cmd.Layer.BlendMode,
-				Opacity:       cmd.Layer.Opacity,
-				Clip:          cmd.Layer.Clip,
-				ClipTransform: aff.Mul(cmd.Transform),
-				ClipFillRule:  cmd.FillRule,
+				BlendMode: cmd.Layer.BlendMode,
+				Opacity:   cmd.Layer.Opacity,
 			})
-		case gfx.CommandPopClip:
-			r.PopClip()
+		case gfx.CommandPop:
+			r.Pop()
 		case gfx.CommandPushClip:
-			r.PushClip(cmd.Clip, cmd.Transform, cmd.FillRule)
+			r.PushClip(cmd.Clip, aff.Mul(cmd.Transform), cmd.FillRule)
 		case gfx.CommandStroke:
 			r.Stroke(cmd.Shape, aff.Mul(cmd.Transform), cmd.Stroke, cmd.Paint)
 		case gfx.CommandPlayRecording:
@@ -218,12 +218,8 @@ func (ctx *Renderer) Reset() {
 	ctx.cmds[2] = cmd{typ: cmdPushLayer}
 	ctx.cmds[3] = cmd{typ: cmdCopyBackdrop}
 
-	clear(ctx.layerStack[1:])
-	ctx.layerStack = ctx.layerStack[:1]
+	clear(ctx.stateStack[1:])
 	ctx.stateStack = ctx.stateStack[:1]
-	ctx.stateStack[0] = gfxState{0, 0}
-	clear(ctx.clipStack)
-	ctx.clipStack = ctx.clipStack[:0]
 }
 
 // Finish the coarse rasterization prior to fine rendering.
@@ -231,9 +227,7 @@ func (ctx *Renderer) Reset() {
 // At the moment, this mostly involves resolving any open layers, but
 // might extend to other things.
 func (ctx *Renderer) finish() {
-	for len(ctx.stateStack) > 0 {
-		ctx.restore()
-	}
+	ctx.PopTo(1)
 }
 
 func (ctx *Renderer) Render(width, height uint16, packer Packer) {
@@ -289,17 +283,27 @@ func renderPathCommon(lineBuf []flatLine, fillRule gfx.FillRule, width, height u
 	return stripBuf, alphas
 }
 
+func (ctx *Renderer) curStateIsLayer() bool {
+	if len(ctx.stateStack) == 1 {
+		return true
+	}
+	// If we last pushed a clip, the state's layer will be the same as the
+	// previous state's.
+	return ctx.stateStack[len(ctx.stateStack)-1].layer != ctx.stateStack[len(ctx.stateStack)-2].layer
+}
+
+func (ctx *Renderer) curState() *gfxState {
+	return &ctx.stateStack[len(ctx.stateStack)-1]
+}
+
 func (ctx *Renderer) renderPath(p Path, paint gfx.EncodedPaint) {
-	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
-	if topLayer.blackholed > 0 {
-		return
-	}
+	state := ctx.curState()
 
-	if len(ctx.clipStack) > 0 {
-		p = ctx.clipStack[len(ctx.clipStack)-1].Intersect(p)
+	if !ctx.curStateIsLayer() {
+		if clip, ok := state.clip.Get(); ok {
+			p = clip.Intersect(p)
+		}
 	}
-
-	topLayer.nonempty = true
 
 	stripBuf := p.strips
 	alphas := p.alphas
@@ -384,30 +388,35 @@ func (ctx *Renderer) renderPath(p Path, paint gfx.EncodedPaint) {
 }
 
 func (ctx *Renderer) bbox() tileBbox {
-	return ctx.layerStack[len(ctx.layerStack)-1].bbox
+	return ctx.curState().layer.bbox
 }
 
-func (ctx *Renderer) popLayer() {
+func (ctx *Renderer) pop() {
 	const popLayerCmdIdx = 1
 
-	lastLayer := &ctx.layerStack[len(ctx.layerStack)-1]
-	if lastLayer.blackholed > 0 {
-		lastLayer.blackholed--
+	if n := len(ctx.stateStack); n < 2 {
+		panic(fmt.Sprintf("internal error: need at least 2 states, only have %d", n))
+	}
+
+	// Copy the current state because we clear its memory in the slice, but
+	// still need to work with it.
+	curState := *ctx.curState()
+	prevState := ctx.stateStack[len(ctx.stateStack)-2]
+	topLayer := curState.layer
+
+	ctx.stateStack[len(ctx.stateStack)-1] = gfxState{}
+	ctx.stateStack = ctx.stateStack[:len(ctx.stateStack)-1]
+	if prevState.layer == curState.layer {
+		// The top of the stack only changed the clip, not the layer; we're
+		// done.
 		return
 	}
 
-	defer func() {
-		// Don't hold on to any data (such as layer.strips and layer.alphas)
-		//
-		// Note that this won't errornously reset the very first layer because
-		// popLayer doesn't get called for it.
-		*lastLayer = layer{}
-	}()
-	ctx.stateStack[len(ctx.stateStack)-1].numLayers--
-	ctx.layerStack = ctx.layerStack[:len(ctx.layerStack)-1]
-	bbox := lastLayer.bbox
+	// We've popped a layer -> blend it
 
-	if lastLayer.noclip {
+	bbox := topLayer.bbox
+
+	if topLayer.noclip {
 		// The layer didn't add a new clip, so we can just blend and pop all
 		// layers in the bounding box. It doesn't matter that we might blend
 		// pixels that lie outside the clip, the parent layer with the actual
@@ -418,8 +427,8 @@ func (ctx *Renderer) popLayer() {
 					ctx.cmds,
 					0,
 					wideTileWidth,
-					lastLayer.blend,
-					lastLayer.opacity,
+					topLayer.blend,
+					topLayer.opacity,
 				)
 				ctx.tiles[tileY][tileX].popLayer(ctx.cmds, popLayerCmdIdx)
 			}
@@ -427,8 +436,8 @@ func (ctx *Renderer) popLayer() {
 		return
 	}
 
-	strips := lastLayer.strips
-	alphas := lastLayer.alphas
+	strips := topLayer.strips
+	alphas := topLayer.alphas
 
 	// The next bit of code accomplishes the following. For each tile in
 	// the intersected bounding box, it does one of two things depending
@@ -507,14 +516,14 @@ func (ctx *Renderer) popLayer() {
 				}
 			}
 			if allOne {
-				ctx.cmds = ctx.tiles[tileY][xtile].blend(ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
+				ctx.cmds = ctx.tiles[tileY][xtile].blend(ctx.cmds, xTileRel, width, topLayer.blend, topLayer.opacity)
 			} else {
 				cmd := cmd{
 					typ:     cmdAlphaBlend,
 					x:       xTileRel,
 					width:   width,
-					blend:   lastLayer.blend,
-					opacity: lastLayer.opacity,
+					blend:   topLayer.blend,
+					opacity: topLayer.opacity,
 					alphas:  alphas[col:],
 				}
 				ctx.cmds = append(ctx.cmds, cmd)
@@ -547,7 +556,7 @@ func (ctx *Renderer) popLayer() {
 					continue
 				}
 				x += width
-				ctx.cmds = ctx.tiles[tileY][xtile].blend(ctx.cmds, xTileRel, width, lastLayer.blend, lastLayer.opacity)
+				ctx.cmds = ctx.tiles[tileY][xtile].blend(ctx.cmds, xTileRel, width, topLayer.blend, topLayer.opacity)
 				tileX = xtile
 				popPending = true
 			}
@@ -596,18 +605,14 @@ func (ctx *Renderer) Stroke(
 }
 
 type Layer struct {
-	BlendMode     gfx.BlendMode
-	Opacity       float32
-	Clip          gfx.Shape
-	ClipTransform curve.Affine
-	ClipFillRule  gfx.FillRule
-	CopyBackdrop  bool
+	BlendMode    gfx.BlendMode
+	Opacity      float32
+	CopyBackdrop bool
 }
 
 type LayerCompiled struct {
 	BlendMode    gfx.BlendMode
 	Opacity      float32
-	Clip         maybe.Option[Path]
 	CopyBackdrop bool
 }
 
@@ -619,26 +624,22 @@ type LayerCompiled struct {
 // currently active clip path, if any.
 //
 // The clip stack is independent of the layer stack.
-func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.FillRule) {
-	ctx.PushClipCompiled(CompileFillPath(shape, transform, fill, ctx.width, ctx.height))
+func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.FillRule) int {
+	// OPT(dh): optimize clipping to a rectangle
+
+	return ctx.PushClipCompiled(CompileFillPath(shape, transform, fill, ctx.width, ctx.height))
 }
 
 // PushClipCompiled is like [PushClip] but using an already compiled [Path].
-func (ctx *Renderer) PushClipCompiled(p Path) {
-	if len(ctx.clipStack) != 0 {
-		p = ctx.clipStack[len(ctx.clipStack)-1].Intersect(p)
+func (ctx *Renderer) PushClipCompiled(p Path) int {
+	state := ctx.curState()
+	if clip, ok := state.clip.Get(); ok {
+		p = clip.Intersect(p)
+		// OPT(dh): handle clips that cover no area; all drawing commands until
+		// the clip gets popped are pointless.
 	}
-	ctx.stateStack[len(ctx.stateStack)-1].numClips++
-	ctx.clipStack = append(ctx.clipStack, p)
-}
-
-// PopClip pops one element off the clip stack.
-func (ctx *Renderer) PopClip() {
-	if len(ctx.clipStack) != 0 {
-		ctx.clipStack[len(ctx.clipStack)-1] = Path{}
-		ctx.clipStack = ctx.clipStack[:len(ctx.clipStack)-1]
-		ctx.stateStack[len(ctx.stateStack)-1].numClips--
-	}
+	ctx.stateStack = append(ctx.stateStack, gfxState{state.layer, maybe.Some(p)})
+	return len(ctx.stateStack) - 1
 }
 
 func stripsBoundingBox(strips []strip) tileBbox {
@@ -664,25 +665,18 @@ func stripsBoundingBox(strips []strip) tileBbox {
 	}
 }
 
-func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
+func (ctx *Renderer) PushLayer(l Layer) int {
 	const pushLayerCmdIdx = 2
 	const copyBackdropIdx = 3
 
-	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
-	if topLayer.blackholed > 0 || (l.BlendMode.Compose == gfx.ComposeSrcIn && !topLayer.nonempty) {
-		topLayer.blackholed++
-		return
-	}
-
-	topLayer.nonempty = true
-
+	state := ctx.curState()
 	bbox := ctx.bbox()
 
-	if !l.Clip.Set() {
-		// When there is no new clip, all tiles that need to be zero-clipped
-		// already have been by the last clip. We can just push layers for all
-		// tiles in the bounding box; tiles that have been zero-clipped will
-		// ignore the new layer.
+	if ctx.curStateIsLayer() {
+		// There has been no new clip since the last layer -> all tiles that
+		// need to be zero-clipped already have been by the previous layer. We
+		// can just push layers for all tiles in the bounding box; tiles that
+		// have been zero-clipped will ignore the new layer.
 		for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
 			for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
 				ctx.tiles[tileY][tileX].pushLayer(pushLayerCmdIdx)
@@ -691,29 +685,22 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 				}
 			}
 		}
-		clip := layer{
-			bbox:         bbox,
-			strips:       nil,
-			opacity:      l.Opacity,
-			blend:        l.BlendMode,
-			alphas:       nil,
-			copyBackdrop: l.CopyBackdrop,
-			nonempty:     l.CopyBackdrop && topLayer.nonempty,
-			noclip:       true,
-		}
-		ctx.layerStack = append(ctx.layerStack, clip)
-		ctx.stateStack[len(ctx.stateStack)-1].numLayers++
-		return
+		ctx.stateStack = append(ctx.stateStack, gfxState{
+			layer: &layer{
+				bbox:         bbox,
+				strips:       nil,
+				opacity:      l.Opacity,
+				blend:        l.BlendMode,
+				alphas:       nil,
+				copyBackdrop: l.CopyBackdrop,
+				noclip:       true,
+			},
+			clip: state.clip,
+		})
+		return len(ctx.stateStack) - 1
 	}
 
-	// Intersect clip bounding box.
-	//
-	// Note that we do not intersect the layer's clip path with the clip stack.
-	// The clip stack can be popped independently of the layer stack and the
-	// layer's full clip path should apply when that happens.
-	//
-	// TODO(dh): should PushLayer be affected by the current clip?
-	strips := l.Clip.Unwrap().strips
+	strips := state.clip.Unwrap().strips
 	bbox = bbox.intersect(stripsBoundingBox(strips))
 
 	// The next bit of code accomplishes the following. For each tile in
@@ -793,66 +780,31 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		tileY++
 	}
 
-	clip := layer{
-		bbox:         bbox,
-		strips:       strips,
-		opacity:      l.Opacity,
-		blend:        l.BlendMode,
-		alphas:       l.Clip.Unwrap().alphas,
-		copyBackdrop: l.CopyBackdrop,
-		nonempty:     l.CopyBackdrop && topLayer.nonempty,
-	}
-	ctx.layerStack = append(ctx.layerStack, clip)
-	ctx.stateStack[len(ctx.stateStack)-1].numLayers++
-}
-
-func (ctx *Renderer) PushLayer(l Layer) {
-	var p maybe.Option[Path]
-	if l.Clip != nil {
-		p = maybe.Some(CompileFillPath(l.Clip, l.ClipTransform, l.ClipFillRule, ctx.width, ctx.height))
-	}
-
-	ctx.PushLayerCompiled(LayerCompiled{
-		BlendMode:    l.BlendMode,
-		Opacity:      l.Opacity,
-		Clip:         p,
-		CopyBackdrop: l.CopyBackdrop,
+	ctx.stateStack = append(ctx.stateStack, gfxState{
+		layer: &layer{
+			bbox:         bbox,
+			strips:       strips,
+			opacity:      l.Opacity,
+			blend:        l.BlendMode,
+			alphas:       state.clip.Unwrap().alphas,
+			copyBackdrop: l.CopyBackdrop,
+		},
+		clip: state.clip,
 	})
-
+	return len(ctx.stateStack) - 1
 }
 
-func (ctx *Renderer) PopLayer() {
-	if len(ctx.layerStack) == 1 {
-		// We start with one layer in the layer stack, which the user shouldn't
-		// be able to pop.
-		return
-	}
-	if ctx.stateStack[len(ctx.stateStack)-1].numLayers > 0 {
-		ctx.popLayer()
-	}
-}
-
-func (ctx *Renderer) Save() {
-	ctx.stateStack = append(ctx.stateStack, gfxState{0, 0})
-}
-
-func (ctx *Renderer) Restore() {
+func (ctx *Renderer) Pop() {
 	if len(ctx.stateStack) == 1 {
-		// We start with one state in the state stack, so that PushClip and
-		// PushLayer can unconditionally increase the counts in the topmost
-		// state. This isn't a state that the user should be able to pop.
+		// We start with one state in the state stack that should always be kept.
 		return
 	}
-	ctx.restore()
+	ctx.pop()
 }
 
-func (ctx *Renderer) restore() {
-	state := &ctx.stateStack[len(ctx.stateStack)-1]
-	for state.numLayers > 0 {
-		ctx.popLayer()
+func (ctx *Renderer) PopTo(n int) {
+	n = max(n, 1)
+	for len(ctx.stateStack) > n {
+		ctx.pop()
 	}
-	for state.numClips > 0 {
-		ctx.PopClip()
-	}
-	ctx.stateStack = ctx.stateStack[:len(ctx.stateStack)-1]
 }
