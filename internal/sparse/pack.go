@@ -38,26 +38,28 @@ func (p *PackerUint8SRGB) PackSimple(x0, y0, x1, y1 uint16, c [4]float32) {
 	baseIdx := int(y0)*p.Width + int(x0)
 	out := p.Out[baseIdx:]
 
-	// Unpremultiply, convert to uint16, then use lookup table to get uint8.
-	//
 	// This doesn't do proper gamut mapping. Doing it would be far too slow.
 	var px [4]uint8
-	alpha := max(c[3], 1e-10)
-	scale := alpha / 65535
 	if p.PremulAlpha {
-		// We fold unpremultiplying and scaling into a single factor.
+		// OPT(dh): You'd expect a SIMD version to be faster, but
+		// the mixing of SSE and AVX instructions in dev.simd is
+		// fucking us. Also, the function doesn't inline, killing
+		// performance even more.
+
 		px = [4]uint8{
-			uint8(srgbUint16Table[uint16(clamp(c[0]/scale, 0, 65535)+0.5)]*alpha + 0.5),
-			uint8(srgbUint16Table[uint16(clamp(c[1]/scale, 0, 65535)+0.5)]*alpha + 0.5),
-			uint8(srgbUint16Table[uint16(clamp(c[2]/scale, 0, 65535)+0.5)]*alpha + 0.5),
+			uint8((float32ToSrgb8(c[0]))),
+			uint8((float32ToSrgb8(c[1]))),
+			uint8((float32ToSrgb8(c[2]))),
 			uint8(c[3]*255 + 0.5),
 		}
 	} else {
+		// OPT(dh): add SIMD path once it performs well
+
 		// We fold unpremultiplying and scaling into a single factor.
 		px = [4]uint8{
-			uint8(srgbUint16Table[uint16(clamp(c[0]/scale, 0, 65535)+0.5)]),
-			uint8(srgbUint16Table[uint16(clamp(c[1]/scale, 0, 65535)+0.5)]),
-			uint8(srgbUint16Table[uint16(clamp(c[2]/scale, 0, 65535)+0.5)]),
+			float32ToSrgb8(c[0] / c[3]),
+			float32ToSrgb8(c[1] / c[3]),
+			float32ToSrgb8(c[2] / c[3]),
 			uint8(c[3]*255 + 0.5),
 		}
 	}
@@ -93,19 +95,34 @@ func (p *PackerUint8SRGB) PackComplex(x0, y0, x1, y1 uint16, src [][4]float32) {
 	baseIdx := int(y0)*p.Width + int(x0)
 	out := p.Out[baseIdx:]
 	if p.PremulAlpha {
+		// According to
+		// https://web.archive.org/web/20250815165940/https://hacksoflife.blogspot.com/2022/06/srgb-pre-multiplied-alpha-and.html
+		// whether the color needs to be premultiplied with alpha before or
+		// after converting it to sRGB depends on the consumer of the data and
+		// whether they will blend in linear or sRGB space. But we can't know
+		// what our consumer (likely a display manager) will do… We'll assume
+		// that they're modern and blend in linear space and premultiply our
+		// colors before conversion to sRGB. Because our colors are already
+		// stored premultiplied this saves us work, too.
+		//
+		// https://web.archive.org/web/20250829113330/https://ssp.impulsetrain.com/gamma-premult.html
+		// covers the same topic and says that premultiplying before encoding in
+		// sRGB is the right thing to do for GPU textures.
+
 		for y := range outHeight {
 			row := out[:min(len(out), int(outWidth))]
 			for x := range row {
-				px := src[x*int(srcHeight)+int(y)]
-				// Unpremultiply, convert to uint16, then use lookup table to get uint8.
-				//
+				// OPT(dh): You'd expect a SIMD version to be faster, but
+				// the mixing of SSE and AVX instructions in dev.simd is
+				// fucking us. Also, the function doesn't inline, killing
+				// performance even more.
+
+				px := &src[x*int(srcHeight)+int(y)]
 				// This doesn't do proper gamut mapping. Doing it would be far too slow.
-				alpha := max(px[3], 1e-10)
-				scale := alpha / 65535
 				row[x] = [4]uint8{
-					uint8(srgbUint16Table[uint16(clamp(px[0]/scale, 0, 65535)+0.5)]*alpha + 0.5),
-					uint8(srgbUint16Table[uint16(clamp(px[1]/scale, 0, 65535)+0.5)]*alpha + 0.5),
-					uint8(srgbUint16Table[uint16(clamp(px[2]/scale, 0, 65535)+0.5)]*alpha + 0.5),
+					float32ToSrgb8(px[0]),
+					float32ToSrgb8(px[1]),
+					float32ToSrgb8(px[2]),
 					uint8(px[3]*255 + 0.5),
 				}
 			}
@@ -115,15 +132,14 @@ func (p *PackerUint8SRGB) PackComplex(x0, y0, x1, y1 uint16, src [][4]float32) {
 		for y := range outHeight {
 			row := out[:min(len(out), int(outWidth))]
 			for x := range row {
-				px := src[x*int(srcHeight)+int(y)]
-				// Unpremultiply, convert to uint16, then use lookup table to get uint8.
-				//
+				// OPT(dh): add SIMD path once it performs well
+
+				px := &src[x*int(srcHeight)+int(y)]
 				// This doesn't do proper gamut mapping. Doing it would be far too slow.
-				alpha := max(px[3], 1e-10) / 65535
 				row[x] = [4]uint8{
-					uint8(srgbUint16Table[uint16(clamp(px[0]/alpha, 0, 65535)+0.5)]),
-					uint8(srgbUint16Table[uint16(clamp(px[1]/alpha, 0, 65535)+0.5)]),
-					uint8(srgbUint16Table[uint16(clamp(px[2]/alpha, 0, 65535)+0.5)]),
+					float32ToSrgb8(px[0] / px[3]),
+					float32ToSrgb8(px[1] / px[3]),
+					float32ToSrgb8(px[2] / px[3]),
 					uint8(px[3]*255 + 0.5),
 				}
 			}
