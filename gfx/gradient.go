@@ -99,7 +99,15 @@ func encodeGradient(
 		space = color.LinearSRGB
 	}
 	pad := extend == GradientExtendPad
-	ranges := encodeStops(stops, pad, space)
+
+	if firstStop := &stops[0]; firstStop.Offset != 0 {
+		firstStop.Offset = 0
+	}
+	if lastStop := &stops[len(stops)-1]; lastStop.Offset != 1 {
+		lastStop.Offset = 1
+	}
+
+	ranges := encodeStops(stops, space)
 
 	// This represents the transform that needs to be applied to the starting
 	// point of a command before starting with the rendering. First we need to
@@ -332,11 +340,6 @@ func validateStops(stops []GradientStop) (valid bool, fallback EncodedPaint) {
 
 	if len(stops) == 1 {
 		return false, ColorToInternal(first)
-	}
-
-	// First stop must be at offset 0.0 and last offset must be at 1.0.
-	if stops[0].Offset != 0.0 || stops[len(stops)-1].Offset != 1.0 {
-		return false, black
 	}
 
 	for i := range len(stops) - 1 {
@@ -645,7 +648,7 @@ func applyReflect(stops []GradientStop) []GradientStop {
 }
 
 // Encode all stops into a sequence of ranges.
-func encodeStops(stops []GradientStop, pad bool, space *color.Space) []GradientRange {
+func encodeStops(stops []GradientStop, space *color.Space) []GradientRange {
 	createRange := func(left_stop, right_stop encodedGradientStop) GradientRange {
 		x0 := left_stop.offset
 		x1 := right_stop.offset
@@ -688,28 +691,11 @@ func encodeStops(stops []GradientStop, pad bool, space *color.Space) []GradientR
 		}
 	}
 
-	if pad {
-		// We handle padding by inserting dummy stops in the beginning and end
-		// with a very big range.
-		stopRanges := make([]GradientRange, len(encodedStops)+1)
-		encodedRange := createRange(encodedStops[0], encodedStops[0])
-		stopRanges[0] = encodedRange
-		for i := range encodedStops[:len(encodedStops)-1] {
-			stopRanges[i+1] = createRange(encodedStops[i], encodedStops[i+1])
-		}
-
-		lastStop := encodedStops[len(encodedStops)-1]
-		encodedRange = createRange(lastStop, lastStop)
-		encodedRange.X1 = math.MaxFloat32
-		stopRanges[len(stopRanges)-1] = encodedRange
-		return stopRanges
-	} else {
-		stopRanges := make([]GradientRange, len(encodedStops)-1)
-		for i := range encodedStops[:len(encodedStops)-1] {
-			stopRanges[i] = createRange(encodedStops[i], encodedStops[i+1])
-		}
-		return stopRanges
+	stopRanges := make([]GradientRange, len(encodedStops)-1)
+	for i := range encodedStops[:len(encodedStops)-1] {
+		stopRanges[i] = createRange(encodedStops[i], encodedStops[i+1])
 	}
+	return stopRanges
 }
 
 func (*EncodedGradient) String() string { return "Gradient" }
