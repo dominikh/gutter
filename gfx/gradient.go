@@ -141,6 +141,7 @@ func encodeGradient(
 		// in which case the resulting color will be transparent and thus the gradient overall
 		// must be treated as non-opaque.
 		hasOpacities || kind.HasUndefined(),
+		MakeGradientLUT(ranges),
 	}
 
 	return encoded
@@ -409,10 +410,7 @@ func (r EncodedRadialGradient) posInner(pos curve.Point) (float32, bool) {
 	// the values we encounter while computing gradients. This simpler
 	// computation is quite a bit faster, and posInner is part of the hot loop
 	// of rendering radial gradients.
-	hypot := func(pos curve.Point) float32 {
-		return float32(math.Sqrt(pos.X*pos.X + pos.Y*pos.Y))
-	}
-	radius := hypot(pos)
+	radius := float32(math.Sqrt(pos.X*pos.X + pos.Y*pos.Y))
 	radius = r.bias + radius*r.scale
 	return radius, true
 }
@@ -561,6 +559,41 @@ type EncodedGradient struct {
 	Pad bool
 	// Whether the gradient requires `source_over` compositing.
 	HasOpacities bool
+
+	LUT GradientLUT
+}
+
+type GradientLUT struct {
+	LUT   [][4]float32
+	Scale float32
+}
+
+func MakeGradientLUT(ranges []GradientRange) GradientLUT {
+	// 11 bits of gradient accuracy. Good enough for our GUI rendering purposes.
+	const lutSize = 2048
+	const invLutSize = 1.0 / (lutSize - 1)
+	lut := make([][4]float32, 0, lutSize)
+	curIdx := 0
+	for idx := range lutSize {
+		tVal := float32(idx) * invLutSize
+		for ranges[curIdx].X1 < tVal {
+			curIdx++
+		}
+		rng := &ranges[curIdx]
+		bias := rng.Bias
+		interpolated := [4]float32{
+			bias[0] + rng.Scale[0]*tVal,
+			bias[1] + rng.Scale[1]*tVal,
+			bias[2] + rng.Scale[2]*tVal,
+			bias[3] + rng.Scale[3]*tVal,
+		}
+		lut = append(lut, interpolated)
+	}
+
+	return GradientLUT{
+		LUT:   lut,
+		Scale: lutSize - 1,
+	}
 }
 
 // isEncodedPaint implements encodedPaint.

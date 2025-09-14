@@ -29,20 +29,12 @@ func newGradientFiller(
 	}
 }
 
-func (gf *gradientFiller) advanceTo(targetPos float32) *gfx.GradientRange {
-	idx := 0
-	for targetPos > gf.gradient.Ranges[idx].X1 {
-		idx++
-	}
-	return &gf.gradient.Ranges[idx]
-}
-
 func (gf *gradientFiller) run(dst [][stripHeight]gfx.PlainColor) {
 	oldPos := gf.curPos
 
 	for x := range dst {
 		col := &dst[x]
-		gf.runColumn(col)
+		gf.runColumn(col, &gf.gradient.LUT)
 		gf.curPos = gf.curPos.Translate(gf.gradient.XAdvance)
 	}
 
@@ -60,23 +52,14 @@ func (gf *gradientFiller) run(dst [][stripHeight]gfx.PlainColor) {
 	}
 }
 
-func (gf *gradientFiller) runColumn(col *[stripHeight]gfx.PlainColor) {
+func (gf *gradientFiller) runColumn(col *[stripHeight]gfx.PlainColor, lut *gfx.GradientLUT) {
 	pos := gf.curPos
-	extend := func(val float32) float32 {
-		return extend(val, gf.gradient.Pad)
-	}
 	for y := range col {
 		px := &col[y]
 		t := gf.gradient.Kind.CurPos(pos)
-		t = extend(t)
-		rng := gf.advanceTo(t)
+		t = extend(t, gf.gradient.Pad)
+		*px = lut.LUT[int(t*lut.Scale)]
 
-		*px = gfx.PlainColor{
-			rng.Bias[0] + rng.Scale[0]*t,
-			rng.Bias[1] + rng.Scale[1]*t,
-			rng.Bias[2] + rng.Scale[2]*t,
-			rng.Bias[3] + rng.Scale[3]*t,
-		}
 		pos = pos.Translate(gf.gradient.YAdvance)
 	}
 }
@@ -98,7 +81,7 @@ func (gf *gradientFiller) runUndefined(dst [][stripHeight]gfx.PlainColor) {
 
 func extend(val float32, pad bool) float32 {
 	if pad {
-		return val
+		return max(min(val, 1), 0)
 	}
 
 	if val < 0 {
