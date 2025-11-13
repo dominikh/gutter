@@ -358,10 +358,6 @@ type Element interface {
 	handle() *elementHandle
 	transition(t elementTransition)
 	performRebuild()
-}
-
-type elementWithChildren interface {
-	Element
 	children() iter.Seq[Element]
 }
 
@@ -394,11 +390,9 @@ func renderObjectAttachingChild(el Element) Element {
 		return nil
 	}
 	var out Element
-	if el, ok := el.(elementWithChildren); ok {
-		for child := range el.children() {
-			debug.Assert(out == nil)
-			out = child
-		}
+	for child := range el.children() {
+		debug.Assert(out == nil)
+		out = child
 	}
 	return out
 }
@@ -424,10 +418,8 @@ func attachRenderObject(el Element, slot int) {
 		el.attachRenderObject(slot)
 		return
 	}
-	if el, ok := el.(elementWithChildren); ok {
-		for child := range el.children() {
-			attachRenderObject(child, slot)
-		}
+	for child := range el.children() {
+		attachRenderObject(child, slot)
 	}
 	el.handle().slot = slot
 }
@@ -443,10 +435,8 @@ func detachRenderObject(el Element) {
 		el.performDetachRenderObject()
 		return
 	}
-	if el, ok := el.(elementWithChildren); ok {
-		for child := range el.children() {
-			detachRenderObject(child)
-		}
+	for child := range el.children() {
+		detachRenderObject(child)
 	}
 	el.handle().slot = int(math.MinInt)
 }
@@ -593,7 +583,7 @@ func forgetChild(el Element, child Element) {
 }
 
 type parentElement interface {
-	elementWithChildren
+	Element
 	// XXX figure out a better API
 	getChildren() []Element
 	setChildren(children []Element)
@@ -884,10 +874,8 @@ type inactiveElements struct {
 }
 
 func (els *inactiveElements) unmount(el Element) {
-	if el, ok := el.(elementWithChildren); ok {
-		for child := range el.children() {
-			els.unmount(child)
-		}
+	for child := range el.children() {
+		els.unmount(child)
 	}
 	unmount(el)
 }
@@ -932,10 +920,8 @@ func sortElements(els []Element) {
 
 func (els *inactiveElements) deactivateRecursively(el Element) {
 	deactivate(el)
-	if el, ok := el.(elementWithChildren); ok {
-		for child := range el.children() {
-			els.deactivateRecursively(child)
-		}
+	for child := range el.children() {
+		els.deactivateRecursively(child)
 	}
 }
 
@@ -1024,10 +1010,8 @@ func updateDepth(el Element, parentDepth int) {
 	expectedDepth := parentDepth + 1
 	if el.handle().depth < expectedDepth {
 		el.handle().depth = expectedDepth
-		if el, ok := el.(elementWithChildren); ok {
-			for child := range el.children() {
-				updateDepth(child, expectedDepth)
-			}
+		for child := range el.children() {
+			updateDepth(child, expectedDepth)
 		}
 	}
 }
@@ -1036,10 +1020,8 @@ func activateRecursively(el Element) {
 	debug.Assert(el.handle().lifecycleState == elementLifecycleInactive)
 	activate(el)
 	debug.Assert(el.handle().lifecycleState == elementLifecycleActive)
-	if el, ok := el.(elementWithChildren); ok {
-		for child := range el.children() {
-			activateRecursively(child)
-		}
+	for child := range el.children() {
+		activateRecursively(child)
 	}
 }
 
@@ -1217,7 +1199,7 @@ func applyParentData(pd ParentDataWidget, childrenOf Element) {
 	applyParentData = func(child Element) {
 		if rto, ok := child.(renderObjectElement); ok {
 			pd.ApplyParentData(rto.renderHandle().RenderObject)
-		} else if child, ok := child.(elementWithChildren); ok {
+		} else {
 			for child2 := range child.children() {
 				applyParentData(child2)
 			}

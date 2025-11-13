@@ -56,11 +56,9 @@ func formatElementTree(root Element) string {
 				}
 			}
 		}
-		if el, ok := el.(elementWithChildren); ok {
-			for child := range el.children() {
-				visit(el, child)
-				fmt.Fprintf(&sb, "n%p -> n%p;\n", el, child)
-			}
+		for child := range el.children() {
+			visit(el, child)
+			fmt.Fprintf(&sb, "n%p -> n%p;\n", el, child)
 		}
 	}
 	visit(nil, root)
