@@ -10,6 +10,7 @@ package widget
 import (
 	"fmt"
 	"iter"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -18,7 +19,6 @@ import (
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/animation"
 	"honnef.co/go/gutter/debug"
-	"honnef.co/go/gutter/mem"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/wsi"
 )
@@ -151,7 +151,7 @@ func (el *simpleInheritedElement) updateInheritance() {
 	var incomingWidgets map[reflect.Type]inheritedElement
 	h := el.handle()
 	if p := h.parent; p != nil {
-		incomingWidgets = mem.CopyMap(p.handle().inheritedElements)
+		incomingWidgets = maps.Clone(p.handle().inheritedElements)
 	} else {
 		incomingWidgets = map[reflect.Type]inheritedElement{}
 	}
