@@ -488,7 +488,7 @@ func updateChild(el, child Element, newWidget Widget, newSlot int) Element {
 	return newChild
 }
 
-// activate activates the element. If it implements Activater, the AfterActivate method will be called afterwards.
+// activate activates the element.
 func activate(el Element) {
 	debug.Assert(el.handle().lifecycleState == elementLifecycleInactive)
 	hadDependencies := len(el.handle().dependencies) != 0 || el.handle().hadUnsatisfiedDependencies
