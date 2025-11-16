@@ -127,6 +127,7 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 
 		app.win.Present(buf, 0, 0, sz.Width, sz.Height)
 	case widgets.CallbackEvent:
+		ev()
 	default:
 		panic(fmt.Sprintf("internal error: unhandled event type %T", ev))
 	}
