@@ -1223,6 +1223,9 @@ func widgetChildrenIter(parent Widget) iter.Seq2[int, Widget] {
 }
 
 func widgetChildren(parent Widget) []Widget {
+	// XXX at some point we'll have widgets that have named children and just
+	// looking for these two fields won't cut it.
+
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Children"); f.IsValid() {
 		return f.Interface().([]Widget)

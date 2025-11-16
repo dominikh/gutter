@@ -25,8 +25,6 @@ type Binding struct {
 	buildOwner        *BuildOwner
 	Renderer          *render.Renderer
 	rootWidget        Widget
-
-	mediaQuery *MediaQuery
 }
 
 func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
@@ -47,7 +45,7 @@ func NewBinding(sys *wsi.System, win wsi.Window) *Binding {
 func (b *Binding) DrawFrame(ev *wsi.RedrawRequested, rec gfx.Recorder) {
 	debug.Assert(!b.buildOwner.inDrawFrame)
 	b.buildOwner.inDrawFrame = true
-	// b.AttachRootWidget(b.rootWidget)
+	b.AttachRootWidget(b.rootWidget)
 	b.Renderer.RunFrameCallbacks(ev.When)
 	if b.renderViewElement != nil {
 		b.buildOwner.BuildScope(nil)
@@ -63,22 +61,20 @@ func (b *Binding) AttachRootWidget(rootWidget Widget) {
 		Scale: 1.0, // XXX scale
 		Size:  cs.Max,
 	}
-	if b.mediaQuery == nil || b.mediaQuery.Data != data {
-		b.mediaQuery = &MediaQuery{
-			Data:  data,
-			Child: rootWidget,
-		}
+	mq := &MediaQuery{
+		Data:  data,
+		Child: rootWidget,
 	}
 	b.renderViewElement = (&renderObjectToWidgetAdapter{
 		container: b.Renderer.View(),
-		child:     b.mediaQuery,
+		Child:     mq,
 	}).AttachToRenderTree(b.buildOwner, b.renderViewElement)
 }
 
 var _ RenderObjectWidget = (*renderObjectToWidgetAdapter)(nil)
 
 type renderObjectToWidgetAdapter struct {
-	child     Widget
+	Child     Widget
 	container render.Object
 }
 
@@ -144,7 +140,7 @@ func (el *renderObjectToWidgetElement) performRebuild() {
 }
 
 func (el *renderObjectToWidgetElement) rebuild() {
-	el.SetChild(updateChild(el, el.Child(), el.widget.(*renderObjectToWidgetAdapter).child, 0))
+	el.SetChild(updateChild(el, el.Child(), el.widget.(*renderObjectToWidgetAdapter).Child, 0))
 }
 
 func (el *renderObjectToWidgetElement) insertRenderObjectChild(child render.Object, slot int) {
