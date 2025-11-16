@@ -117,43 +117,17 @@ func (el *proxyElement) transition(t elementTransition) {
 	}
 }
 
-func NewInheritedElement[W Widget](w W) inheritedElement {
-	se := &simpleInheritedElement{}
-	se.elementHandle.widget = w
-	// XXX do we care about StatefulWidget here, analogous to NewInteriorElement?
-	return se
-}
-
-type inheritedElement interface {
-	interiorElement
-	updateInheritance()
-}
-
-type simpleInheritedElement struct {
-	proxyElement
-}
-
 func updateInheritance(el Element) {
 	debug.Assert(el.handle().lifecycleState == elementLifecycleActive)
-	if el, ok := el.(inheritedElement); ok {
-		el.updateInheritance()
-		return
-	}
-	h := el.handle()
-	if p := h.parent; p != nil {
-		h.inheritedElements = p.handle().inheritedElements
-	} else {
-		h.inheritedElements = nil
-	}
-}
-
-func (el *simpleInheritedElement) updateInheritance() {
-	var incomingWidgets map[reflect.Type]inheritedElement
+	var incomingWidgets map[reflect.Type]Element
 	h := el.handle()
 	if p := h.parent; p != nil {
 		incomingWidgets = maps.Clone(p.handle().inheritedElements)
+		if incomingWidgets == nil {
+			incomingWidgets = map[reflect.Type]Element{}
+		}
 	} else {
-		incomingWidgets = map[reflect.Type]inheritedElement{}
+		incomingWidgets = map[reflect.Type]Element{}
 	}
 	incomingWidgets[reflect.TypeOf(h.widget)] = el
 	h.inheritedElements = incomingWidgets
@@ -246,9 +220,9 @@ func (el *simpleInteriorElement[W]) performRebuild() {
 func DependOnWidgetOfExactType[W Widget](bc BuildContext) W {
 	el := bc.(Element)
 	h := el.handle()
-	if ancestor := h.inheritedElements[reflect.TypeOf(*new(W))]; ancestor != nil {
+	if ancestor := h.inheritedElements[reflect.TypeFor[W]()]; ancestor != nil {
 		if h.dependencies == nil {
-			h.dependencies = make(map[inheritedElement]struct{})
+			h.dependencies = make(map[Element]struct{})
 		}
 		h.dependencies[ancestor] = struct{}{}
 		ah := ancestor.handle()
@@ -289,7 +263,6 @@ type Widget interface {
 	//   - [NewProxyElement] for widgets that wrap other widgets only to provide
 	//     additional data, but otherwise act transparently. [Flexible] and
 	//     [KeyedWidget] are two examples.
-	//   - [NewInheritedElement]
 	//
 	// See the documentation on [Element] for more information about the element
 	// tree.
@@ -786,8 +759,8 @@ type elementHandle struct {
 	inDirtyList    bool
 	widget         Widget
 	// OPT(dh): use a persistent data structure for inheritedElements
-	inheritedElements          map[reflect.Type]inheritedElement
-	dependencies               map[inheritedElement]struct{}
+	inheritedElements          map[reflect.Type]Element
+	dependencies               map[Element]struct{}
 	dependents                 map[Element]struct{}
 	hadUnsatisfiedDependencies bool
 }
@@ -1363,7 +1336,7 @@ type MediaQuery struct {
 }
 
 func (m *MediaQuery) CreateElement() Element {
-	return NewInheritedElement(m)
+	return NewProxyElement(m)
 }
 
 type MediaQueryData struct {
