@@ -217,7 +217,9 @@ func (el *simpleInteriorElement[W]) performRebuild() {
 	el.handle().dirty = false
 }
 
-func DependOnWidgetOfExactType[W Widget](bc BuildContext) W {
+// Ancestor returns the earliest ancestor of bc that has type W and establishes
+// a dependency on it.
+func Ancestor[W Widget](bc BuildContext) W {
 	el := bc.(Element)
 	h := el.handle()
 	if ancestor := h.inheritedElements[reflect.TypeFor[W]()]; ancestor != nil {
