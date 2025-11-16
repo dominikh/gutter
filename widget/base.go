@@ -38,11 +38,26 @@ const (
 type StateTransitionKind uint8
 
 const (
+	// StateInitializing gets emitted exactly once when a stateful widget's
+	// state is first created.
 	StateInitializing StateTransitionKind = iota
+	// StateUpdatedWidget gets emitted when the widget associated with its state
+	// changes. Two widgets are considered different when their addresses
+	// differ, even if their values are identical.
 	StateUpdatedWidget
+	// StateChangedDependencies gets emitted when a widget that the state
+	// depends on has changed.
 	StateChangedDependencies
+	// StateDeactivating gets emitted when a widget and its state are removed from
+	// the widget tree. This might be followed by either StateActivating or
+	// StateDisposing.
 	StateDeactivating
+	// StateActivating gets emitted when a widget and its state that have
+	// previously been removed are added back to the widget tree.
 	StateActivating
+	// StateDisposing gets emitted at most once per instance of state at the end
+	// of its lifecycle, when the widget and its associated state are about to
+	// be permanently removed from the widget tree.
 	StateDisposing
 )
 
