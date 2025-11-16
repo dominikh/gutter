@@ -117,12 +117,12 @@ func (el *proxyElement) transition(t elementTransition) {
 	}
 }
 
-func updateInheritance(el Element) {
+func updateAncestors(el Element) {
 	debug.Assert(el.handle().lifecycleState == elementLifecycleActive)
 	var incomingWidgets map[reflect.Type]Element
 	h := el.handle()
 	if p := h.parent; p != nil {
-		incomingWidgets = maps.Clone(p.handle().inheritedElements)
+		incomingWidgets = maps.Clone(p.handle().ancestorElements)
 		if incomingWidgets == nil {
 			incomingWidgets = map[reflect.Type]Element{}
 		}
@@ -130,7 +130,7 @@ func updateInheritance(el Element) {
 		incomingWidgets = map[reflect.Type]Element{}
 	}
 	incomingWidgets[reflect.TypeOf(h.widget)] = el
-	h.inheritedElements = incomingWidgets
+	h.ancestorElements = incomingWidgets
 }
 
 func NewInteriorElement[W Widget](w W) Element {
@@ -222,7 +222,7 @@ func (el *simpleInteriorElement[W]) performRebuild() {
 func Ancestor[W Widget](bc BuildContext) W {
 	el := bc.(Element)
 	h := el.handle()
-	if ancestor := h.inheritedElements[reflect.TypeFor[W]()]; ancestor != nil {
+	if ancestor := h.ancestorElements[reflect.TypeFor[W]()]; ancestor != nil {
 		if h.dependencies == nil {
 			h.dependencies = make(map[Element]struct{})
 		}
@@ -474,7 +474,7 @@ func activate(el Element) {
 	// Since we're going to be reused, let's clear our list now.
 	clear(el.handle().dependencies)
 	el.handle().hadUnsatisfiedDependencies = false
-	updateInheritance(el)
+	updateAncestors(el)
 	// el.attachNotificationTree()
 	if h.dirty {
 		h.BuildOwner.scheduleBuildFor(el)
@@ -498,7 +498,7 @@ func deactivate(el Element) {
 		// implementation to decide whether to rebuild based on whether we had
 		// dependencies here.
 	}
-	el.handle().inheritedElements = nil
+	el.handle().ancestorElements = nil
 
 	el.handle().lifecycleState = elementLifecycleInactive
 }
@@ -525,7 +525,7 @@ func mount(el, parent Element, newSlot int) {
 		}
 	}
 
-	updateInheritance(el)
+	updateAncestors(el)
 
 	// XXX attachNotificationTree
 
@@ -760,8 +760,8 @@ type elementHandle struct {
 	dirty          bool
 	inDirtyList    bool
 	widget         Widget
-	// OPT(dh): use a persistent data structure for inheritedElements
-	inheritedElements          map[reflect.Type]Element
+	// OPT(dh): use a persistent data structure for ancestorElements
+	ancestorElements           map[reflect.Type]Element
 	dependencies               map[Element]struct{}
 	dependents                 map[Element]struct{}
 	hadUnsatisfiedDependencies bool
