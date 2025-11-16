@@ -295,7 +295,7 @@ func (m *automaticAnimatedState[W, Anims]) Transition(t widget.StateTransition[W
 	}
 }
 
-// Transition implements widget.State.
+// Build implements widget.State.
 func (m *automaticAnimatedState[W, Anims]) Build(ctx widget.BuildContext) widget.Widget {
 	return m.builder(ctx, m, m.animations)
 }
