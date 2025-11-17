@@ -290,9 +290,16 @@ func curveOrDefault(curve animation.Curve) animation.Curve {
 	}
 }
 
+var _ widget.StatelessWidget = (*KeyedSubtree)(nil)
+
 type KeyedSubtree struct {
 	Key   any
 	Child widget.Widget
+}
+
+// Build implements widget.StatelessWidget.
+func (k *KeyedSubtree) Build(ctx widget.BuildContext) widget.Widget {
+	return k.Child
 }
 
 func (k *KeyedSubtree) GetKey() any {
@@ -301,7 +308,7 @@ func (k *KeyedSubtree) GetKey() any {
 
 // CreateElement implements widget.Widget.
 func (k *KeyedSubtree) CreateElement() widget.Element {
-	return widget.NewProxyElement(k)
+	return widget.NewInteriorElement(k)
 }
 
 type Builder struct {

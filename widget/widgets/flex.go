@@ -6,9 +6,9 @@
 package widgets
 
 import (
-	"honnef.co/go/stuff/container/maybe"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/widget"
+	"honnef.co/go/stuff/container/maybe"
 )
 
 type Flex struct {
@@ -41,15 +41,22 @@ func (f *Flex) CreateElement() widget.Element {
 	return widget.NewRenderObjectElement(f)
 }
 
+var _ widget.StatelessWidget = (*Flexible)(nil)
+
 type Flexible struct {
 	Flex  float64
 	Fit   render.FlexFit
 	Child widget.Widget
 }
 
+// Build implements widget.StatelessWidget.
+func (f *Flexible) Build(ctx widget.BuildContext) widget.Widget {
+	return f.Child
+}
+
 // CreateElement implements SingleChildWidget.
 func (f *Flexible) CreateElement() widget.Element {
-	return widget.NewProxyElement(f)
+	return widget.NewInteriorElement(f)
 }
 
 func (f *Flexible) ApplyParentData(obj render.Object) {

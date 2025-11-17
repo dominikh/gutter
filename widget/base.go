@@ -93,45 +93,6 @@ type StateTransition[W Widget] struct {
 
 // TODO support "Notification"
 
-func NewProxyElement[W Widget](w W) Element {
-	el := &proxyElement{}
-	el.widget = w
-	return el
-}
-
-type proxyElement struct {
-	elementHandle
-	singleChildElement
-}
-
-// build implements interiorElement.
-func (el *proxyElement) build() Widget {
-	w := getWidgetChild(el.widget)
-	// TODO(dh): emit a more useful error than a generic assertion failure
-	debug.Assert(w != nil)
-	return w
-}
-
-// performRebuild implements interiorElement.
-func (el *proxyElement) performRebuild() {
-	built := el.build()
-	el.SetChild(updateChild(el, el.Child(), built, el.handle().slot))
-	el.handle().dirty = false
-}
-
-// Transition implements interiorElement.
-func (el *proxyElement) transition(t elementTransition) {
-	switch t.kind {
-	case elementMounted:
-		rebuild(el)
-	case elementActivated:
-		MarkNeedsBuild(el)
-	case elementUpdated:
-		forceRebuild(el)
-		// notifyClients(el, t.OldWidget)
-	}
-}
-
 func updateAncestors(el Element) {
 	debug.Assert(el.handle().lifecycleState == elementLifecycleActive)
 	var incomingWidgets map[reflect.Type]Element
@@ -277,9 +238,6 @@ type Widget interface {
 	//
 	//   - [NewInteriorElement] for most [StatelessWidget]s and [StatefulWidget]s
 	//   - [NewRenderObjectElement] for any [RenderObjectWidget].
-	//   - [NewProxyElement] for widgets that wrap other widgets only to provide
-	//     additional data, but otherwise act transparently. [Flexible] and
-	//     [KeyedWidget] are two examples.
 	//
 	// See the documentation on [Element] for more information about the element
 	// tree.
@@ -1198,21 +1156,6 @@ func applyParentData(pd ParentDataWidget, childrenOf Element) {
 	applyParentData(childrenOf)
 }
 
-func getWidgetChild(parent Widget) Widget {
-	v := reflect.Indirect(reflect.ValueOf(parent))
-	if f := v.FieldByName("Child"); f.IsValid() {
-		if f.IsNil() {
-			return nil
-		} else {
-			return f.Interface().(Widget)
-		}
-	} else if f := v.FieldByName("Children"); f.IsValid() {
-		return f.Index(0).Interface().(Widget)
-	} else {
-		panic(fmt.Sprintf("%T does not have children", parent))
-	}
-}
-
 func widgetChildrenIter(parent Widget) iter.Seq2[int, Widget] {
 	v := reflect.Indirect(reflect.ValueOf(parent))
 	if f := v.FieldByName("Children"); f.IsValid() {
@@ -1348,15 +1291,20 @@ func NewRenderObjectElement(w RenderObjectWidget) Element {
 	return el
 }
 
-var _ Widget = (*MediaQuery)(nil)
+var _ StatelessWidget = (*MediaQuery)(nil)
 
 type MediaQuery struct {
 	Data  MediaQueryData
 	Child Widget
 }
 
+// Build implements StatelessWidget.
+func (m *MediaQuery) Build(ctx BuildContext) Widget {
+	return m.Child
+}
+
 func (m *MediaQuery) CreateElement() Element {
-	return NewProxyElement(m)
+	return NewInteriorElement(m)
 }
 
 type MediaQueryData struct {
