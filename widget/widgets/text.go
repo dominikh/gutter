@@ -5,12 +5,12 @@
 package widgets
 
 import (
-	"honnef.co/go/stuff/container/maybe"
 	"honnef.co/go/gutter/paint"
 	"honnef.co/go/gutter/render"
 	"honnef.co/go/gutter/text"
 	"honnef.co/go/gutter/text/bidi"
 	"honnef.co/go/gutter/widget"
+	"honnef.co/go/stuff/container/maybe"
 )
 
 type WidgetSpan interface{}
@@ -31,11 +31,6 @@ type RichText struct {
 	// XXX textHeightBehavior (why is there no height field?)
 	// XXX selection registrar
 	// XXX selection color
-}
-
-// CreateElement implements widget.RenderObjectWidget.
-func (r *RichText) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(r)
 }
 
 // CreateRenderObject implements widget.RenderObjectWidget.

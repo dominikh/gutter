@@ -16,11 +16,6 @@ type LottieFrame struct {
 	Frame       float64
 }
 
-// CreateElement implements RenderObjectWidget.
-func (l *LottieFrame) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(l)
-}
-
 // CreateRenderObject implements RenderObjectWidget.
 func (l *LottieFrame) CreateRenderObject(ctx widget.BuildContext) render.Object {
 	var obj render.Lottie

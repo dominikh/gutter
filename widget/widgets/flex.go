@@ -36,11 +36,6 @@ func (f *Flex) UpdateRenderObject(ctx widget.BuildContext, obj render.Object) {
 	fobj.SetCrossAxisAlignment(f.CrossAxisAlignment)
 }
 
-// CreateElement implements MultiChildWidget.
-func (f *Flex) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(f)
-}
-
 var _ widget.StatelessWidget = (*Flexible)(nil)
 
 type Flexible struct {
@@ -52,11 +47,6 @@ type Flexible struct {
 // Build implements widget.StatelessWidget.
 func (f *Flexible) Build(ctx widget.BuildContext) widget.Widget {
 	return f.Child
-}
-
-// CreateElement implements SingleChildWidget.
-func (f *Flexible) CreateElement() widget.Element {
-	return widget.NewInteriorElement(f)
 }
 
 func (f *Flexible) ApplyParentData(obj render.Object) {
@@ -85,10 +75,6 @@ type Row struct {
 	Children           []widget.Widget
 }
 
-func (r *Row) CreateElement() widget.Element {
-	return widget.NewInteriorElement(r)
-}
-
 func (r *Row) Build(ctx widget.BuildContext) widget.Widget {
 	return &Flex{
 		Direction:          render.Horizontal,
@@ -106,10 +92,6 @@ type Column struct {
 	Children           []widget.Widget
 }
 
-func (r *Column) CreateElement() widget.Element {
-	return widget.NewInteriorElement(r)
-}
-
 func (r *Column) Build(ctx widget.BuildContext) widget.Widget {
 	return &Flex{
 		Direction:          render.Vertical,
@@ -122,10 +104,6 @@ func (r *Column) Build(ctx widget.BuildContext) widget.Widget {
 
 type Spacer struct {
 	Flex maybe.Option[float64]
-}
-
-func (s *Spacer) CreateElement() widget.Element {
-	return widget.NewInteriorElement(s)
 }
 
 func (s *Spacer) Build(ctx widget.BuildContext) widget.Widget {

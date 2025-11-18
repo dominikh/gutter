@@ -176,7 +176,7 @@ func (el *simpleInteriorElement[W]) Build() Widget {
 	} else if w, ok := el.widget.(WidgetBuilder); ok {
 		return w.Build(el)
 	} else {
-		panic(fmt.Sprintf("widget %T needs to implement WidgetBuilder or StatefulWidget", el.widget))
+		panic(fmt.Sprintf("widget %T needs to implement widget.WidgetBuilder or %s", el.widget, reflect.TypeOf(new(StatefulWidget[W])).Elem()))
 	}
 }
 
@@ -231,17 +231,6 @@ type BuildContext interface {
 //   - [KeyedWidget]
 //   - [ParentDataWidget]
 type Widget interface {
-	// CreateElement returns a new Element that represents this widget in the
-	// element tree.
-	//
-	// You should use one of the following functions to implement CreateElement:
-	//
-	//   - [NewInteriorElement] for most [StatelessWidget]s and [StatefulWidget]s
-	//   - [NewRenderObjectElement] for any [RenderObjectWidget].
-	//
-	// See the documentation on [Element] for more information about the element
-	// tree.
-	CreateElement() Element
 }
 
 type KeyedWidget interface {
@@ -257,6 +246,17 @@ type StatelessWidget interface {
 
 type StatefulWidget[W Widget] interface {
 	Widget
+	// CreateElement returns a new Element that represents this widget in the
+	// element tree.
+	//
+	// You should use one of the following functions to implement CreateElement:
+	//
+	//   - [NewInteriorElement] for most [StatelessWidget]s and [StatefulWidget]s
+	//   - [NewRenderObjectElement] for any [RenderObjectWidget].
+	//
+	// See the documentation on [Element] for more information about the element
+	// tree.
+	CreateElement() Element
 	CreateState() State[W]
 }
 
@@ -915,9 +915,18 @@ func inflateWidget(parent Element, widget Widget, newSlot int) Element {
 			}
 		}
 	}
-	newChild := widget.CreateElement()
-	mount(newChild, parent, newSlot)
 
+	var newChild Element
+	switch widget := widget.(type) {
+	case interface{ CreateElement() Element }:
+		newChild = widget.CreateElement()
+	case RenderObjectWidget:
+		newChild = NewRenderObjectElement(widget)
+	default:
+		newChild = NewInteriorElement(widget)
+	}
+
+	mount(newChild, parent, newSlot)
 	return newChild
 }
 
@@ -1301,10 +1310,6 @@ type MediaQuery struct {
 // Build implements StatelessWidget.
 func (m *MediaQuery) Build(ctx BuildContext) Widget {
 	return m.Child
-}
-
-func (m *MediaQuery) CreateElement() Element {
-	return NewInteriorElement(m)
 }
 
 type MediaQueryData struct {

@@ -66,10 +66,6 @@ func (p *Padding) UpdateRenderObject(ctx widget.BuildContext, obj render.Object)
 	obj.(*render.Padding).SetInset(p.Padding)
 }
 
-func (p *Padding) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(p)
-}
-
 type AnimatedPadding struct {
 	Padding render.Inset
 	Child   widget.Widget
@@ -112,10 +108,6 @@ func (c *ColoredBox) CreateRenderObject(ctx widget.BuildContext) render.Object {
 
 func (c *ColoredBox) UpdateRenderObject(ctx widget.BuildContext, obj render.Object) {
 	obj.(*renderColoredBox).setColor(c.Color)
-}
-
-func (c *ColoredBox) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(c)
 }
 
 type renderColoredBox struct {
@@ -166,11 +158,6 @@ func (box *SizedBox) UpdateRenderObject(ctx widget.BuildContext, obj render.Obje
 	obj.(*render.Constrained).SetExtraConstraints(cs)
 }
 
-// CreateElement implements widget.Widget.
-func (box *SizedBox) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(box)
-}
-
 type PointerRegion struct {
 	OnPress   func(hit render.HitTestEntry, ev pointer.Event)
 	OnRelease func(hit render.HitTestEntry, ev pointer.Event)
@@ -201,11 +188,6 @@ func (p *PointerRegion) UpdateRenderObject(ctx widget.BuildContext, obj render.O
 	obj.(*render.PointerRegion).OnAll = p.OnAll
 }
 
-// CreateElement implements widget.Widget.
-func (w *PointerRegion) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(w)
-}
-
 type Opacity struct {
 	Opacity float32
 	Child   widget.Widget
@@ -221,11 +203,6 @@ func (o *Opacity) CreateRenderObject(ctx widget.BuildContext) render.Object {
 // UpdateRenderObject implements RenderObjectWidget.
 func (o *Opacity) UpdateRenderObject(ctx widget.BuildContext, obj render.Object) {
 	obj.(*render.Opacity).SetOpacity(o.Opacity)
-}
-
-// CreateElement implements widget.Widget.
-func (o *Opacity) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(o)
 }
 
 type AnimatedOpacity struct {
@@ -266,11 +243,6 @@ type FadeTransition struct {
 	Child   widget.Widget
 }
 
-// CreateElement implements widget.Widget.
-func (f *FadeTransition) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(f)
-}
-
 func (f *FadeTransition) CreateRenderObject(ctx widget.BuildContext) render.Object {
 	obj := &render.AnimatedOpacity{}
 	obj.SetOpacity(f.Opacity)
@@ -306,11 +278,6 @@ func (k *KeyedSubtree) GetKey() any {
 	return k.Key
 }
 
-// CreateElement implements widget.Widget.
-func (k *KeyedSubtree) CreateElement() widget.Element {
-	return widget.NewInteriorElement(k)
-}
-
 type Builder struct {
 	Child   widget.Widget
 	Builder func(ctx widget.BuildContext, child widget.Widget) widget.Widget
@@ -319,11 +286,6 @@ type Builder struct {
 // Build implements StatelessWidget.
 func (b *Builder) Build(ctx widget.BuildContext) widget.Widget {
 	return b.Builder(ctx, b.Child)
-}
-
-// CreateElement implements StatelessWidget.
-func (b *Builder) CreateElement() widget.Element {
-	return widget.NewInteriorElement(b)
 }
 
 type CallbackEvent func()
@@ -335,11 +297,6 @@ type FittedBox struct {
 	// TODO(dh): add alignment option
 	Clip  bool
 	Child widget.Widget
-}
-
-// CreateElement implements RenderObjectWidget.
-func (f *FittedBox) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(f)
 }
 
 // CreateRenderObject implements RenderObjectWidget.
@@ -500,11 +457,6 @@ type Align struct {
 	WidthFactor  maybe.Option[float64]
 	HeightFactor maybe.Option[float64]
 	Child        widget.Widget
-}
-
-// CreateElement implements RenderObjectWidget.
-func (a *Align) CreateElement() widget.Element {
-	return widget.NewRenderObjectElement(a)
 }
 
 // CreateRenderObject implements RenderObjectWidget.
