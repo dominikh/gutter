@@ -91,7 +91,7 @@ func (w *renderObjectToWidgetAdapter) UpdateRenderObject(ctx BuildContext, obj r
 func (w *renderObjectToWidgetAdapter) AttachToRenderTree(bo *BuildOwner, el *renderObjectToWidgetElement) *renderObjectToWidgetElement {
 	if el == nil {
 		el = w.CreateElement().(*renderObjectToWidgetElement)
-		el.AssignOwner(bo)
+		el.BuildOwner = bo
 		bo.BuildScope(func() {
 			mount(el, nil, 0)
 		})
@@ -115,10 +115,6 @@ func newRenderObjectToWidgetElement(w Widget) *renderObjectToWidgetElement {
 	var el renderObjectToWidgetElement
 	el.widget = w
 	return &el
-}
-
-func (el *renderObjectToWidgetElement) AssignOwner(owner *BuildOwner) {
-	el.BuildOwner = owner
 }
 
 func (el *renderObjectToWidgetElement) transition(t elementTransition) {
