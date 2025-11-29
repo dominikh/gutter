@@ -5,26 +5,123 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
-	"math/rand/v2"
-	"os"
+	"math/rand"
 	"time"
 
+	"honnef.co/go/color"
 	"honnef.co/go/gutter/application"
-	"honnef.co/go/gutter/lottie/lottie_converter"
-	"honnef.co/go/gutter/lottie/lottie_encoding"
-	"honnef.co/go/stuff/container/maybe"
 	"honnef.co/go/gutter/widget"
 	"honnef.co/go/gutter/widget/widgets"
-	"honnef.co/go/gutter/wsi"
+	"honnef.co/go/stuff/container/maybe"
 )
+
+var _ widget.StatefulWidget[*Root] = (*Root)(nil)
+var _ widget.StatelessWidget = (*Interior1)(nil)
+var _ widget.StatelessWidget = (*Interior2)(nil)
+var _ widget.StatelessWidget = (*Leaf)(nil)
+
+type Root struct {
+	Child widget.Widget
+}
+
+// CreateElement implements widget.StatelessWidget.
+func (r *Root) CreateElement() widget.Element {
+	return widget.NewInteriorElement(r)
+}
+
+// CreateState implements widget.StatefulWidget.
+func (r *Root) CreateState() widget.State[*Root] {
+	return &rootState{}
+}
+
+var int2 = &Interior2{
+	Child: &Leaf{},
+}
+
+var ch = make(chan float64)
+
+type rootState struct {
+	widget.StateHandle[*Root]
+
+	l *widgets.ChannelListener[float64]
+}
+
+// Build implements widget.State.
+func (r *rootState) Build(ctx widget.BuildContext) widget.Widget {
+	log.Println("Building Root")
+	return &widgets.ValueListenableBuilder[float64]{
+		ValueListenable: r.l,
+		Builder: func(ctx widget.BuildContext, v maybe.Option[float64], child widget.Widget) widget.Widget {
+			log.Println("building")
+			return &Interior1{
+				R:     v.UnwrapOr(1),
+				Child: int2,
+			}
+		},
+	}
+}
+
+// Transition implements widget.State.
+func (r *rootState) Transition(t widget.StateTransition[*Root]) {
+	log.Println(t)
+	switch t.Kind {
+	case widget.StateInitializing:
+		r.l = widgets.NewChannelListener(ch, r.BuildOwner().EmitEvent)
+	case widget.StateUpdatedWidget:
+	case widget.StateChangedDependencies:
+	case widget.StateActivating:
+	case widget.StateDeactivating:
+	case widget.StateDisposing:
+		r.l.Dispose()
+	default:
+		panic(fmt.Sprintf("unexpected widget.StateTransitionKind: %#v", t.Kind))
+	}
+}
+
+type Interior1 struct {
+	R     float64
+	Child widget.Widget
+}
+
+// Build implements widget.StatelessWidget.
+func (i *Interior1) Build(ctx widget.BuildContext) widget.Widget {
+	log.Println("Building Interior1")
+	return i.Child
+}
+
+type Interior2 struct {
+	Child widget.Widget
+}
+
+// Build implements widget.StatelessWidget.
+func (i *Interior2) Build(ctx widget.BuildContext) widget.Widget {
+	log.Println("Building Interior2")
+	return i.Child
+}
+
+type Leaf struct{}
+
+// Build implements widget.StatelessWidget.
+func (l *Leaf) Build(ctx widget.BuildContext) widget.Widget {
+	log.Printf("Building Leaf %p", l)
+	int1 := widget.Ancestor[*Interior1](ctx)
+	return &widgets.ColoredBox{
+		Color: color.Make(color.SRGB, int1.R, 0, 0, 1),
+	}
+}
 
 func main() {
 	log.SetFlags(log.Lmicroseconds | log.Llongfile)
-	// slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-	// 	AddSource: true,
-	// 	Level:     slog.LevelDebug,
-	// })))
+
+	go func() {
+		for {
+			time.Sleep(100 * time.Millisecond)
+			ch <- rand.Float64()
+		}
+	}()
 
 	app, err := application.New()
 	if err != nil {
@@ -33,69 +130,12 @@ func main() {
 	// XXX
 	// defer app.Dispose()
 
-	theCh := make(chan float64)
-	go func() {
-		t := time.NewTicker(500 * time.Millisecond)
-		defer t.Stop()
-		for range t.C {
-			theCh <- rand.Float64()
-		}
-	}()
-
-	b, err := os.ReadFile("/home/dominikh/lottie/:melting:.json")
-	if err != nil {
-		panic(err)
-	}
-	anim, err := lottie_encoding.Parse(b)
-	if err != nil {
-		panic(err)
-	}
-	comp := lottie_converter.ConvertAnimation(anim)
-
-	l := widgets.NewChannelListener(theCh, func(ev wsi.Event) {
-		// Ignore that we need this argument, ideally widget.NewChannelListener
-		// would have a magic way to get the event emitter, while not depending
-		// on the 'application' package.
-		// XXX
-		// app.EmitEvent(nil, ev)
-	})
-	defer l.Dispose()
-
-	root := &widgets.ValueListenableBuilder[float64]{
-		ValueListenable: l,
-		Builder: func(ctx widget.BuildContext, mv maybe.Option[float64], child widget.Widget) widget.Widget {
-			return &widgets.Column{
-				Children: []widget.Widget{
-					&widgets.Lottie{
-						Composition: comp,
-						Animate:     true,
-						Repeat:      true,
-						Reverse:     false,
-						Width:       64,
-					},
-					&widgets.Spacer{},
-					&widgets.Lottie{
-						Composition: comp,
-						Animate:     true,
-						Repeat:      true,
-						Reverse:     false,
-						Width:       64,
-					},
-				},
-			}
+	root := &Root{
+		Child: &Interior1{
+			Child: &Interior2{
+				Child: &Leaf{},
+			},
 		},
 	}
-
-	// root := &widget.Lottie{
-	// 	Composition: comp,
-	// 	Animate:     true,
-	// 	Repeat:      true,
-	// 	Reverse:     false,
-	// }
-
-	// XXX
-	// app.Run(context.Background(), root)
-
-	_ = app
-	_ = root
+	app.Run(context.Background(), root)
 }
