@@ -616,14 +616,12 @@ type LayerCompiled struct {
 	CopyBackdrop bool
 }
 
-// PushClip pushes a new clip to the clip stack. The provided shape gets
+// PushClip pushes a new clip to the layer stack. The provided shape gets
 // intersected with the current clip path, if any.
 //
 // All uses of [PushClip], [PushClipCompiled], [Fill], [FillCompiled], [Stroke],
 // and [StrokeCompiled] have their shapes and paths intersected with the
 // currently active clip path, if any.
-//
-// The clip stack is independent of the layer stack.
 func (ctx *Renderer) PushClip(shape gfx.Shape, transform curve.Affine, fill gfx.FillRule) int {
 	// OPT(dh): optimize clipping to a rectangle
 
