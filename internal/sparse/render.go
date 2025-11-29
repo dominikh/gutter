@@ -610,12 +610,6 @@ type Layer struct {
 	CopyBackdrop bool
 }
 
-type LayerCompiled struct {
-	BlendMode    gfx.BlendMode
-	Opacity      float32
-	CopyBackdrop bool
-}
-
 // PushClip pushes a new clip to the layer stack. The provided shape gets
 // intersected with the current clip path, if any.
 //
