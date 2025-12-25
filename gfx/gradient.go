@@ -727,6 +727,12 @@ func (fd FocalData) nativelyFocal() bool {
 	return isNearlyZero32(fd.fFocalX)
 }
 
+// approximateGradient takes two color stops of a gradient, the color space in
+// which to interpolate the gradient, and a tolerance. It returns a sequence of
+// new color stops that when interpolated in [ColorSpace] approximate the
+// original gradient to the specified tolerance at every point. Tolerance is
+// specified as the Euclidean distance between original and approximated colors,
+// in the Oklab color space.
 func approximateGradient(
 	start, end color.Color,
 	cs *color.Space,
