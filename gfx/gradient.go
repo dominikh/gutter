@@ -682,7 +682,7 @@ func encodeStops(stops []GradientStop, space *color.Space) []GradientRange {
 	for i := range stops[:len(stops)-1] {
 		left := stops[i]
 		right := stops[i+1]
-		for t, c := range ApproximateGradient(left.Color, right.Color, space, 0.01) {
+		for t, c := range approximateGradient(left.Color, right.Color, space, 0.01) {
 			stop := encodedGradientStop{
 				left.Offset + (right.Offset-left.Offset)*t,
 				c,
@@ -727,7 +727,7 @@ func (fd FocalData) nativelyFocal() bool {
 	return isNearlyZero32(fd.fFocalX)
 }
 
-func ApproximateGradient(
+func approximateGradient(
 	start, end color.Color,
 	cs *color.Space,
 	tol float32,
