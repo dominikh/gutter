@@ -8,6 +8,9 @@
 package sparse
 
 import (
+	"fmt"
+	"math"
+
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/stuff/math/math32"
@@ -57,7 +60,7 @@ func (gf *gradientFiller) runColumn(col *[stripHeight]gfx.PlainColor, lut *gfx.G
 	for y := range col {
 		px := &col[y]
 		t := gf.gradient.Kind.CurPos(pos)
-		t = extend(t, gf.gradient.Pad)
+		t = applyExtend(t, gf.gradient.Extend)
 		*px = lut.LUT[int(t*lut.Scale)]
 
 		pos = pos.Translate(gf.gradient.YAdvance)
@@ -79,16 +82,17 @@ func (gf *gradientFiller) runUndefined(dst [][stripHeight]gfx.PlainColor) {
 	}
 }
 
-func extend(val float32, pad bool) float32 {
-	if pad {
+func applyExtend(val float32, extend gfx.GradientExtend) float32 {
+	switch extend {
+	case gfx.GradientExtendPad:
 		return max(min(val, 1), 0)
+	case gfx.GradientExtendRepeat:
+		_, fract := math.Modf(float64(val - math32.Floor(val)))
+		return float32(fract)
+	case gfx.GradientExtendReflect:
+		// See https://github.com/google/skia/blob/220738774f7a0ce4a6c7bd17519a336e5e5dea5b/src/opts/SkRasterPipeline_opts.h#L6472-L6475
+		return min(max(math32.Abs((val-1)-2*math32.Floor((val-1)*0.5)-1), 0), 1)
+	default:
+		panic(fmt.Sprintf("unexpected gfx.GradientExtend: %#v", extend))
 	}
-
-	if val < 0 {
-		return val - math32.Floor(val)
-	}
-	if val > 1 {
-		return val - math32.Ceil(val-1)
-	}
-	return val
 }

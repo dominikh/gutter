@@ -725,3 +725,19 @@ func TestSweepGradientComplexShape(t *testing.T) {
 		ctx.Fill(path, curve.Identity, gfx.NonZero, gradient)
 	})
 }
+
+func TestRadialGradientSmallerR1WithReflect(t *testing.T) {
+	renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_smaller_r1_with_reflect", func(ctx *Renderer) {
+		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
+		gradient := &gfx.RadialGradient{
+			StartCenter: curve.Pt(30, 50),
+			StartRadius: 20,
+			EndCenter:   curve.Pt(70, 50),
+			EndRadius:   5,
+			Stops:       stopsBlueGreenRedYellow,
+			Extend:      gfx.GradientExtendReflect,
+			ColorSpace:  color.SRGB,
+		}
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
+	})
+}

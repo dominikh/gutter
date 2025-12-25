@@ -68,16 +68,10 @@ func (l *LinearGradient) Encode(transform curve.Affine) EncodedPaint {
 
 	p0 := l.Start
 	p1 := l.End
-	stops := l.Stops
-	if l.Extend == GradientExtendReflect {
-		p1.X = p1.X + p1.X - p0.X
-		p1.Y = p1.Y + p1.Y - p0.Y
-		stops = applyReflect(stops)
-	}
 	baseTransform := mapLineToLine(p0, p1, curve.Point{}, curve.Pt(1.0, 0.0))
 	return encodeGradient(
 		EncodedLinearGradient{},
-		stops,
+		l.Stops,
 		baseTransform,
 		l.Extend,
 		transform,
@@ -98,7 +92,6 @@ func encodeGradient(
 	if space == nil {
 		space = color.LinearSRGB
 	}
-	pad := extend == GradientExtendPad
 
 	if firstStop := &stops[0]; firstStop.Offset != 0 {
 		firstStop.Offset = 0
@@ -143,7 +136,7 @@ func encodeGradient(
 		curve.Vec2(xAdvance),
 		curve.Vec2(yAdvance),
 		ranges,
-		pad,
+		extend,
 		// Even if the gradient has no stops with transparency, we might have to force
 		// alpha-compositing in case the radial gradient is undefined in certain positions,
 		// in which case the resulting color will be transparent and thus the gradient overall
@@ -200,11 +193,6 @@ func (r *RadialGradient) Encode(transform curve.Affine) EncodedPaint {
 	stops := r.Stops
 	var kind GradientKind
 	var baseTransform curve.Affine
-	if r.Extend == GradientExtendReflect {
-		c1 = c1.Translate(c1.Sub(c0))
-		r1 = r1 + r1 - r0
-		stops = applyReflect(stops)
-	}
 	dRadius := r1 - r0
 	if isNearlyZero(c1.Sub(c0).Hypot()) {
 		sf := float64(1.0 / max(r0, r1))
@@ -282,10 +270,6 @@ func (s *SweepGradient) Encode(transform curve.Affine) EncodedPaint {
 	startAngle := s.StartAngle
 	endAngle := s.EndAngle
 	stops := s.Stops
-	if s.Extend == GradientExtendReflect {
-		endAngle = endAngle + endAngle - startAngle
-		stops = applyReflect(stops)
-	}
 	xOffset := -s.Center.X
 	yOffset := -s.Center.Y
 	baseTransform := curve.Translate(curve.Vec(xOffset, yOffset))
@@ -558,8 +542,8 @@ type EncodedGradient struct {
 	YAdvance curve.Vec2
 	// The color Ranges of the gradient.
 	Ranges []GradientRange
-	// Whether the gradient should be padded.
-	Pad bool
+	// The extend of the gradient.
+	Extend GradientExtend
 	// Whether the gradient requires `source_over` compositing.
 	HasOpacities bool
 
@@ -628,23 +612,6 @@ func degeneratePoint(p1 curve.Point, p2 curve.Point) bool {
 
 func degenerateVal(v1 float32, v2 float32) bool {
 	return math32.Abs(v2-v1) <= degenerateThreshold
-}
-
-// Extend the stops so that we can treat a repeated gradient like a reflected
-// gradient.
-func applyReflect(stops []GradientStop) []GradientStop {
-	// OPT(dh): we could combine the two loops, and also index into out instead
-	// of using append.
-	out := make([]GradientStop, 0, len(stops)*2)
-	for _, stop := range stops {
-		out = append(out, GradientStop{stop.Offset / 2, stop.Color})
-	}
-	for i := len(stops) - 1; i >= 0; i-- {
-		stop := stops[i]
-		out = append(out, GradientStop{0.5 + (1.0-stop.Offset)/2, stop.Color})
-	}
-
-	return out
 }
 
 // Encode all stops into a sequence of ranges.
