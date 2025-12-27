@@ -52,9 +52,9 @@ func NewConcurrentRenderer(width, height uint16, parallelism int) *ConcurrentRen
 			case fillRenderTask:
 				r.r.FillCompiled(p, t.transform, t.paint)
 			case saveRenderTask:
-				// r.r.Save()
+				r.r.Save()
 			case restoreRenderTask:
-				r.r.Pop()
+				r.r.Restore()
 			}
 		}
 		close(r.done)

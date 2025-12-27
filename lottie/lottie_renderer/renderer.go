@@ -29,17 +29,16 @@ func (r *Renderer) Render(
 	rec = rec.Checkpoint()
 	r.batch.reset(r)
 
-	rec.PushClip(curve.Rect{
-		X0: 0,
-		Y0: 0,
-		X1: float64(anim.Width),
-		Y1: float64(anim.Height),
-	})
 	rec.PushLayer(gfx.Layer{
 		Opacity: float32(alpha),
+		Clip: curve.Rect{
+			X0: 0,
+			Y0: 0,
+			X1: float64(anim.Width),
+			Y1: float64(anim.Height),
+		},
 	})
-	defer rec.Pop()
-	defer rec.Pop()
+	defer rec.PopLayer()
 
 	for i := len(anim.Layers) - 1; i >= 0; i-- {
 		layer := anim.Layers[i]
@@ -75,7 +74,7 @@ func (r *Renderer) renderLayer(
 	}
 
 	rec.PushLayer(gfx.Layer{Opacity: float32(alpha)})
-	defer rec.Pop()
+	defer rec.PopLayer()
 
 	parentTransform := trans
 	trans = r.computeTransform(layerSet, layer, parentTransform, frame)
@@ -85,7 +84,7 @@ func (r *Renderer) renderLayer(
 			rec.PushLayer(gfx.Layer{
 				Opacity: 1,
 			})
-			defer rec.Pop()
+			defer rec.PopLayer()
 
 			if maskIndex >= 0 && maskIndex < len(layerSet) {
 				r.renderLayer(
@@ -99,7 +98,7 @@ func (r *Renderer) renderLayer(
 			}
 
 			rec.PushLayer(gfx.Layer{BlendMode: mode, Opacity: 1})
-			defer rec.Pop()
+			defer rec.PopLayer()
 		}
 	}
 	for _, mask := range layer.Masks {
@@ -109,10 +108,10 @@ func (r *Renderer) renderLayer(
 		// on the stack? and then avoid having to manually apply it in all the
 		// places where we do drawing?
 		rec.PushTransform(trans)
-		rec.PushClip(r.maskElements)
 		rec.PushLayer(gfx.Layer{
 			BlendMode: mask.Mode,
 			Opacity:   float32(alpha),
+			Clip:      r.maskElements,
 		})
 		rec.PopTransform()
 		r.maskElements = r.maskElements[:0]
@@ -137,7 +136,7 @@ func (r *Renderer) renderLayer(
 
 			rec.PushTransform(trans)
 			rec.PushClip(curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(layer.Width, layer.Height)))
-			defer rec.Pop()
+			defer rec.PopClip()
 			rec.PopTransform()
 
 			for i := len(assetLayers) - 1; i >= 0; i-- {
@@ -162,7 +161,7 @@ func (r *Renderer) renderLayer(
 	}
 
 	for range len(layer.Masks) {
-		rec.Pop()
+		rec.PopLayer()
 	}
 }
 
@@ -339,7 +338,7 @@ func (b *batch) render(rec gfx.Recorder, group *drawData) {
 
 	if group.groupAlpha != 1 {
 		rec.PushLayer(gfx.Layer{Opacity: float32(group.groupAlpha)})
-		defer rec.Pop()
+		defer rec.PopLayer()
 	}
 
 	// Process all draws in reverse

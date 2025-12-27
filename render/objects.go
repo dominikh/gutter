@@ -50,7 +50,7 @@ func (w *Clip) PerformLayout() curve.Size {
 // PerformPaint implements Object.
 func (w *Clip) PerformPaint(p *Painter) {
 	p.Canvas.PushClip(curve.NewRectFromOrigin(curve.Point{}, w.Handle().Size()))
-	defer p.Canvas.Pop()
+	defer p.Canvas.PopClip()
 
 	p.PaintAt(w.Child, curve.Point{})
 }
@@ -334,7 +334,7 @@ func (o *Opacity) PerformPaint(p *Painter) {
 		p.Canvas.PushLayer(gfx.Layer{
 			Opacity: o.opacity,
 		})
-		defer p.Canvas.Pop()
+		defer p.Canvas.PopLayer()
 		p.PaintAt(o.Child, curve.Point{})
 	}
 }
@@ -568,7 +568,7 @@ func (o *AnimatedOpacity) PerformPaint(p *Painter) {
 		p.Canvas.PushLayer(gfx.Layer{
 			Opacity: alpha,
 		})
-		defer p.Canvas.Pop()
+		defer p.Canvas.PopLayer()
 		p.PaintAt(o.Child, curve.Point{})
 	}
 }

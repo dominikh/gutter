@@ -913,7 +913,7 @@ func (g *glyphPainter) PushClipRect(rect curve.Rect) {
 // PopClip implements harfbuzz.GlyphPainter.
 func (g *glyphPainter) PopClip() {
 	// XXX guard against empty layers
-	g.layers[len(g.layers)-1].Pop()
+	g.layers[len(g.layers)-1].PopClip()
 }
 
 // PushGroup implements harfbuzz.GlyphPainter.
@@ -943,7 +943,7 @@ func (g *glyphPainter) PopGroup(mode gfx.BlendMode) {
 	parent.PushTransform(g.transforms[len(g.transforms)-1])
 	parent.PlayRecording(top.Finish())
 	parent.PopTransform()
-	parent.Pop()
+	parent.PopLayer()
 }
 
 // PushTransform implements harfbuzz.GlyphPainter.
