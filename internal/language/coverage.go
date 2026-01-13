@@ -8,7 +8,7 @@ package language
 // the list by traversing the internal structures.
 func BaseLanguages() []Language {
 	base := make([]Language, 0, NumLanguages)
-	for i := 0; i < langNoIndexOffset; i++ {
+	for i := range langNoIndexOffset {
 		// We included "und" already for the value 0.
 		if i != nonCanonicalUnd {
 			base = append(base, Language(i))
@@ -16,7 +16,7 @@ func BaseLanguages() []Language {
 	}
 	i := langNoIndexOffset
 	for _, v := range langNoIndex {
-		for k := 0; k < 8; k++ {
+		for range 8 {
 			if v&1 == 1 {
 				base = append(base, Language(i))
 			}

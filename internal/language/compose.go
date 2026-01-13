@@ -60,7 +60,7 @@ func (b *Builder) SetTag(t Tag) {
 	// TODO: optimize
 	b.variants = b.variants[:0]
 	if variants := t.Variants(); variants != "" {
-		for _, vr := range strings.Split(variants[1:], "-") {
+		for vr := range strings.SplitSeq(variants[1:], "-") {
 			b.variants = append(b.variants, vr)
 		}
 	}

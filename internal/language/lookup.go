@@ -77,7 +77,7 @@ const base = 'z' - 'a' + 1
 
 func strToInt(s []byte) uint {
 	v := uint(0)
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		v *= base
 		v += uint(s[i] - 'a')
 	}

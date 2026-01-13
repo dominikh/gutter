@@ -37,25 +37,25 @@ func decodeTyped(d *jsontext.Decoder, a *any, o json.Options, m map[any]reflect.
 var layerTypes = map[any]reflect.Type{
 	// We have to use float64 keys because the key gets unmarshaled into any,
 	// which uses float64, not int
-	float64(0): reflect.TypeOf(PrecompositionLayer{}),
-	float64(1): reflect.TypeOf(SolidLayer{}),
-	float64(2): reflect.TypeOf(ImageLayer{}),
-	float64(3): reflect.TypeOf(NullLayer{}),
-	float64(4): reflect.TypeOf(ShapeLayer{}),
+	float64(0): reflect.TypeFor[PrecompositionLayer](),
+	float64(1): reflect.TypeFor[SolidLayer](),
+	float64(2): reflect.TypeFor[ImageLayer](),
+	float64(3): reflect.TypeFor[NullLayer](),
+	float64(4): reflect.TypeFor[ShapeLayer](),
 }
 
 var graphicElementTypes = map[any]reflect.Type{
-	"el": reflect.TypeOf(Ellipse{}),
-	"fl": reflect.TypeOf(Fill{}),
-	"gf": reflect.TypeOf(GradientFill{}),
-	"gs": reflect.TypeOf(GradientStroke{}),
-	"gr": reflect.TypeOf(Group{}),
-	"sh": reflect.TypeOf(Path{}),
-	"sr": reflect.TypeOf(Polystar{}),
-	"rc": reflect.TypeOf(Rectangle{}),
-	"st": reflect.TypeOf(Stroke{}),
-	"tr": reflect.TypeOf(TransformShape{}),
-	"tm": reflect.TypeOf(TrimPath{}),
+	"el": reflect.TypeFor[Ellipse](),
+	"fl": reflect.TypeFor[Fill](),
+	"gf": reflect.TypeFor[GradientFill](),
+	"gs": reflect.TypeFor[GradientStroke](),
+	"gr": reflect.TypeFor[Group](),
+	"sh": reflect.TypeFor[Path](),
+	"sr": reflect.TypeFor[Polystar](),
+	"rc": reflect.TypeFor[Rectangle](),
+	"st": reflect.TypeFor[Stroke](),
+	"tr": reflect.TypeFor[TransformShape](),
+	"tm": reflect.TypeFor[TrimPath](),
 }
 
 var unmarshalLayer = json.UnmarshalFuncV2(func(d *jsontext.Decoder, a *AnyLayer, o json.Options) error {

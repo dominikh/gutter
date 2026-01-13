@@ -176,7 +176,7 @@ func (el *simpleInteriorElement[W]) Build() Widget {
 	} else if w, ok := el.widget.(WidgetBuilder); ok {
 		return w.Build(el)
 	} else {
-		panic(fmt.Sprintf("widget %T needs to implement widget.WidgetBuilder or %s", el.widget, reflect.TypeOf(new(StatefulWidget[W])).Elem()))
+		panic(fmt.Sprintf("widget %T needs to implement widget.WidgetBuilder or %s", el.widget, reflect.TypeFor[StatefulWidget[W]]()))
 	}
 }
 

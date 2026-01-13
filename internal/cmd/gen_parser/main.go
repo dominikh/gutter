@@ -701,8 +701,8 @@ fieldLoop:
 		getterFnName := f.field.Name()
 		if f.sliceInfo.singular != "" {
 			getterFnName = f.sliceInfo.singular
-		} else if strings.HasSuffix(getterFnName, "s") {
-			getterFnName = title(strings.TrimSuffix(getterFnName, "s"))
+		} else if before, ok0 := strings.CutSuffix(getterFnName, "s"); ok0 {
+			getterFnName = title(before)
 		} else {
 			getterFnName = "Get" + title(getterFnName)
 		}
@@ -1032,7 +1032,7 @@ func parseTag(s string) tag {
 		g = strings.TrimSuffix(g, ")")
 		out.args = map[any]string{}
 		n := 0
-		for _, arg := range strings.Split(g, ",") {
+		for arg := range strings.SplitSeq(g, ",") {
 			parts := strings.SplitN(strings.TrimSpace(arg), "=", 2)
 			if len(parts) == 1 {
 				out.args[n] = parts[0]
@@ -1048,8 +1048,8 @@ func parseTag(s string) tag {
 func (g *generator) needsParentData(typ types.Type) bool {
 	switch typ := typ.Underlying().(type) {
 	case *types.Struct:
-		for i := range typ.NumFields() {
-			if typ.Field(i).Name() == "parentData" {
+		for field := range typ.Fields() {
+			if field.Name() == "parentData" {
 				return true
 			}
 		}

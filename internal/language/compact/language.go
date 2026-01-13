@@ -178,7 +178,7 @@ func (t Tag) RegionalTag() Tag {
 	// tag, _ = tag.SetTypeForKey("rg", "")
 	b.SetTag(t.locale.Tag())
 	if v := tag.Variants(); v != "" {
-		for _, v := range strings.Split(v, "-") {
+		for v := range strings.SplitSeq(v, "-") {
 			b.AddVariant(v)
 		}
 	}

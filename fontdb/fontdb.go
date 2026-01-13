@@ -197,7 +197,7 @@ func New() *Faces {
 type nilLogger struct{}
 
 // Printf implements fontscan.Logger.
-func (n nilLogger) Printf(format string, args ...interface{}) {}
+func (n nilLogger) Printf(format string, args ...any) {}
 
 // fontFiles collects all discoverable font files.
 func fontFiles() []string {

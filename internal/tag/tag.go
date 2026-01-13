@@ -46,10 +46,7 @@ func (s Index) Next(key []byte, x int) int {
 
 // cmp returns an integer comparing a and b lexicographically.
 func cmp(a Index, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	for i, c := range b[:n] {
 		switch {
 		case a[i] > c:
