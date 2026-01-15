@@ -93,14 +93,14 @@ type Recorder interface {
 	Finish() Recording
 }
 
-func NewSimpleRecorder() *SimpleRecorder {
-	return &SimpleRecorder{
+func NewRecorder() Recorder {
+	return &recorder{
 		transform: curve.Identity,
 		commands:  new([]Command),
 	}
 }
 
-type SimpleRecorder struct {
+type recorder struct {
 	transform      curve.Affine
 	transformStack []curve.Affine
 	fillRule       FillRule
@@ -110,7 +110,7 @@ type SimpleRecorder struct {
 }
 
 // Fill implements Recorder.
-func (s *SimpleRecorder) Fill(shape Shape, paint Paint) {
+func (s *recorder) Fill(shape Shape, paint Paint) {
 	*s.commands = append(*s.commands, CommandFill{
 		Paint:     paint,
 		Shape:     shape,
@@ -120,7 +120,7 @@ func (s *SimpleRecorder) Fill(shape Shape, paint Paint) {
 }
 
 // Stroke implements Recorder.
-func (s *SimpleRecorder) Stroke(shape Shape, stroke curve.Stroke, paint Paint) {
+func (s *recorder) Stroke(shape Shape, stroke curve.Stroke, paint Paint) {
 	*s.commands = append(*s.commands, CommandStroke{
 		Shape:     shape,
 		Paint:     paint,
@@ -130,7 +130,7 @@ func (s *SimpleRecorder) Stroke(shape Shape, stroke curve.Stroke, paint Paint) {
 }
 
 // PlayRecording implements Recorder.
-func (s *SimpleRecorder) PlayRecording(rec Recording) {
+func (s *recorder) PlayRecording(rec Recording) {
 	*s.commands = append(*s.commands, CommandPlayRecording{
 		Recording: rec,
 		Transform: s.transform,
@@ -138,7 +138,7 @@ func (s *SimpleRecorder) PlayRecording(rec Recording) {
 }
 
 // PushClip implements Recorder.
-func (s *SimpleRecorder) PushClip(shape Shape) {
+func (s *recorder) PushClip(shape Shape) {
 	*s.commands = append(*s.commands, CommandPushClip{
 		Clip:      shape,
 		FillRule:  s.fillRule,
@@ -147,12 +147,12 @@ func (s *SimpleRecorder) PushClip(shape Shape) {
 }
 
 // PopClip implements Recorder.
-func (s *SimpleRecorder) PopClip() {
+func (s *recorder) PopClip() {
 	*s.commands = append(*s.commands, CommandPopClip{})
 }
 
 // PushLayer implements Recorder.
-func (s *SimpleRecorder) PushLayer(l Layer) {
+func (s *recorder) PushLayer(l Layer) {
 	*s.commands = append(*s.commands, CommandPushLayer{
 		Layer:     l,
 		FillRule:  s.fillRule,
@@ -162,7 +162,7 @@ func (s *SimpleRecorder) PushLayer(l Layer) {
 }
 
 // PopLayer implements Recorder.
-func (s *SimpleRecorder) PopLayer() {
+func (s *recorder) PopLayer() {
 	if s.layerCount <= 0 {
 		panic("unbalanced layer push/pop")
 	}
@@ -171,17 +171,17 @@ func (s *SimpleRecorder) PopLayer() {
 }
 
 // PushTransform implements Recorder.
-func (s *SimpleRecorder) PushTransform(aff curve.Affine) {
+func (s *recorder) PushTransform(aff curve.Affine) {
 	s.transformStack = append(s.transformStack, s.transform)
 	s.transform = s.transform.Mul(aff)
 }
 
-func (s *SimpleRecorder) CurrentTransform() curve.Affine {
+func (s *recorder) CurrentTransform() curve.Affine {
 	return s.transform
 }
 
 // PopTransform implements Recorder.
-func (s *SimpleRecorder) PopTransform() {
+func (s *recorder) PopTransform() {
 	if len(s.transformStack) == 0 {
 		panic("unbalanced transform push/pop")
 	}
@@ -190,13 +190,13 @@ func (s *SimpleRecorder) PopTransform() {
 }
 
 // SetFillRule implements Recorder.
-func (s *SimpleRecorder) SetFillRule(fr FillRule) {
+func (s *recorder) SetFillRule(fr FillRule) {
 	s.fillRule = fr
 }
 
 // Checkpoint implements Recorder.
-func (s *SimpleRecorder) Checkpoint() Recorder {
-	return &SimpleRecorder{
+func (s *recorder) Checkpoint() Recorder {
+	return &recorder{
 		transform:      s.transform,
 		transformStack: nil,
 		fillRule:       s.fillRule,
@@ -206,7 +206,7 @@ func (s *SimpleRecorder) Checkpoint() Recorder {
 }
 
 // Finish implements Recorder.
-func (s *SimpleRecorder) Finish() Recording {
+func (s *recorder) Finish() Recording {
 	for s.layerCount > 0 {
 		s.PopLayer()
 	}

@@ -750,7 +750,7 @@ func (p *Paragraph) Paint(rec gfx.Recorder) {
 					}
 					glyphRec, ok := p.filledGlyphCache[key]
 					if !ok {
-						glyphScene := gfx.NewSimpleRecorder()
+						glyphScene := gfx.NewRecorder()
 						run.font.PaintGlyph(fill, glyph.Codepoint, glyphScene)
 						glyphRec = glyphScene.Finish()
 						p.filledGlyphCache[key] = glyphRec
@@ -770,7 +770,7 @@ func (p *Paragraph) Paint(rec gfx.Recorder) {
 					for i := range style.DashPattern {
 						style.DashPattern[i] /= scaleFactor
 					}
-					glyphScene := gfx.NewSimpleRecorder()
+					glyphScene := gfx.NewRecorder()
 					glyphScene.PushTransform(scale.ThenTranslate(curve.Vec2(glyphOffset)))
 					glyphScene.Stroke(
 						path,
@@ -918,7 +918,7 @@ func (g *glyphPainter) PopClip() {
 
 // PushGroup implements harfbuzz.GlyphPainter.
 func (g *glyphPainter) PushGroup() {
-	g.layers = append(g.layers, gfx.NewSimpleRecorder())
+	g.layers = append(g.layers, gfx.NewRecorder())
 }
 
 // PopGroup implements harfbuzz.GlyphPainter.
@@ -999,7 +999,7 @@ func (f *Font) PaintGlyph(fg color.Color, gid int32, rec gfx.Recorder) {
 		font:       f,
 		fg:         fg,
 		transforms: []curve.Affine{curve.Identity},
-		layers:     []gfx.Recorder{gfx.NewSimpleRecorder()},
+		layers:     []gfx.Recorder{gfx.NewRecorder()},
 	}
 	f.hb.PaintGlyph(gid, gp)
 	// XXX guard against mismatched group/pop group

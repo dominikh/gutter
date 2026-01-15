@@ -27,7 +27,7 @@ func BenchmarkRender(b *testing.B) {
 	var r Renderer
 	for range b.N {
 		for i := int(ccomp.FirstFrame); i < int(ccomp.LastFrame); i++ {
-			rec := gfx.NewSimpleRecorder()
+			rec := gfx.NewRecorder()
 			r.Render(ccomp, float64(i), 1, rec)
 		}
 	}

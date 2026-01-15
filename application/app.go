@@ -76,7 +76,7 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 		// XXX make sure window size fits in uint16
 		// log.Printf("rendering at physical size %dx%d", sz.Width, sz.Height)
 
-		rec := gfx.NewSimpleRecorder()
+		rec := gfx.NewRecorder()
 		// XXX use actual scale, not 2
 		rec.PushTransform(curve.Scale(2, 2))
 		t := time.Now()
