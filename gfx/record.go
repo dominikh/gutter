@@ -73,7 +73,7 @@ type Recorder interface {
 	CurrentTransform() curve.Affine
 	PopTransform()
 
-	SetFillRule(FillRule)
+	SetFillRule(FillRule) FillRule
 
 	PushClip(Shape)
 	PopClip()
@@ -190,8 +190,10 @@ func (s *recorder) PopTransform() {
 }
 
 // SetFillRule implements Recorder.
-func (s *recorder) SetFillRule(fr FillRule) {
+func (s *recorder) SetFillRule(fr FillRule) FillRule {
+	old := s.fillRule
 	s.fillRule = fr
+	return old
 }
 
 // Checkpoint implements Recorder.
