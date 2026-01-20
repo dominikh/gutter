@@ -266,6 +266,25 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 			blendComplexComplex(buf, colors, nil, gfx.BlendMode{}, 1)
 		}
 
+	case *gfx.EncodedBlurredRoundedRectangle:
+		// TODO(dh): remove duplication for different encoded paints
+
+		// OPT(dh): only the edge of the rectangle modulates alpha. if the
+		// paint's base color is opaque, then we don't need to do blending for
+		// the center of the rectangle. for large enough rectangles, the center
+		// might even cover the whole tile and make it simple..
+
+		startX := f.tileX*wideTileWidth + uint16(x)
+		startY := f.tileY * tileHeight
+		bf := newBlurredRoundedRectFiller(paint, startX, startY)
+		// OPT(dh): when the layer is simple, we don't have to read pixels
+		// from memory to blend with the blur
+		f.materialize(l)
+		// OPT(dh): reuse memory
+		colors := make([][stripHeight]gfx.PlainColor, width)
+		bf.run(colors)
+		blendComplexComplex(buf, colors, nil, gfx.BlendMode{}, 1)
+
 	default:
 		panic(fmt.Sprintf("internal error: unhandled type %T", paint))
 	}
@@ -339,6 +358,10 @@ func fineFillComplexNative(buf [][stripHeight]gfx.PlainColor, color gfx.PlainCol
 
 func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.EncodedPaint) {
 	// OPT implement SIMD versions
+
+	// TODO(dh): there is a lot of duplication between fine.fill and
+	// fine.alphaFill. can we combine the two functions without hurting
+	// performance much?
 
 	if len(alphas) < width {
 		panic(fmt.Sprintf("internal error: got %d alphas for a width of %d",
@@ -463,5 +486,18 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 		colors := make([][stripHeight]gfx.PlainColor, width)
 		gf.run(colors)
 		alphaFillInner(safeish.SliceCast[[]gfx.PlainColor](colors))
+
+	case *gfx.EncodedBlurredRoundedRectangle:
+		// TODO(dh): remove duplication for different encoded paints
+		// OPT(dh): reuse memory
+		startX := f.tileX*wideTileWidth + uint16(x)
+		startY := f.tileY * tileHeight
+		bf := newBlurredRoundedRectFiller(paint, startX, startY)
+		colors := make([][stripHeight]gfx.PlainColor, width)
+		bf.run(colors)
+		alphaFillInner(safeish.SliceCast[[]gfx.PlainColor](colors))
+
+	default:
+		panic(fmt.Sprintf("internal error: unhandled type %T", paint))
 	}
 }

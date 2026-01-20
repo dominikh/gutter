@@ -125,16 +125,13 @@ func encodeGradient(
 	// unit vectors are affected by the transform, and then use this as the step
 	// delta for a step in the x/y direction.
 
-	c := transform.Coefficients()
-	scaleSkewTransform := curve.NewAffine([6]float64{c[0], c[1], c[2], c[3], 0, 0})
-	xAdvance := curve.Pt(1.0, 0.0).Transform(scaleSkewTransform)
-	yAdvance := curve.Pt(0.0, 1.0).Transform(scaleSkewTransform)
+	xAdvance, yAdvance := xyAdvances(transform)
 
 	encoded := &EncodedGradient{
 		kind,
 		transform,
-		curve.Vec2(xAdvance),
-		curve.Vec2(yAdvance),
+		xAdvance,
+		yAdvance,
 		ranges,
 		extend,
 		// Even if the gradient has no stops with transparency, we might have to force
