@@ -22,6 +22,8 @@ type BlurredRoundedRectangle struct {
 	Radius float32
 	// The standard deviation of the blur effect.
 	StdDev float32
+	// Whether to opt into further optimizations.
+	LowPrecision bool
 }
 
 var _ Paint = BlurredRoundedRectangle{}
@@ -77,6 +79,7 @@ func (b BlurredRoundedRectangle) Encode(transform curve.Affine) EncodedPaint {
 		Transform:     transform,
 		XAdvance:      xAdvance,
 		YAdvance:      yAdvance,
+		LowPrecision:  b.LowPrecision,
 	}
 }
 
@@ -101,7 +104,8 @@ type EncodedBlurredRoundedRectangle struct {
 	XAdvance curve.Vec2
 	// How much to advance into the x/y direction for one step in the y
 	// direction.
-	YAdvance curve.Vec2
+	YAdvance     curve.Vec2
+	LowPrecision bool
 }
 
 var _ EncodedPaint = (*EncodedBlurredRoundedRectangle)(nil)
