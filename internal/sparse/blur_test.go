@@ -14,7 +14,7 @@ import (
 )
 
 func BenchmarkBlurredRoundedRectFiller(b *testing.B) {
-	br := gfx.BlurredRoundedRectangle{
+	br := &gfx.BlurredRoundedRectangle{
 		Rect:   curve.NewRectFromOrigin(curve.Pt(100, 100), curve.Sz(100, 100)),
 		Color:  color.Make(color.LinearSRGB, 1, 0, 0, 1),
 		Radius: 15,
@@ -24,7 +24,7 @@ func BenchmarkBlurredRoundedRectFiller(b *testing.B) {
 	b.Run("normal", func(b *testing.B) {
 		br.LowPrecision = false
 		f := newBlurredRoundedRectFiller(
-			br.Encode(curve.Identity).(*gfx.EncodedBlurredRoundedRectangle),
+			encodeBlurredRoundedRectangle(br, curve.Identity),
 			0, 0,
 		)
 
@@ -38,7 +38,7 @@ func BenchmarkBlurredRoundedRectFiller(b *testing.B) {
 	b.Run("low_precision", func(b *testing.B) {
 		br.LowPrecision = true
 		f := newBlurredRoundedRectFiller(
-			br.Encode(curve.Identity).(*gfx.EncodedBlurredRoundedRectangle),
+			encodeBlurredRoundedRectangle(br, curve.Identity),
 			0, 0,
 		)
 

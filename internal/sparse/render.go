@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 
+	"honnef.co/go/color"
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/stuff/container/maybe"
@@ -297,7 +298,7 @@ func renderPathCommon(lineBuf []flatLine, fillRule gfx.FillRule, width, height u
 	return stripBuf, alphas
 }
 
-func (ctx *Renderer) renderPath(p Path, paint gfx.EncodedPaint) {
+func (ctx *Renderer) renderPath(p Path, paint encodedPaint) {
 	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
 	if topLayer.blackholed > 0 {
 		return
@@ -580,7 +581,7 @@ func (ctx *Renderer) popLayer() {
 }
 
 func (ctx *Renderer) FillCompiled(p Path, transform curve.Affine, paint gfx.Paint) {
-	ctx.renderPath(p, paint.Encode(transform))
+	ctx.renderPath(p, encodePaint(paint, transform))
 }
 
 func (ctx *Renderer) Fill(
@@ -590,7 +591,7 @@ func (ctx *Renderer) Fill(
 	paint gfx.Paint,
 ) {
 	p := CompileFillPath(shape, transform, fillRule, ctx.width, ctx.height)
-	ctx.renderPath(p, paint.Encode(transform))
+	ctx.renderPath(p, encodePaint(paint, transform))
 }
 
 func (ctx *Renderer) Stroke(
@@ -600,7 +601,7 @@ func (ctx *Renderer) Stroke(
 	paint gfx.Paint,
 ) {
 	p := CompileStrokedPath(shape, transform, stroke_, ctx.width, ctx.height)
-	ctx.renderPath(p, paint.Encode(transform))
+	ctx.renderPath(p, encodePaint(paint, transform))
 }
 
 type Layer struct {
@@ -863,4 +864,27 @@ func (ctx *Renderer) restore() {
 		ctx.PopClip()
 	}
 	ctx.stateStack = ctx.stateStack[:len(ctx.stateStack)-1]
+}
+
+type encodedPaint interface {
+	// Opaque reports whether it's impossible for the paint to be translucent.
+	Opaque() bool
+	isEncodedPaint()
+}
+
+func encodePaint(p gfx.Paint, transform curve.Affine) encodedPaint {
+	switch p := p.(type) {
+	case gfx.Solid:
+		return encodeColor(color.Color(p), transform)
+	case *gfx.LinearGradient:
+		return encodeLinearGradient(p, transform)
+	case *gfx.RadialGradient:
+		return encodeRadialGradient(p, transform)
+	case *gfx.SweepGradient:
+		return encodeSweepGradient(p, transform)
+	case *gfx.BlurredRoundedRectangle:
+		return encodeBlurredRoundedRectangle(p, transform)
+	default:
+		panic(fmt.Sprintf("unexpected gfx.Paint: %#v", p))
+	}
 }

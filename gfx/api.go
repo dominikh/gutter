@@ -59,14 +59,6 @@ func InternalToColor(c PlainColor) color.Color {
 	)
 }
 
-// isEncodedPaint implements encodedPaint.
-func (s PlainColor) isEncodedPaint() {}
-
-// Opaque implements encodedPaint.
-func (s PlainColor) Opaque() bool {
-	return s[3] == 1
-}
-
 type Shape interface {
 	PathElements(precision float64) iter.Seq[curve.PathElement]
 }
@@ -180,22 +172,12 @@ type BlendMode struct {
 }
 
 type Paint interface {
-	Encode(transform curve.Affine) EncodedPaint
+	isPaint()
 }
 
 type Solid color.Color
 
-func (s Solid) Encode(_ curve.Affine) EncodedPaint {
-	c := color.Color(s).Convert(ColorSpace)
-	cc := ColorToInternal(c)
-	return cc
-}
-
-type EncodedPaint interface {
-	// Opaque reports whether it's impossible for the paint to be translucent.
-	Opaque() bool
-	isEncodedPaint()
-}
+func (Solid) isPaint() {}
 
 type Layer struct {
 	BlendMode BlendMode

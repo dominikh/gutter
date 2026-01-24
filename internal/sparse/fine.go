@@ -169,8 +169,8 @@ func (f *fine) runCmd(cmd cmd) {
 	case cmdAlphaBlend:
 		f.alphaBlend(int(cmd.x), int(cmd.width), cmd.alphas, cmd.blend, cmd.opacity)
 	case cmdClear:
-		if p, ok := cmd.paint.(gfx.PlainColor); ok {
-			f.clear(int(cmd.x), int(cmd.width), p)
+		if p, ok := cmd.paint.(encodedColor); ok {
+			f.clear(int(cmd.x), int(cmd.width), gfx.PlainColor(p))
 		} else {
 			f.fill(int(cmd.x), int(cmd.width), cmd.paint)
 		}
@@ -192,12 +192,12 @@ func (f *fine) clear(x, width int, paint gfx.PlainColor) {
 }
 
 // TODO(dh): change types of x and width to uint16.
-func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
+func (f *fine) fill(x, width int, paint encodedPaint) {
 	l := f.topLayer()
 	buf := l.scratch[x : x+width]
 
 	switch paint := paint.(type) {
-	case gfx.PlainColor:
+	case encodedColor:
 		color := gfx.PlainColor(paint)
 		if x == 0 && width == wideTileWidth {
 			if color[3] == 1.0 {
@@ -241,11 +241,11 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 			}
 		}
 
-	case *gfx.EncodedGradient:
+	case *encodedGradient:
 		startX := f.tileX*wideTileWidth + uint16(x)
 		startY := f.tileY * tileHeight
 		gf := newGradientFiller(paint, startX, startY)
-		if !paint.HasOpacities {
+		if !paint.hasOpacities {
 			// The gradient is opaque, so we don't have to blend.
 			if x == 0 && width == wideTileWidth {
 				// We're going to overwrite the entire tile, so the old contents
@@ -266,7 +266,7 @@ func (f *fine) fill(x, width int, paint gfx.EncodedPaint) {
 			blendComplexComplex(buf, colors, nil, gfx.BlendMode{}, 1)
 		}
 
-	case *gfx.EncodedBlurredRoundedRectangle:
+	case *encodedBlurredRoundedRectangle:
 		// TODO(dh): remove duplication for different encoded paints
 
 		// OPT(dh): only the edge of the rectangle modulates alpha. if the
@@ -356,7 +356,7 @@ func fineFillComplexNative(buf [][stripHeight]gfx.PlainColor, color gfx.PlainCol
 	}
 }
 
-func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.EncodedPaint) {
+func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encodedPaint) {
 	// OPT implement SIMD versions
 
 	// TODO(dh): there is a lot of duplication between fine.fill and
@@ -469,10 +469,10 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 	}
 
 	switch paint := paint.(type) {
-	case gfx.PlainColor:
-		alphaFillInnerSingleColor(paint)
+	case encodedColor:
+		alphaFillInnerSingleColor(gfx.PlainColor(paint))
 
-	case *gfx.EncodedGradient:
+	case *encodedGradient:
 		startX := f.tileX*wideTileWidth + uint16(x)
 		startY := f.tileY * tileHeight
 		gf := newGradientFiller(paint, startX, startY)
@@ -487,7 +487,7 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint gfx.En
 		gf.run(colors)
 		alphaFillInner(safeish.SliceCast[[]gfx.PlainColor](colors))
 
-	case *gfx.EncodedBlurredRoundedRectangle:
+	case *encodedBlurredRoundedRectangle:
 		// TODO(dh): remove duplication for different encoded paints
 		// OPT(dh): reuse memory
 		startX := f.tileX*wideTileWidth + uint16(x)

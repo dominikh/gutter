@@ -42,7 +42,7 @@ const (
 )
 
 type cmd struct {
-	paint   gfx.EncodedPaint     // fill, alphaFill, clear
+	paint   encodedPaint         // fill, alphaFill, clear
 	alphas  [][stripHeight]uint8 // alphaFill, alphaBlend
 	opacity float32              // alphaBlend, blend
 	x       uint16               // fill, alphaFill, blend, alphaBlend, clear
@@ -81,7 +81,7 @@ func (cmd cmd) String() string {
 	}
 }
 
-func (wt *wideTile) fill(allCmds []cmd, x, width uint16, paint gfx.EncodedPaint) []cmd {
+func (wt *wideTile) fill(allCmds []cmd, x, width uint16, paint encodedPaint) []cmd {
 	if wt.isZeroClip() {
 		return allCmds
 	}

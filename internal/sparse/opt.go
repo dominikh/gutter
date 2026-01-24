@@ -402,7 +402,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 	}
 
 	// clearColor exists to avoid repeated calls to runtime.convTnoptr
-	clearColor := gfx.EncodedPaint(gfx.PlainColor{})
+	clearColor := encodedColor{}
 	changed := true
 	for changed {
 		changed = false
@@ -536,7 +536,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 					}
 
 					// Update maybeNotTransparent
-					if p, ok := c.paint.(gfx.PlainColor); ok && p[3] == 0 {
+					if p, ok := c.paint.(encodedColor); ok && p[3] == 0 {
 						if c.width == wideTileWidth {
 							l.maybeNotTransparent = optBitset{}
 						} else {
