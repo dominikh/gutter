@@ -19,12 +19,10 @@ import (
 type fineScratch = [wideTileWidth][stripHeight]gfx.PlainColor
 
 type fine struct {
-	// the width and height of the output image, in pixels
-	width, height uint16
-	tileX         uint16
-	tileY         uint16
-	layers        []fineLayer
-	packer        Packer
+	tileX  uint16
+	tileY  uint16
+	layers []fineLayer
+	packer Packer
 
 	// free list of scratch space
 	freeScratches []*fineScratch
@@ -38,10 +36,8 @@ type fineLayer struct {
 	complex bool
 }
 
-func newFine(width, height uint16, packer Packer) *fine {
+func newFine(packer Packer) *fine {
 	f := &fine{
-		width:  width,
-		height: height,
 		packer: packer,
 	}
 	f.layers = []fineLayer{{scratch: f.newScratch()}}

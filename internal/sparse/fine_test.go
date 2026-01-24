@@ -49,7 +49,7 @@ func render(ctx *Renderer) [][4]float32 {
 		Width:  int(ctx.width),
 		Height: int(ctx.height),
 	}
-	ctx.Render(ctx.width, ctx.height, packer)
+	ctx.Render(packer)
 	return pixmap
 }
 
@@ -641,7 +641,7 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 				Width:  int(tt.width),
 				Height: int(tt.height),
 			}
-			f := newFine(tt.width, tt.height, packer)
+			f := newFine(packer)
 			clear(pixmap)
 			if complex {
 				clear(f.layers[len(f.layers)-1].scratch[:])

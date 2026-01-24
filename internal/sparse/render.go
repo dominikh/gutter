@@ -245,12 +245,12 @@ func (ctx *Renderer) finish() {
 	}
 }
 
-func (ctx *Renderer) Render(width, height uint16, packer Packer) {
+func (ctx *Renderer) Render(packer Packer) {
 	ctx.finish()
 
 	syncutil.Distribute(ctx.tiles, runtime.GOMAXPROCS(0), func(group int, step int, subitems [][]wideTile) error {
 		stackScratch := make([]optLayer, 0, 32)
-		fine := newFine(width, height, packer)
+		fine := newFine(packer)
 		for y, row := range subitems {
 			y += group * step
 			for x := range row {

@@ -116,7 +116,7 @@ func (app *application) WindowEvent(ctx *wsi.Context, ev wsi.Event) {
 			Height:      sz.Height,
 			PremulAlpha: true,
 		}
-		app.renderer.Render(uint16(sz.Width), uint16(sz.Height), packer)
+		app.renderer.Render(packer)
 		if printDetailedTimings {
 			log.Printf("rendered to pixmap in: %s", time.Since(t))
 		}

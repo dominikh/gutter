@@ -74,7 +74,7 @@ func (r *ConcurrentRenderer) Stop() {
 
 func (r *ConcurrentRenderer) RenderToPixmap(width, height uint16, packer Packer) {
 	r.Stop()
-	r.r.Render(width, height, packer)
+	r.r.Render(packer)
 }
 
 func (r *ConcurrentRenderer) Fill(
