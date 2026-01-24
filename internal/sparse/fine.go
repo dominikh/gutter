@@ -125,6 +125,21 @@ func (f *fine) materialize(l *fineLayer) {
 	l.complex = true
 }
 
+func (f *fine) allocScratch(width int) *fineScratch {
+	if len(f.freeScratches) > 0 {
+		scratch := f.freeScratches[len(f.freeScratches)-1]
+		clear(scratch[:width])
+		f.freeScratches = f.freeScratches[:len(f.freeScratches)-1]
+		return scratch
+	} else {
+		return f.newScratch()
+	}
+}
+
+func (f *fine) freeScratch(scratch *fineScratch) {
+	f.freeScratches = append(f.freeScratches, scratch)
+}
+
 func (f *fine) runCmd(cmd cmd) {
 	switch cmd.typ {
 	case cmdFill:
@@ -132,19 +147,11 @@ func (f *fine) runCmd(cmd cmd) {
 	case cmdAlphaFill:
 		f.alphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.paint)
 	case cmdPushLayer:
-		var scratch *fineScratch
-		if len(f.freeScratches) > 0 {
-			scratch = f.freeScratches[len(f.freeScratches)-1]
-			clear(scratch[:])
-			f.freeScratches = f.freeScratches[:len(f.freeScratches)-1]
-		} else {
-			scratch = f.newScratch()
-		}
 		f.layers = append(f.layers, fineLayer{
-			scratch: scratch,
+			scratch: f.allocScratch(wideTileWidth),
 		})
 	case cmdPopLayer:
-		f.freeScratches = append(f.freeScratches, f.layers[len(f.layers)-1].scratch)
+		f.freeScratch(f.layers[len(f.layers)-1].scratch)
 		f.layers = f.layers[:len(f.layers)-1]
 	case cmdCopyBackdrop:
 		if len(f.layers) < 2 {
@@ -256,10 +263,10 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			// OPT(dh): when the layer is simple, we don't have to read pixels
 			// from memory to blend with the gradient
 			f.materialize(l)
-			// OPT(dh): reuse memory
-			colors := make([][stripHeight]gfx.PlainColor, width)
-			pf.fill(colors)
-			blendComplexComplex(buf, colors, nil, gfx.BlendMode{}, 1)
+			colors := f.allocScratch(width)
+			pf.fill(colors[:width])
+			blendComplexComplex(buf, colors[:width], nil, gfx.BlendMode{}, 1)
+			f.freeScratch(colors)
 		}
 
 	default:
