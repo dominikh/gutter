@@ -21,42 +21,6 @@ func memsetColumnsSSE(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 func fineFillComplexSSE(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 
 //go:noescape
-func computeWindingSSE(
-	lineTopY float32,
-	lineTopX float32,
-	lineBottomY float32,
-	sign float32,
-	xSlope float32,
-	ySlope float32,
-	locationWinding *[tileWidth][tileHeight]float32,
-	accumulatedWinding *[tileHeight]float32,
-)
-
-//go:noescape
-func computeWindingAVX(
-	lineTopY float32,
-	lineTopX float32,
-	lineBottomY float32,
-	sign float32,
-	xSlope float32,
-	ySlope float32,
-	locationWinding *[tileWidth][tileHeight]float32,
-	accumulatedWinding *[tileHeight]float32,
-)
-
-//go:noescape
-func computeWindingAVXFMA(
-	lineTopY float32,
-	lineTopX float32,
-	lineBottomY float32,
-	sign float32,
-	xSlope float32,
-	ySlope float32,
-	locationWinding *[tileWidth][tileHeight]float32,
-	accumulatedWinding *[tileHeight]float32,
-)
-
-//go:noescape
 func processOutOfBoundsWindingSSE(
 	ymin float32,
 	ymax float32,

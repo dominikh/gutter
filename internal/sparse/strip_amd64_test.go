@@ -69,10 +69,8 @@ func BenchmarkComputeWindingAMD64(b *testing.B) {
 		desc    string
 		enabled bool
 	}{
-		{computeWindingNative, "purego", true},
-		{computeWindingSSE, "SSE", true},
+		{computeWindingScalar, "purego", true},
 		{computeWindingAVX, "AVX", cpu.X86.HasAVX},
-		{computeWindingAVXFMA, "AVX+FMA", cpu.X86.HasAVX && cpu.X86.HasFMA},
 	}
 
 	// Ideally, these two variables would be in the scope of a single iteration,

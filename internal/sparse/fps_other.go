@@ -30,14 +30,14 @@ func computeWinding(
 	locationWinding *[tileWidth][tileHeight]float32,
 	accumulatedWinding *[tileHeight]float32,
 ) {
-	computeWindingNative(lineTopY,
+	computeWindingScalar(lineTopY,
 		lineTopX,
 		lineBottomY,
 		sign,
-		xSlopse,
+		xSlope,
 		ySlope,
 		locationWinding,
-		accumulatedWInding,
+		accumulatedWinding,
 	)
 }
 

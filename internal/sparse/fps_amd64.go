@@ -7,6 +7,8 @@
 package sparse
 
 import (
+	"simd/archsimd"
+
 	"golang.org/x/sys/cpu"
 	"honnef.co/go/gutter/gfx"
 )
@@ -37,32 +39,19 @@ func computeWinding(
 	locationWinding *[tileWidth][tileHeight]float32,
 	accumulatedWinding *[tileHeight]float32,
 ) {
-	if cpu.X86.HasAVX {
-		if cpu.X86.HasFMA {
-			computeWindingAVXFMA(
-				lineTopY,
-				lineTopX,
-				lineBottomY,
-				sign,
-				xSlope,
-				ySlope,
-				locationWinding,
-				accumulatedWinding,
-			)
-		} else {
-			computeWindingAVX(
-				lineTopY,
-				lineTopX,
-				lineBottomY,
-				sign,
-				xSlope,
-				ySlope,
-				locationWinding,
-				accumulatedWinding,
-			)
-		}
+	if archsimd.X86.AVX() {
+		computeWindingAVX(
+			lineTopY,
+			lineTopX,
+			lineBottomY,
+			sign,
+			xSlope,
+			ySlope,
+			locationWinding,
+			accumulatedWinding,
+		)
 	} else {
-		computeWindingSSE(
+		computeWindingScalar(
 			lineTopY,
 			lineTopX,
 			lineBottomY,

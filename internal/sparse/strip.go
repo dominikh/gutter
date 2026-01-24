@@ -325,7 +325,7 @@ func processOutOfBoundsWindingNative(
 	}
 }
 
-func computeWindingNative(
+func computeWindingScalar(
 	lineTopY float32,
 	lineTopX float32,
 	lineBottomY float32,

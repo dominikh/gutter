@@ -38,7 +38,7 @@ func BenchmarkComputeWindingNative(b *testing.B) {
 		ySlope := float32(math.Inf(1))
 		var locationWinding [tileWidth][tileHeight]float32
 		var accumulatedWinding [tileHeight]float32
-		computeWindingNative(
+		computeWindingScalar(
 			lineTopY,
 			lineTopX,
 			lineBottomY,
