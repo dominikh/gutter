@@ -298,18 +298,18 @@ func childNeedsBackdrop(layers []optLayer, l *optLayer) bool {
 	return false
 }
 
-func dfs(layers []optLayer, l *optLayer, f func(*optLayer) bool) bool {
+func dfsInner(layers []optLayer, l *optLayer, f func(*optLayer) bool) bool {
 	for _, child := range l.children {
-		if !dfs(layers, &layers[child], f) {
+		if !dfsInner(layers, &layers[child], f) {
 			return false
 		}
 	}
 	return f(l)
 }
 
-func DFS(layers []optLayer) iter.Seq[*optLayer] {
+func dfs(layers []optLayer) iter.Seq[*optLayer] {
 	return func(yield func(l *optLayer) bool) {
-		dfs(layers, &layers[0], yield)
+		dfsInner(layers, &layers[0], yield)
 	}
 }
 
@@ -461,7 +461,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 		}
 
 		// Optimize layers, depth-first.
-		for l := range DFS(layers) {
+		for l := range dfs(layers) {
 			numPushes := 0
 
 			if l.blend.Compose == gfx.ComposeClear {
