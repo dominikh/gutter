@@ -19,9 +19,9 @@ func _() {
 	_ = x[cmdClear-8]
 }
 
-const _cmdType_name = "cmdNopcmdFillcmdAlphaFillcmdPushLayercmdPopLayercmdCopyParentcmdBlendcmdAlphaBlendcmdClear"
+const _cmdType_name = "cmdNopcmdFillcmdAlphaFillcmdPushLayercmdPopLayercmdCopyBackdropcmdBlendcmdAlphaBlendcmdClear"
 
-var _cmdType_index = [...]uint8{0, 6, 13, 25, 37, 48, 61, 69, 82, 90}
+var _cmdType_index = [...]uint8{0, 6, 13, 25, 37, 48, 63, 71, 84, 92}
 
 func (i cmdType) String() string {
 	if i >= cmdType(len(_cmdType_index)-1) {
