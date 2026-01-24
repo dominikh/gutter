@@ -241,20 +241,20 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			}
 		}
 
-	case *encodedGradient:
+	case fillablePaint:
 		startX := f.tileX*wideTileWidth + uint16(x)
 		startY := f.tileY * tileHeight
-		gf := newGradientFiller(paint, startX, startY)
-		if !paint.hasOpacities {
+		pf := paint.filler(startX, startY)
+		if paint.(encodedPaint).Opaque() {
 			// The gradient is opaque, so we don't have to blend.
 			if x == 0 && width == wideTileWidth {
 				// We're going to overwrite the entire tile, so the old contents
 				// don't matter.
-				gf.run(buf)
+				pf.fill(buf)
 				l.complex = true
 			} else {
 				f.materialize(l)
-				gf.run(buf)
+				pf.fill(buf)
 			}
 		} else {
 			// OPT(dh): when the layer is simple, we don't have to read pixels
@@ -262,28 +262,9 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			f.materialize(l)
 			// OPT(dh): reuse memory
 			colors := make([][stripHeight]gfx.PlainColor, width)
-			gf.run(colors)
+			pf.fill(colors)
 			blendComplexComplex(buf, colors, nil, gfx.BlendMode{}, 1)
 		}
-
-	case *encodedBlurredRoundedRectangle:
-		// TODO(dh): remove duplication for different encoded paints
-
-		// OPT(dh): only the edge of the rectangle modulates alpha. if the
-		// paint's base color is opaque, then we don't need to do blending for
-		// the center of the rectangle. for large enough rectangles, the center
-		// might even cover the whole tile and make it simple..
-
-		startX := f.tileX*wideTileWidth + uint16(x)
-		startY := f.tileY * tileHeight
-		bf := newBlurredRoundedRectFiller(paint, startX, startY)
-		// OPT(dh): when the layer is simple, we don't have to read pixels
-		// from memory to blend with the blur
-		f.materialize(l)
-		// OPT(dh): reuse memory
-		colors := make([][stripHeight]gfx.PlainColor, width)
-		bf.run(colors)
-		blendComplexComplex(buf, colors, nil, gfx.BlendMode{}, 1)
 
 	default:
 		panic(fmt.Sprintf("internal error: unhandled type %T", paint))
@@ -472,32 +453,25 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 	case encodedColor:
 		alphaFillInnerSingleColor(gfx.PlainColor(paint))
 
-	case *encodedGradient:
+	case fillablePaint:
 		startX := f.tileX*wideTileWidth + uint16(x)
 		startY := f.tileY * tileHeight
-		gf := newGradientFiller(paint, startX, startY)
-
+		pf := paint.filler(startX, startY)
 		// OPT(dh): reuse memory
-		//
-		// OPT(dh): it's silly to write the whole gradient to memory, only to
-		// read it again pixel by pixel. we could instead generate the colors
-		// one at a time. this is currently only complicated by the way
-		// undefined colors are handled when drawing gradients.
 		colors := make([][stripHeight]gfx.PlainColor, width)
-		gf.run(colors)
-		alphaFillInner(safeish.SliceCast[[]gfx.PlainColor](colors))
-
-	case *encodedBlurredRoundedRectangle:
-		// TODO(dh): remove duplication for different encoded paints
-		// OPT(dh): reuse memory
-		startX := f.tileX*wideTileWidth + uint16(x)
-		startY := f.tileY * tileHeight
-		bf := newBlurredRoundedRectFiller(paint, startX, startY)
-		colors := make([][stripHeight]gfx.PlainColor, width)
-		bf.run(colors)
+		pf.fill(colors)
 		alphaFillInner(safeish.SliceCast[[]gfx.PlainColor](colors))
 
 	default:
 		panic(fmt.Sprintf("internal error: unhandled type %T", paint))
 	}
+}
+
+type fillablePaint interface {
+	filler(startX, startY uint16) paintFiller
+}
+
+type paintFiller interface {
+	fill(dst [][stripHeight]gfx.PlainColor)
+	reset(startX, startY uint16)
 }

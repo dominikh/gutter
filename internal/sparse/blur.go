@@ -102,14 +102,10 @@ type blurredRoundedRectFiller struct {
 	rect   *encodedBlurredRoundedRectangle
 }
 
-func newBlurredRoundedRectFiller(
-	rect *encodedBlurredRoundedRectangle,
-	startX uint16,
-	startY uint16,
-) *blurredRoundedRectFiller {
+func (e *encodedBlurredRoundedRectangle) filler(startX, startY uint16) paintFiller {
 	return &blurredRoundedRectFiller{
-		curPos: curve.Pt(float64(startX), float64(startY)).Transform(rect.transform),
-		rect:   rect,
+		curPos: curve.Pt(float64(startX), float64(startY)).Transform(e.transform),
+		rect:   e,
 	}
 }
 
@@ -117,7 +113,7 @@ func (f *blurredRoundedRectFiller) reset(startX, startY uint16) {
 	f.curPos = curve.Pt(float64(startX), float64(startY)).Transform(f.rect.transform)
 }
 
-func (f *blurredRoundedRectFiller) run(dst [][stripHeight]gfx.PlainColor) {
+func (f *blurredRoundedRectFiller) fill(dst [][stripHeight]gfx.PlainColor) {
 	// Implementation is adapted from:
 	// <https://git.sr.ht/~raph/blurrr/tree/master/src/distfield.rs>
 

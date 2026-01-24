@@ -832,18 +832,18 @@ type gradientFiller struct {
 	gradient *encodedGradient
 }
 
-func newGradientFiller(
-	e *encodedGradient,
-	startX uint16,
-	startY uint16,
-) *gradientFiller {
+func (e *encodedGradient) filler(startX, startY uint16) paintFiller {
 	return &gradientFiller{
 		curPos:   curve.Pt(float64(startX), float64(startY)).Transform(e.transform),
 		gradient: e,
 	}
 }
 
-func (gf *gradientFiller) run(dst [][stripHeight]gfx.PlainColor) {
+func (gf *gradientFiller) reset(startX, startY uint16) {
+	gf.curPos = curve.Pt(float64(startX), float64(startY)).Transform(gf.gradient.transform)
+}
+
+func (gf *gradientFiller) fill(dst [][stripHeight]gfx.PlainColor) {
 	oldPos := gf.curPos
 
 	for x := range dst {
