@@ -35,10 +35,13 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) []flatLine {
 	lineBuf := lineBufPool.Get()[:0]
 
 	var start, p0 curve.Point
-	iter := func(yield func(el curve.PathElement) bool) {
-		for el := range path {
-			if !yield(el.Transform(affine)) {
-				return
+	iter := path
+	if affine != curve.Identity {
+		iter = func(yield func(el curve.PathElement) bool) {
+			for el := range path {
+				if !yield(el.Transform(affine)) {
+					return
+				}
 			}
 		}
 	}
