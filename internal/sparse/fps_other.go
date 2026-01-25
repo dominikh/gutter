@@ -17,7 +17,7 @@ func memsetColumns(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
 }
 
 func fineFillComplex(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
-	fineFillComplexNative(buf, color)
+	fineFillComplexScalar(buf, color)
 }
 
 func computeWinding(

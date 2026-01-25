@@ -20,8 +20,7 @@ func Benchmark_fineFillComplexAMD64(b *testing.B) {
 		desc    string
 		enabled bool
 	}{
-		{fineFillComplexNative, "purego", true},
-		{fineFillComplexSSE, "SSE", true},
+		{fineFillComplexScalar, "purego", true},
 		{fineFillComplexAVX, "AVX", cpu.X86.HasAVX},
 	}
 	for _, fn := range fns {

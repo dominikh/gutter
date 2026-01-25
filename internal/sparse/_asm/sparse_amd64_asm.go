@@ -70,10 +70,7 @@ func main() {
 	ConstraintExpr("!purego")
 
 	memsetColumnsAVX()
-	fillComplexAVX()
-
 	memsetColumnsSSE()
-	fillComplexSSE()
 
 	processOutOfBoundsWindingSSE()
 
@@ -131,47 +128,6 @@ func memsetColumnsAVX() {
 	fillEpilogueAVX()
 }
 
-func fillComplexAVX() {
-	Implement("fineFillComplexAVX")
-
-	outData, outLen, colorx2 := fillPrologueAVX()
-
-	// Load() would emit a MOVSS instruction, which on our Ryzen 3950X results
-	// in slower code than using VMOVSS, probably because of mixing SSE and AVX.
-	alphaAddr, _ := Param("color").Index(3).Resolve()
-	alpha := XMM()
-	VMOVSS(alphaAddr.Addr, alpha)
-
-	const unroll = 2
-
-	// New color is translucent, blend with old pixels
-	oneMinusAlpha := YMM()
-	one := XMM()
-	VMOVSS(floatConst(1), one)
-	VSUBSS(alpha, one, oneMinusAlpha.AsX())
-
-	// These two instructions achieve the same as
-	// VBROADCASTSS(oneMinusAlpha.AsX(), oneMinusAlpha), are virtually identical
-	// in speed on our Ryzen 3950X but don't need AVX2.
-	VSHUFPS(Imm(0), oneMinusAlpha.AsX(), oneMinusAlpha.AsX(), oneMinusAlpha.AsX())
-	VINSERTF128(Imm(1), oneMinusAlpha.AsX(), oneMinusAlpha, oneMinusAlpha)
-
-	PCALIGN(Imm(16))
-	Label("loop")
-	for i := range unroll {
-		bg := YMM()
-		VMOVAPS(Mem{Base: outData}.Idx(outLen, 1).Offset(i*2*4*4), bg)
-		VMULPS(oneMinusAlpha, bg, bg)
-		VADDPS(colorx2, bg, bg)
-		VMOVAPS(bg, Mem{Base: outData}.Idx(outLen, 1).Offset(i*2*4*4))
-	}
-
-	ADDQ(I32(unroll*2*4*4), outLen)
-	JL(LabelRef("loop"))
-
-	fillEpilogueAVX()
-}
-
 func fillPrologueSSE() (data reg.Register, offset reg.Register, color reg.VecVirtual) {
 	data, offset = fillPrologue()
 	b, _ := Param("color").Index(0).Resolve()
@@ -196,35 +152,6 @@ func memsetColumnsSSE() {
 	const unroll = 2
 	for i := range unroll {
 		MOVAPS(color, Mem{Base: outData}.Idx(outLen, 1).Offset(i*4*4))
-	}
-	ADDQ(Imm(unroll*4*4), outLen)
-	JL(LabelRef("loop"))
-
-	fillEpilogueSSE()
-}
-
-func fillComplexSSE() {
-	Implement("fineFillComplexSSE")
-
-	outData, outLen, color := fillPrologueSSE()
-
-	alpha := Load(Param("color").Index(3), XMM())
-
-	oneMinusAlpha := XMM()
-	one := XMM()
-	MOVSS(floatConst(1), one)
-	MOVSS(one, oneMinusAlpha)
-	SUBSS(alpha, oneMinusAlpha)
-	SHUFPS(Imm(0), oneMinusAlpha, oneMinusAlpha)
-
-	Label("loop")
-	const unroll = 2
-	for i := range unroll {
-		bg := XMM()
-		MOVAPS(Mem{Base: outData}.Idx(outLen, 1).Offset(i*4*4), bg)
-		MULPS(oneMinusAlpha, bg)
-		ADDPS(color, bg)
-		MOVAPS(bg, Mem{Base: outData}.Idx(outLen, 1).Offset(i*4*4))
 	}
 	ADDQ(Imm(unroll*4*4), outLen)
 	JL(LabelRef("loop"))

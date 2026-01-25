@@ -596,7 +596,7 @@ func Benchmark_fineFillComplexNative(b *testing.B) {
 	c := gfx.PlainColor{0.5, 0.5, 0.5, 0.5}
 	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]gfx.PlainColor) {
 		for b.Loop() {
-			fineFillComplexNative(buf, c)
+			fineFillComplexScalar(buf, c)
 		}
 	})
 }

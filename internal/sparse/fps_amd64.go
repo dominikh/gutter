@@ -25,7 +25,7 @@ func fineFillComplex(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
 	if cpu.X86.HasAVX {
 		fineFillComplexAVX(buf, color)
 	} else {
-		fineFillComplexSSE(buf, color)
+		fineFillComplexScalar(buf, color)
 	}
 }
 

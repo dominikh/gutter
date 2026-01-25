@@ -325,7 +325,7 @@ func (f *fine) alphaBlend(
 	blendComplexComplex(dst, src, alphas, blend, opacity)
 }
 
-func fineFillComplexNative(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
+func fineFillComplexScalar(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
 	oneMinusAlpha := 1.0 - color[3]
 	for x := range buf {
 		col := &buf[x]

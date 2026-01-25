@@ -41,44 +41,6 @@ exit:
 	VZEROUPPER
 	RET
 
-// func fineFillComplexAVX(buf [][4]gfx.PlainColor, color gfx.PlainColor)
-// Requires: AVX
-TEXT ·fineFillComplexAVX(SB), $0-40
-	MOVQ           buf_len+8(FP), AX
-	SHLQ           $0x02, AX
-	TESTQ          AX, AX
-	JZ             exit
-	MOVQ           buf_base+0(FP), CX
-	SHLQ           $0x04, AX
-	ADDQ           AX, CX
-	NEGQ           AX
-	VBROADCASTF128 color_0+24(FP), Y0
-	VMOVSS         color_3+36(FP), X1
-	VMOVSS         f_3f800000<>+0(SB), X2
-	VSUBSS         X1, X2, X1
-	VSHUFPS        $0x00, X1, X1, X1
-	VINSERTF128    $0x01, X1, Y1, Y1
-	PCALIGN        $0x10
-
-loop:
-	VMOVAPS (CX)(AX*1), Y2
-	VMULPS  Y1, Y2, Y2
-	VADDPS  Y0, Y2, Y2
-	VMOVAPS Y2, (CX)(AX*1)
-	VMOVAPS 32(CX)(AX*1), Y2
-	VMULPS  Y1, Y2, Y2
-	VADDPS  Y0, Y2, Y2
-	VMOVAPS Y2, 32(CX)(AX*1)
-	ADDQ    $+64, AX
-	JL      loop
-
-exit:
-	VZEROUPPER
-	RET
-
-DATA f_3f800000<>+0(SB)/4, $(1.0)
-GLOBL f_3f800000<>(SB), RODATA|NOPTR, $4
-
 // func memsetColumnsSSE(buf [][4]gfx.PlainColor, color gfx.PlainColor)
 // Requires: SSE
 TEXT ·memsetColumnsSSE(SB), $0-40
@@ -95,39 +57,6 @@ TEXT ·memsetColumnsSSE(SB), $0-40
 loop:
 	MOVAPS X0, (CX)(AX*1)
 	MOVAPS X0, 16(CX)(AX*1)
-	ADDQ   $0x20, AX
-	JL     loop
-
-exit:
-	RET
-
-// func fineFillComplexSSE(buf [][4]gfx.PlainColor, color gfx.PlainColor)
-// Requires: SSE
-TEXT ·fineFillComplexSSE(SB), $0-40
-	MOVQ   buf_len+8(FP), AX
-	SHLQ   $0x02, AX
-	TESTQ  AX, AX
-	JZ     exit
-	MOVQ   buf_base+0(FP), CX
-	SHLQ   $0x04, AX
-	ADDQ   AX, CX
-	NEGQ   AX
-	MOVUPS color_0+24(FP), X0
-	MOVSS  color_3+36(FP), X1
-	MOVSS  f_3f800000<>+0(SB), X3
-	MOVSS  X3, X2
-	SUBSS  X1, X2
-	SHUFPS $0x00, X2, X2
-
-loop:
-	MOVAPS (CX)(AX*1), X1
-	MULPS  X2, X1
-	ADDPS  X0, X1
-	MOVAPS X1, (CX)(AX*1)
-	MOVAPS 16(CX)(AX*1), X1
-	MULPS  X2, X1
-	ADDPS  X0, X1
-	MOVAPS X1, 16(CX)(AX*1)
 	ADDQ   $0x20, AX
 	JL     loop
 
@@ -260,6 +189,9 @@ TEXT ·computeAlphasNonZeroAVX(SB), $0-16
 
 DATA f_437f0000<>+0(SB)/4, $(255.0)
 GLOBL f_437f0000<>(SB), RODATA|NOPTR, $4
+
+DATA f_3f800000<>+0(SB)/4, $(1.0)
+GLOBL f_3f800000<>(SB), RODATA|NOPTR, $4
 
 DATA f_3f000000<>+0(SB)/4, $(0.5)
 GLOBL f_3f000000<>(SB), RODATA|NOPTR, $4

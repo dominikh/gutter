@@ -12,13 +12,7 @@ import "honnef.co/go/gutter/gfx"
 func memsetColumnsAVX(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 
 //go:noescape
-func fineFillComplexAVX(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
-
-//go:noescape
 func memsetColumnsSSE(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
-
-//go:noescape
-func fineFillComplexSSE(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
 
 //go:noescape
 func processOutOfBoundsWindingSSE(
