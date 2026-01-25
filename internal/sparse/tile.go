@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"honnef.co/go/stuff/math/math32"
+	"honnef.co/go/stuff/syncutil"
 )
 
 const (
@@ -43,6 +44,8 @@ func newTile(x, y uint16, lineIdx uint32, winding bool) tile {
 	return tile(uint64(y)<<48 | uint64(x)<<32 | windingb<<31 | uint64(lineIdx))
 }
 
+var tileBufPool = syncutil.NewPool(func() []tile { return nil })
+
 // Populate the tiles' container with a buffer of lines.
 //
 // Tiles exceeding the top, right or bottom of the viewport (given by `width`
@@ -56,7 +59,7 @@ func makeTiles(lineBuf []flatLine, width, height uint16) []tile {
 		return nil
 	}
 
-	var tileBuf []tile
+	tileBuf := tileBufPool.Get()[:0]
 	tileColumns := divCeil(width, tileWidth)
 	tileRows := divCeil(height, tileHeight)
 

@@ -11,6 +11,7 @@ import (
 	"math"
 
 	"honnef.co/go/curve"
+	"honnef.co/go/stuff/syncutil"
 )
 
 const flattenTolerance = 0.25
@@ -28,8 +29,10 @@ func (v vec2) String() string {
 	return fmt.Sprintf("(%g, %g)", v.x, v.y)
 }
 
+var lineBufPool = syncutil.NewPool(func() []flatLine { return nil })
+
 func fill(path iter.Seq[curve.PathElement], affine curve.Affine) []flatLine {
-	var lineBuf []flatLine
+	lineBuf := lineBufPool.Get()[:0]
 
 	var start, p0 curve.Point
 	iter := func(yield func(el curve.PathElement) bool) {

@@ -53,6 +53,7 @@ func CompileFillPath(
 	// TODO(dh): scale precision based on transformation
 	lines := fill(shape.PathElements(0.1), affine)
 	strips, alphas := renderPathCommon(lines, fillRule, width, height)
+	lineBufPool.Put(lines[:0])
 	return Path{strips, alphas}
 }
 

@@ -295,6 +295,7 @@ func renderPathCommon(lineBuf []flatLine, fillRule gfx.FillRule, width, height u
 	tileBuf := makeTiles(lineBuf, width, height)
 	slices.Sort(tileBuf)
 	stripBuf, alphas := renderStripsScalar(tileBuf, fillRule, lineBuf)
+	tileBufPool.Put(tileBuf[:0])
 	return stripBuf, alphas
 }
 
