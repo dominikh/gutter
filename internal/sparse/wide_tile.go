@@ -16,7 +16,7 @@ const wideTileWidth = 256
 
 type wideTile struct {
 	bg           gfx.PlainColor
-	cmds         []int32
+	cmds         []cmd
 	numZeroClips int
 	numLayers    int
 }
@@ -81,56 +81,52 @@ func (cmd cmd) String() string {
 	}
 }
 
-func (wt *wideTile) fill(allCmds []cmd, x, width uint16, paint encodedPaint) []cmd {
+func (wt *wideTile) fill(x, width uint16, paint encodedPaint) {
 	if wt.isZeroClip() {
-		return allCmds
+		return
 	}
 	t := cmdFill
 	if paint.Opaque() {
 		t = cmdClear
 	}
-	allCmds = append(allCmds, cmd{typ: t, x: x, width: width, paint: paint})
-	wt.cmds = append(wt.cmds, int32(len(allCmds)-1))
-	return allCmds
+	wt.cmds = append(wt.cmds, cmd{typ: t, x: x, width: width, paint: paint})
 }
 
-func (wt *wideTile) alphaFill(allCmds []cmd, c cmd) []cmd {
+func (wt *wideTile) alphaFill(c cmd) {
 	if wt.isZeroClip() {
-		return allCmds
+		return
 	}
-	allCmds = append(allCmds, c)
-	wt.cmds = append(wt.cmds, int32(len(allCmds)-1))
-	return allCmds
+	wt.cmds = append(wt.cmds, c)
 }
 
-func (wt *wideTile) pushLayer(idx int32) {
+func (wt *wideTile) pushLayer() {
 	if wt.isZeroClip() {
 		return
 	}
 
-	wt.cmds = append(wt.cmds, idx)
+	wt.cmds = append(wt.cmds, cmd{typ: cmdPushLayer})
 	wt.numLayers++
 }
 
-func (wt *wideTile) copyBackdrop(idx int32) {
+func (wt *wideTile) copyBackdrop() {
 	if wt.isZeroClip() {
 		return
 	}
 
-	wt.cmds = append(wt.cmds, idx)
+	wt.cmds = append(wt.cmds, cmd{typ: cmdCopyBackdrop})
 }
 
-func (wt *wideTile) popLayer(allCmds []cmd, idx int32) {
+func (wt *wideTile) popLayer() {
 	if wt.isZeroClip() {
 		return
 	}
 	if !disableWideTileOpts &&
 		len(wt.cmds) > 0 &&
-		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer {
+		wt.cmds[len(wt.cmds)-1].typ == cmdPushLayer {
 		// Nothing was drawn inside the layer, elide it.
 		wt.cmds = wt.cmds[:len(wt.cmds)-1]
 	} else {
-		wt.cmds = append(wt.cmds, idx)
+		wt.cmds = append(wt.cmds, cmd{typ: cmdPopLayer})
 	}
 	wt.numLayers--
 }
@@ -150,57 +146,53 @@ func (wt *wideTile) isZeroClip() bool {
 	return wt.numZeroClips > 0
 }
 
-func (wt *wideTile) alphaBlend(allCmds []cmd, idx int32) {
+func (wt *wideTile) alphaBlend(c cmd) {
 	if wt.isZeroClip() {
 		return
 	}
-	c := allCmds[idx]
 	if !disableWideTileOpts &&
 		len(wt.cmds) > 0 &&
-		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer &&
+		wt.cmds[len(wt.cmds)-1].typ == cmdPushLayer &&
 		c.blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
 		return
 	}
-	wt.cmds = append(wt.cmds, idx)
+	wt.cmds = append(wt.cmds, c)
 }
 
 func (wt *wideTile) blend(
-	allCmds []cmd,
 	x uint16,
 	width uint16,
 	blend gfx.BlendMode,
 	opacity float32,
-) []cmd {
+) {
 	if wt.isZeroClip() {
-		return allCmds
+		return
 	}
 	if !disableWideTileOpts &&
 		blend.Compose&gfx.ComposeAffectsDestRegion == 0 &&
 		len(wt.cmds) > 0 &&
-		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer {
+		wt.cmds[len(wt.cmds)-1].typ == cmdPushLayer {
 		// Blending when nothing has been drawn in the layer yet has no visible
 		// effect for some compose operators, notably SrcOver.
-		return allCmds
+		return
 	}
 	if len(wt.cmds) == 0 {
 		panic("internal error: called blend without pushing a layer")
 	}
 
-	prevCmd := &allCmds[wt.cmds[len(wt.cmds)-1]]
+	prevCmd := &wt.cmds[len(wt.cmds)-1]
 	// We don't check that the blend mode and opacity match, because at command
 	// generation time, an uninterrupted run of blends is only possible while
 	// popping a layer.
 	if !disableWideTileOpts && prevCmd.typ == cmdBlend && x == prevCmd.x+prevCmd.width {
 		prevCmd.width += width
-		return allCmds
+		return
 	}
-	allCmds = append(allCmds, cmd{
+	wt.cmds = append(wt.cmds, cmd{
 		typ:     cmdBlend,
 		x:       x,
 		width:   width,
 		blend:   blend,
 		opacity: opacity,
 	})
-	wt.cmds = append(wt.cmds, int32(len(allCmds)-1))
-	return allCmds
 }

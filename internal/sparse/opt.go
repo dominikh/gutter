@@ -313,7 +313,7 @@ func dfs(layers []optLayer) iter.Seq[*optLayer] {
 	}
 }
 
-func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (newCmdIdxs []int32, _ []optLayer) {
+func optimizeCommands(cmds []cmd, stackScratch []optLayer) (newCmds []cmd, _ []optLayer) {
 	const debug = false
 
 	if len(cmds) == 0 {
@@ -338,8 +338,8 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 			pop:  len(cmds) - 1,
 		})
 		top := 0
-		for i, cID := range cmds {
-			c := &allCmds[cID]
+		for i := range cmds {
+			c := &cmds[i]
 			switch c.typ {
 			case cmdAlphaBlend, cmdBlend:
 				if layers[top].footer == 0 {
@@ -381,9 +381,9 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 
 	debugPrintCmds := func() {
 		depth := 0
-		for _, cmdIdx := range cmds {
+		for cmdIdx := range cmds {
 			prefix := strings.Repeat("  ", depth)
-			cmd := allCmds[cmdIdx]
+			cmd := cmds[cmdIdx]
 			log.Println(prefix, cmd)
 
 			switch cmd.typ {
@@ -423,15 +423,15 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 			lastOpaque := uint16(255 - l.blended.LeadingZeros())
 
 			for i := l.push + 1; i < l.footer; i++ {
-				c := &allCmds[cmds[i]]
+				c := &cmds[i]
 				switch c.typ {
 				case cmdAlphaBlend, cmdAlphaFill, cmdBlend, cmdClear, cmdFill:
 					switch {
 					case c.x > lastOpaque:
-						cmds[i] = 0
+						cmds[i] = cmd{}
 						changed = true
 					case c.x+c.width-1 < firstOpaque:
-						cmds[i] = 0
+						cmds[i] = cmd{}
 						changed = true
 					case c.x < firstOpaque:
 						d := firstOpaque - c.x
@@ -446,7 +446,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 						changed = true
 					}
 					if c.width == 0 {
-						cmds[i] = 0
+						cmds[i] = cmd{}
 						changed = true
 					}
 				case cmdNop:
@@ -474,7 +474,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 			}
 
 			for i, lastCmd := l.push+1, lastCmd(l); i <= lastCmd; i++ {
-				c := &allCmds[cmds[i]]
+				c := &cmds[i]
 				switch c.typ {
 				case cmdAlphaFill:
 					// TODO(dh): if all alpha values are 0.0, we don't need the
@@ -482,13 +482,13 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 
 					// Merge touching alpha fills
 					for j := i + 1; j < len(cmds); j++ {
-						c2 := &allCmds[cmds[j]]
+						c2 := &cmds[j]
 						if c2.typ != cmdAlphaFill || c.x+c.width != c2.x || c.paint != c2.paint {
 							break
 						}
 						c.alphas = slices.Concat(c.alphas[:c.width], c2.alphas[:c2.width])
 						c.width += c2.width
-						cmds[j] = 0
+						cmds[j] = cmd{}
 						changed = true
 					}
 
@@ -507,7 +507,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 						lastOpaque := 255 - bs.LeadingZeros()
 						if lastOpaque < firstOpaque {
 							// No pixels are opaque
-							cmds[i] = 0
+							cmds[i] = cmd{}
 							changed = true
 						} else {
 							nx := uint16(firstOpaque)
@@ -526,12 +526,12 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 				case cmdClear:
 					// Merge adjacent clears
 					for j := i + 1; j <= lastCmd; j++ {
-						c2 := &allCmds[cmds[j]]
+						c2 := &cmds[j]
 						if c2.typ != cmdClear || c2.paint != c.paint || c2.x != c.x+c.width {
 							break
 						}
 						c.width += c2.width
-						cmds[j] = 0
+						cmds[j] = cmd{}
 						changed = true
 					}
 
@@ -555,9 +555,9 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 					// find the subset of draw commands that are irrelevant.
 					if c.x == 0 && c.width == wideTileWidth {
 						for j := l.push + 1; j < i; j++ {
-							if cmds[j] != 0 {
+							if cmds[j].typ != cmdNop {
 								changed = true
-								cmds[j] = 0
+								cmds[j] = cmd{}
 							}
 						}
 					}
@@ -567,12 +567,12 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 
 					// Merge adjacent fills
 					for j := i + 1; j <= lastCmd; j++ {
-						c2 := &allCmds[cmds[j]]
+						c2 := &cmds[j]
 						if c2.typ != cmdFill || c2.paint != c.paint || c2.x != c.x+c.width {
 							break
 						}
 						c.width += c2.width
-						cmds[j] = 0
+						cmds[j] = cmd{}
 						changed = true
 					}
 
@@ -606,7 +606,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 						}
 						clear(cmds[child.push:child.footer])
 						for j := child.footer; j < child.pop; j++ {
-							c2 := &allCmds[cmds[j]]
+							c2 := &cmds[j]
 							switch c2.typ {
 							case cmdBlend:
 								c2.typ = cmdClear
@@ -616,7 +616,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 								panic(fmt.Sprintf("internal error: unexpected sparse.cmdType: %s", c2.typ))
 							}
 						}
-						cmds[child.pop] = 0
+						cmds[child.pop] = cmd{}
 						changed = true
 						return true
 					}
@@ -627,11 +627,11 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 							// Replace the layer with a series of Clears.
 							clear(cmds[child.push:child.footer])
 							for j := child.footer; j < child.pop; j++ {
-								c2 := &allCmds[cmds[j]]
+								c2 := &cmds[j]
 								c2.typ = cmdClear
 								c2.paint = clearColor
 							}
-							cmds[child.pop] = 0
+							cmds[child.pop] = cmd{}
 							changed = true
 						}
 
@@ -661,7 +661,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 							// are transparent. Thus, the visible effect is
 							// identical to blending with SrcOver instead.
 							for j := child.footer; j < child.pop; j++ {
-								c2 := &allCmds[cmds[j]]
+								c2 := &cmds[j]
 								switch c2.typ {
 								case cmdBlend, cmdAlphaBlend:
 									c2.blend.Compose = gfx.ComposeSrcOver
@@ -682,7 +682,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 							// TODO(dh): future-proof code would look for
 							// CopyBackdrop anywhere in the layer, not just at
 							// the beginning.
-							allCmds[cmds[child.push+1]].typ != cmdCopyBackdrop {
+							cmds[child.push+1].typ != cmdCopyBackdrop {
 
 							// If the layer has opaque pixels that aren't being
 							// blended into the parent, then we can't unwrap the
@@ -702,7 +702,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 								// That means the child layer doesn't have to be
 								// a layer at all and its commands can be part
 								// of this layer instead.
-								cmds[child.push] = 0
+								cmds[child.push] = cmd{}
 								clear(cmds[child.footer : child.pop+1])
 								changed = true
 
@@ -719,10 +719,10 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 						}
 
 					case gfx.ComposeCopy:
-						if child.opacity == 1 && allCmds[cmds[child.push+1]].typ == cmdCopyBackdrop && child.numAlphaBlends == 0 {
+						if child.opacity == 1 && cmds[child.push+1].typ == cmdCopyBackdrop && child.numAlphaBlends == 0 {
 							unwrappable := true
 							for j := child.footer; j < child.pop; j++ {
-								c2 := allCmds[cmds[j]]
+								c2 := cmds[j]
 								if c2.typ != cmdBlend || c2.x != 0 || c2.width != wideTileWidth {
 									unwrappable = false
 									break
@@ -735,8 +735,8 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 								// OPT(dh): it'd be smarter to never generate
 								// this layer in the first place, by adjusting
 								// the logic in render.go
-								cmds[child.push] = 0
-								cmds[child.push+1] = 0
+								cmds[child.push] = cmd{}
+								cmds[child.push+1] = cmd{}
 								clear(cmds[child.footer : child.pop+1])
 								changed = true
 							}
@@ -758,7 +758,7 @@ func optimizeCommands(allCmds []cmd, cmds []int32, stackScratch []optLayer) (new
 		if changed {
 			out := cmds[:0]
 			for _, c := range cmds {
-				if c != 0 {
+				if c.typ != cmdNop {
 					out = append(out, c)
 				}
 			}
