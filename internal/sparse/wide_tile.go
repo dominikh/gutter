@@ -175,9 +175,9 @@ func (wt *wideTile) blend(
 		return allCmds
 	}
 	if !disableWideTileOpts &&
+		blend.Compose&gfx.ComposeAffectsDestRegion == 0 &&
 		len(wt.cmds) > 0 &&
-		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer &&
-		blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
+		allCmds[wt.cmds[len(wt.cmds)-1]].typ == cmdPushLayer {
 		// Blending when nothing has been drawn in the layer yet has no visible
 		// effect for some compose operators, notably SrcOver.
 		return allCmds
