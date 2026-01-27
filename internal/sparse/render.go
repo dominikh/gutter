@@ -56,6 +56,9 @@ type layer struct {
 	nonempty     bool
 	blackholed   int
 	noclip       bool
+
+	lazy          bool
+	pushedToTiles []struct{ x, y uint16 }
 }
 
 type Renderer struct {
@@ -358,7 +361,7 @@ func (ctx *Renderer) renderPath(p Path, paint encodedPaint) {
 			}
 			x += width
 			col += uint32(width)
-			ctx.tiles[stripY][xtile].alphaFill(c)
+			ctx.alphaFillTile(xtile, stripY, c)
 		}
 
 		if nextStrip.fillGap && stripY == nextStrip.stripY() {
@@ -371,7 +374,7 @@ func (ctx *Renderer) renderPath(p Path, paint encodedPaint) {
 				xTileRel := x % wideTileWidth
 				width := min(x2, (xtile+1)*wideTileWidth) - x
 				x += width
-				ctx.tiles[stripY][xtile].fill(xTileRel, width, paint)
+				ctx.fillTile(xtile, stripY, xTileRel, width, paint)
 			}
 		}
 	}
@@ -404,15 +407,28 @@ func (ctx *Renderer) popLayer() {
 		// layers in the bounding box. It doesn't matter that we might blend
 		// pixels that lie outside the clip, the parent layer with the actual
 		// clip on it will make sure to discard those pixels.
-		for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
-			for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
-				ctx.tiles[tileY][tileX].blend(
+		if lastLayer.lazy {
+			for _, tileCoords := range lastLayer.pushedToTiles {
+				tile := &ctx.tiles[tileCoords.y][tileCoords.x]
+				tile.blend(
 					0,
 					wideTileWidth,
 					lastLayer.blend,
 					lastLayer.opacity,
 				)
-				ctx.tiles[tileY][tileX].popLayer()
+				tile.popLayer()
+			}
+		} else {
+			for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
+				for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
+					ctx.tiles[tileY][tileX].blend(
+						0,
+						wideTileWidth,
+						lastLayer.blend,
+						lastLayer.opacity,
+					)
+					ctx.tiles[tileY][tileX].popLayer()
+				}
 			}
 		}
 		return
@@ -654,6 +670,39 @@ func stripsBoundingBox(strips []strip) tileBbox {
 	}
 }
 
+func (ctx *Renderer) ensureLayerForTile(tileX, tileY uint16) {
+	tile := &ctx.tiles[tileY][tileX]
+	if tile.isZeroClip() {
+		return
+	}
+	if tile.numLayers+1 < len(ctx.layerStack) {
+		for i := tile.numLayers + 1; i < len(ctx.layerStack); i++ {
+			l := &ctx.layerStack[i]
+			if !l.lazy {
+				panic("unexpected unlazy layer")
+			}
+			tile.pushLayer()
+			l.pushedToTiles = append(l.pushedToTiles, struct {
+				x uint16
+				y uint16
+			}{tileX, tileY})
+		}
+	}
+	if tile.numLayers+1 != len(ctx.layerStack) {
+		panic("unreachable")
+	}
+}
+
+func (ctx *Renderer) fillTile(tileX, tileY, tileRelX, width uint16, paint encodedPaint) {
+	ctx.ensureLayerForTile(tileX, tileY)
+	ctx.tiles[tileY][tileX].fill(tileRelX, width, paint)
+}
+
+func (ctx *Renderer) alphaFillTile(tileX, tileY uint16, c cmd) {
+	ctx.ensureLayerForTile(tileX, tileY)
+	ctx.tiles[tileY][tileX].alphaFill(c)
+}
+
 func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 	topLayer := &ctx.layerStack[len(ctx.layerStack)-1]
 	if topLayer.blackholed > 0 || (l.BlendMode.Compose == gfx.ComposeSrcIn && !topLayer.nonempty) {
@@ -670,11 +719,16 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		// already have been by the last clip. We can just push layers for all
 		// tiles in the bounding box; tiles that have been zero-clipped will
 		// ignore the new layer.
-		for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
-			for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
-				ctx.tiles[tileY][tileX].pushLayer()
-				if l.CopyBackdrop {
-					ctx.tiles[tileY][tileX].copyBackdrop()
+
+		// OPT(dh): allow all blend modes that we can
+		lazy := l.BlendMode == gfx.BlendMode{} && !l.CopyBackdrop
+		if !lazy {
+			for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
+				for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
+					ctx.tiles[tileY][tileX].pushLayer()
+					if l.CopyBackdrop {
+						ctx.tiles[tileY][tileX].copyBackdrop()
+					}
 				}
 			}
 		}
@@ -687,6 +741,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 			copyBackdrop: l.CopyBackdrop,
 			nonempty:     l.CopyBackdrop && topLayer.nonempty,
 			noclip:       true,
+			lazy:         lazy,
 		}
 		ctx.layerStack = append(ctx.layerStack, clip)
 		ctx.stateStack[len(ctx.stateStack)-1].numLayers++
@@ -746,6 +801,8 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		xtile1 := min(divCeil(x1, wideTileWidth), bbox.tileMax.tileX)
 		if tileX < xtile1 {
 			for xtile := tileX; xtile < xtile1; xtile++ {
+				// OPT(dh): make these layers lazy, too. complicated by zero clips.
+				ctx.ensureLayerForTile(xtile, tileY)
 				ctx.tiles[tileY][xtile].pushLayer()
 				if l.CopyBackdrop {
 					ctx.tiles[tileY][xtile].copyBackdrop()
@@ -761,6 +818,8 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 			fxt0 := tileX
 			fxt1 := x2
 			for xtile := fxt0; xtile < fxt1; xtile++ {
+				// OPT(dh): make these layers lazy, too. complicated by zero clips.
+				ctx.ensureLayerForTile(xtile, tileY)
 				ctx.tiles[tileY][xtile].pushLayer()
 				if l.CopyBackdrop {
 					ctx.tiles[tileY][xtile].copyBackdrop()
