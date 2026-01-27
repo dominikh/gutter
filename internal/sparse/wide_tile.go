@@ -168,19 +168,18 @@ func (wt *wideTile) blend(
 	if wt.isZeroClip() {
 		return
 	}
+	if len(wt.cmds) == 0 {
+		panic("internal error: called blend without pushing a layer")
+	}
+	prevCmd := &wt.cmds[len(wt.cmds)-1]
 	if !disableWideTileOpts &&
 		blend.Compose&gfx.ComposeAffectsDestRegion == 0 &&
-		len(wt.cmds) > 0 &&
-		wt.cmds[len(wt.cmds)-1].typ == cmdPushLayer {
+		prevCmd.typ == cmdPushLayer {
 		// Blending when nothing has been drawn in the layer yet has no visible
 		// effect for some compose operators, notably SrcOver.
 		return
 	}
-	if len(wt.cmds) == 0 {
-		panic("internal error: called blend without pushing a layer")
-	}
 
-	prevCmd := &wt.cmds[len(wt.cmds)-1]
 	// We don't check that the blend mode and opacity match, because at command
 	// generation time, an uninterrupted run of blends is only possible while
 	// popping a layer.
