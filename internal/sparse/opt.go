@@ -21,6 +21,15 @@ const extraSafetyChecks = true
 
 // TODO(dh): this
 //
+// 	PushLayer()
+// 	  AlphaFill(x=200, width=12, paint=[1 1 1 1])
+// 	  Blend(x=200, width=12, blend={Normal SrcOver}, opacity=0.4)
+// 	  PopLayer()
+//
+// could be a layer-less AlphaFill, with its alpha values multiplied by the blend's opacity
+
+// TODO(dh): this
+//
 // 	Clear(x=0, width=256, paint=[1 0 0 1])
 // 	PushLayer(blend={Normal SrcOver}, opacity=1)
 // 	  Clear(x=0, width=256, paint=[0 1 0 1])
