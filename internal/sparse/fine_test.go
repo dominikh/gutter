@@ -651,7 +651,7 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 			for b.Loop() {
 				for x := range tt.width / wideTileWidth {
 					for y := range tt.height / stripHeight {
-						f.setTile(x, y)
+						f.setTile(nil, x, y)
 						f.pack()
 					}
 				}

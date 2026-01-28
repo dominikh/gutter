@@ -15,10 +15,14 @@ const disableWideTileOpts = false
 const wideTileWidth = 256
 
 type wideTile struct {
-	bg           gfx.PlainColor
-	cmds         []cmd
-	numZeroClips int
-	numLayers    int
+	bg             gfx.PlainColor
+	cmds           []cmd
+	fillArgs       []fillArgs
+	alphaFillArgs  []alphaFillArgs
+	blendArgs      []blendArgs
+	alphaBlendArgs []alphaBlendArgs
+	numZeroClips   int
+	numLayers      int
 }
 
 // TODO rename to cmdKind, same for cmd.typ field
@@ -41,24 +45,47 @@ const (
 	cmdClear
 )
 
-type cmd struct {
-	paint   encodedPaint         // fill, alphaFill, clear
-	alphas  [][stripHeight]uint8 // alphaFill, alphaBlend
-	opacity float32              // alphaBlend, blend
-	x       uint16               // fill, alphaFill, blend, alphaBlend, clear
-	width   uint16               // fill, alphaFill, blend, alphaBlend, clear
-	blend   gfx.BlendMode        // alphaBlend, blend
-	typ     cmdType
+type baseArgs struct {
+	x     uint16
+	width uint16
 }
 
-func (cmd cmd) String() string {
+type fillArgs struct {
+	paint encodedPaint
+	baseArgs
+}
+
+type alphaFillArgs struct {
+	alphas [][stripHeight]uint8
+	fillArgs
+}
+
+type blendArgs struct {
+	opacity float32
+	baseArgs
+	blend gfx.BlendMode
+}
+
+type alphaBlendArgs struct {
+	alphas [][stripHeight]uint8
+	blendArgs
+}
+
+type cmd struct {
+	typ  cmdType
+	args uint32
+}
+
+func (wt *wideTile) stringifyCmd(cmd cmd) string {
 	switch cmd.typ {
 	case cmdFill:
+		args := wt.fillArgs[cmd.args]
 		return fmt.Sprintf("Fill(x=%v, width=%v, paint=%v)",
-			cmd.x, cmd.width, cmd.paint)
+			args.x, args.width, args.paint)
 	case cmdAlphaFill:
+		args := wt.alphaFillArgs[cmd.args]
 		return fmt.Sprintf("AlphaFill(x=%v, width=%v, paint=%v)",
-			cmd.x, cmd.width, cmd.paint)
+			args.x, args.width, args.paint)
 	case cmdPushLayer:
 		return "PushLayer()"
 	case cmdPopLayer:
@@ -66,20 +93,26 @@ func (cmd cmd) String() string {
 	case cmdCopyBackdrop:
 		return "CopyBackdrop()"
 	case cmdBlend:
+		args := wt.blendArgs[cmd.args]
 		return fmt.Sprintf("Blend(x=%v, width=%v, blend=%s, opacity=%v)",
-			cmd.x, cmd.width, cmd.blend, cmd.opacity)
+			args.x, args.width, args.blend, args.opacity)
 	case cmdAlphaBlend:
+		args := wt.alphaBlendArgs[cmd.args]
 		return fmt.Sprintf("AlphaBlend(x=%v, width=%v, blend=%s, opacity=%v)",
-			cmd.x, cmd.width, cmd.blend, cmd.opacity)
+			args.x, args.width, args.blend, args.opacity)
 	case cmdNop:
 		return "Nop()"
 	case cmdClear:
+		args := wt.fillArgs[cmd.args]
 		return fmt.Sprintf("Clear(x=%v, width=%v, paint=%v)",
-			cmd.x, cmd.width, cmd.paint)
+			args.x, args.width, args.paint)
 	default:
 		panic(fmt.Sprintf("invalid command type %v", cmd.typ))
 	}
 }
+
+// func (cmd cmd) String() string {
+// }
 
 func (wt *wideTile) fill(x, width uint16, paint encodedPaint) {
 	if wt.isZeroClip() {
@@ -89,14 +122,22 @@ func (wt *wideTile) fill(x, width uint16, paint encodedPaint) {
 	if paint.Opaque() {
 		t = cmdClear
 	}
-	wt.cmds = append(wt.cmds, cmd{typ: t, x: x, width: width, paint: paint})
+	wt.fillArgs = append(wt.fillArgs, fillArgs{
+		paint: paint,
+		baseArgs: baseArgs{
+			x:     x,
+			width: width,
+		},
+	})
+	wt.cmds = append(wt.cmds, cmd{typ: t, args: uint32(len(wt.fillArgs) - 1)})
 }
 
-func (wt *wideTile) alphaFill(c cmd) {
+func (wt *wideTile) alphaFill(args alphaFillArgs) {
 	if wt.isZeroClip() {
 		return
 	}
-	wt.cmds = append(wt.cmds, c)
+	wt.alphaFillArgs = append(wt.alphaFillArgs, args)
+	wt.cmds = append(wt.cmds, cmd{typ: cmdAlphaFill, args: uint32(len(wt.alphaFillArgs) - 1)})
 }
 
 func (wt *wideTile) pushLayer() {
@@ -146,17 +187,18 @@ func (wt *wideTile) isZeroClip() bool {
 	return wt.numZeroClips > 0
 }
 
-func (wt *wideTile) alphaBlend(c cmd) {
+func (wt *wideTile) alphaBlend(args alphaBlendArgs) {
 	if wt.isZeroClip() {
 		return
 	}
 	if !disableWideTileOpts &&
 		len(wt.cmds) > 0 &&
 		wt.cmds[len(wt.cmds)-1].typ == cmdPushLayer &&
-		c.blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
+		args.blend.Compose&gfx.ComposeAffectsDestRegion == 0 {
 		return
 	}
-	wt.cmds = append(wt.cmds, c)
+	wt.alphaBlendArgs = append(wt.alphaBlendArgs, args)
+	wt.cmds = append(wt.cmds, cmd{typ: cmdAlphaBlend, args: uint32(len(wt.alphaBlendArgs) - 1)})
 }
 
 func (wt *wideTile) blend(
@@ -183,15 +225,56 @@ func (wt *wideTile) blend(
 	// We don't check that the blend mode and opacity match, because at command
 	// generation time, an uninterrupted run of blends is only possible while
 	// popping a layer.
-	if !disableWideTileOpts && prevCmd.typ == cmdBlend && x == prevCmd.x+prevCmd.width {
-		prevCmd.width += width
-		return
+	if prevCmd.typ == cmdBlend {
+		prevArgs := wt.blendArgs[prevCmd.args]
+		if !disableWideTileOpts && x == prevArgs.x+prevArgs.width {
+			prevArgs.width += width
+			return
+		}
 	}
-	wt.cmds = append(wt.cmds, cmd{
-		typ:     cmdBlend,
-		x:       x,
-		width:   width,
+	wt.blendArgs = append(wt.blendArgs, blendArgs{
 		blend:   blend,
 		opacity: opacity,
+		baseArgs: baseArgs{
+			x:     x,
+			width: width,
+		},
 	})
+	wt.cmds = append(wt.cmds, cmd{typ: cmdBlend, args: uint32(len(wt.blendArgs) - 1)})
+}
+
+func (wt *wideTile) baseArgs(c cmd) *baseArgs {
+	switch c.typ {
+	case cmdFill:
+		return &wt.fillArgs[c.args].baseArgs
+	case cmdAlphaFill:
+		return &wt.alphaFillArgs[c.args].baseArgs
+	case cmdClear:
+		return &wt.fillArgs[c.args].baseArgs
+	case cmdBlend:
+		return &wt.blendArgs[c.args].baseArgs
+	case cmdAlphaBlend:
+		return &wt.alphaBlendArgs[c.args].baseArgs
+	case cmdCopyBackdrop:
+		return nil
+	case cmdNop:
+		return nil
+	case cmdPopLayer:
+		return nil
+	case cmdPushLayer:
+		return nil
+	default:
+		panic(fmt.Sprintf("unexpected sparse.cmdType: %#v", c.typ))
+	}
+}
+
+func (wt *wideTile) getBlendArgs(c cmd) *blendArgs {
+	switch c.typ {
+	case cmdBlend:
+		return &wt.blendArgs[c.args]
+	case cmdAlphaBlend:
+		return &wt.alphaBlendArgs[c.args].blendArgs
+	default:
+		return nil
+	}
 }

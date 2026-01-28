@@ -209,8 +209,17 @@ func (ctx *Renderer) Reset() {
 		for x := range row {
 			tile := &row[x]
 			tile.bg = gfx.PlainColor{}
-			clear(tile.cmds)
+			clear(tile.fillArgs)
+			// OPT(dh): technically there's no need to clear blendArgs, it
+			// doesn't contain any pointers.
+			clear(tile.blendArgs)
+			clear(tile.alphaBlendArgs)
+			clear(tile.alphaFillArgs)
 			tile.cmds = tile.cmds[:0]
+			tile.fillArgs = tile.fillArgs[:0]
+			tile.blendArgs = tile.blendArgs[:0]
+			tile.alphaFillArgs = tile.alphaFillArgs[:0]
+			tile.alphaBlendArgs = tile.alphaBlendArgs[:0]
 			tile.numZeroClips = 0
 			tile.numLayers = 0
 		}
@@ -244,7 +253,7 @@ func (ctx *Renderer) Render(packer Packer) {
 			y += group * step
 			for x := range row {
 				tile := &row[x]
-				fine.setTile(uint16(x), uint16(y))
+				fine.setTile(tile, uint16(x), uint16(y))
 				fine.topLayer().clear(tile.bg)
 
 				if false && len(tile.cmds) > 0 {
@@ -256,7 +265,7 @@ func (ctx *Renderer) Render(packer Packer) {
 				}
 
 				// log.Println(x, y)
-				tile.cmds, stackScratch = optimizeCommands(tile.cmds, stackScratch[:0])
+				tile.cmds, stackScratch = optimizeCommands(tile, tile.cmds, stackScratch[:0])
 
 				for _, c := range tile.cmds {
 					fine.runCmd(c)
@@ -336,23 +345,18 @@ func (ctx *Renderer) renderPath(p Path, paint encodedPaint) {
 		for xtile := xtile0; xtile < xtile1; xtile++ {
 			xTileRel := x % wideTileWidth
 			width := min(x1, (xtile+1)*wideTileWidth) - x
-			c := cmd{
-				typ:    cmdAlphaFill,
-				x:      xTileRel,
-				width:  width,
-				paint:  paint,
-				alphas: alphas[col:],
-			}
+			c := cmd{typ: cmdAlphaFill}
+			alphas := alphas[col:]
 			if width <= alphaValueCutoff {
 				allOne := true
-				for _, a := range c.alphas[:c.width] {
+				for _, a := range alphas[:width] {
 					if a != [4]uint8{255, 255, 255, 255} {
 						allOne = false
 						break
 					}
 				}
 				if allOne {
-					if c.paint.Opaque() {
+					if paint.Opaque() {
 						c.typ = cmdClear
 					} else {
 						c.typ = cmdFill
@@ -361,7 +365,24 @@ func (ctx *Renderer) renderPath(p Path, paint encodedPaint) {
 			}
 			x += width
 			col += uint32(width)
-			ctx.alphaFillTile(xtile, stripY, c)
+			switch c.typ {
+			case cmdClear, cmdFill:
+				ctx.fillTile(xtile, stripY, xTileRel, width, paint)
+			case cmdAlphaFill:
+				args := alphaFillArgs{
+					alphas: alphas,
+					fillArgs: fillArgs{
+						paint: paint,
+						baseArgs: baseArgs{
+							x:     xTileRel,
+							width: width,
+						},
+					},
+				}
+				ctx.alphaFillTile(xtile, stripY, args)
+			default:
+				panic(fmt.Sprintf("unexpected sparse.cmdType: %#v", c.typ))
+			}
 		}
 
 		if nextStrip.fillGap && stripY == nextStrip.stripY() {
@@ -516,15 +537,18 @@ func (ctx *Renderer) popLayer() {
 			if allOne {
 				ctx.tiles[tileY][xtile].blend(xTileRel, width, lastLayer.blend, lastLayer.opacity)
 			} else {
-				cmd := cmd{
-					typ:     cmdAlphaBlend,
-					x:       xTileRel,
-					width:   width,
-					blend:   lastLayer.blend,
-					opacity: lastLayer.opacity,
-					alphas:  alphas[col:],
+				args := alphaBlendArgs{
+					alphas: alphas[col:],
+					blendArgs: blendArgs{
+						blend:   lastLayer.blend,
+						opacity: lastLayer.opacity,
+						baseArgs: baseArgs{
+							x:     xTileRel,
+							width: width,
+						},
+					},
 				}
-				ctx.tiles[tileY][xtile].alphaBlend(cmd)
+				ctx.tiles[tileY][xtile].alphaBlend(args)
 			}
 			x += width
 			col += uint32(width)
@@ -698,9 +722,9 @@ func (ctx *Renderer) fillTile(tileX, tileY, tileRelX, width uint16, paint encode
 	ctx.tiles[tileY][tileX].fill(tileRelX, width, paint)
 }
 
-func (ctx *Renderer) alphaFillTile(tileX, tileY uint16, c cmd) {
+func (ctx *Renderer) alphaFillTile(tileX, tileY uint16, args alphaFillArgs) {
 	ctx.ensureLayerForTile(tileX, tileY)
-	ctx.tiles[tileY][tileX].alphaFill(c)
+	ctx.tiles[tileY][tileX].alphaFill(args)
 }
 
 func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {

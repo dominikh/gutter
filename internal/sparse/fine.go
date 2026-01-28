@@ -19,6 +19,7 @@ import (
 type fineScratch = [wideTileWidth][stripHeight]gfx.PlainColor
 
 type fine struct {
+	tile   *wideTile
 	tileX  uint16
 	tileY  uint16
 	layers []fineLayer
@@ -44,7 +45,8 @@ func newFine(packer Packer) *fine {
 	return f
 }
 
-func (f *fine) setTile(x, y uint16) {
+func (f *fine) setTile(tile *wideTile, x, y uint16) {
+	f.tile = tile
 	f.tileX = x
 	f.tileY = y
 }
@@ -143,9 +145,11 @@ func (f *fine) freeScratch(scratch *fineScratch) {
 func (f *fine) runCmd(cmd cmd) {
 	switch cmd.typ {
 	case cmdFill:
-		f.fill(int(cmd.x), int(cmd.width), cmd.paint)
+		args := f.tile.fillArgs[cmd.args]
+		f.fill(int(args.x), int(args.width), args.paint)
 	case cmdAlphaFill:
-		f.alphaFill(int(cmd.x), int(cmd.width), cmd.alphas, cmd.paint)
+		args := f.tile.alphaFillArgs[cmd.args]
+		f.alphaFill(int(args.x), int(args.width), args.alphas, args.paint)
 	case cmdPushLayer:
 		f.layers = append(f.layers, fineLayer{
 			scratch: f.allocScratch(wideTileWidth),
@@ -168,14 +172,17 @@ func (f *fine) runCmd(cmd cmd) {
 		}
 	case cmdBlend:
 		// OPT(dh): we should probably just pass *cmd to blend and alphaBlend
-		f.blend(int(cmd.x), int(cmd.width), cmd.blend, cmd.opacity)
+		args := f.tile.blendArgs[cmd.args]
+		f.blend(int(args.x), int(args.width), args.blend, args.opacity)
 	case cmdAlphaBlend:
-		f.alphaBlend(int(cmd.x), int(cmd.width), cmd.alphas, cmd.blend, cmd.opacity)
+		args := f.tile.alphaBlendArgs[cmd.args]
+		f.alphaBlend(int(args.x), int(args.width), args.alphas, args.blend, args.opacity)
 	case cmdClear:
-		if p, ok := cmd.paint.(encodedColor); ok {
-			f.clear(int(cmd.x), int(cmd.width), gfx.PlainColor(p))
+		args := f.tile.fillArgs[cmd.args]
+		if p, ok := args.paint.(encodedColor); ok {
+			f.clear(int(args.x), int(args.width), gfx.PlainColor(p))
 		} else {
-			f.fill(int(cmd.x), int(cmd.width), cmd.paint)
+			f.fill(int(args.x), int(args.width), args.paint)
 		}
 	case cmdNop:
 	default:
