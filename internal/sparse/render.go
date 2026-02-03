@@ -170,28 +170,56 @@ func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
 		printRecording()
 	}
 
-	// OPT parallelism
+	// OPT(dh): reuse this slice between multiple renders
+	compiled := make([]Path, len(cmds))
+	syncutil.Distribute(cmds, -1, func(group, step int, items gfx.Recording) error {
+		for i, cmd := range items {
+			switch cmd := cmd.(type) {
+			case gfx.CommandFill:
+				compiled[group*step+i] = CompileFillPath(cmd.Shape, aff.Mul(cmd.Transform), cmd.FillRule, r.width, r.height)
+			case gfx.CommandPlayRecording:
+				// Nothing to do
+			case gfx.CommandPopClip:
+				// Nothing to do
+			case gfx.CommandPopLayer:
+				// Nothing to do
+			case gfx.CommandPushClip:
+				compiled[group*step+i] = CompileFillPath(cmd.Clip, aff.Mul(cmd.Transform), cmd.FillRule, r.width, r.height)
+			case gfx.CommandPushLayer:
+				if cmd.Layer.Clip != nil {
+					compiled[group*step+i] = CompileFillPath(cmd.Layer.Clip, aff.Mul(cmd.Transform), cmd.FillRule, r.width, r.height)
+				}
+			case gfx.CommandStroke:
+				compiled[group*step+i] = CompileStrokedPath(cmd.Shape, aff.Mul(cmd.Transform), cmd.Stroke, r.width, r.height)
+			case nil:
+			default:
+				panic(fmt.Sprintf("unexpected gfx.Command: %#v", cmd))
+			}
+		}
+		return nil
+	})
 
-	for _, cmd := range cmds {
+	for i, cmd := range cmds {
 		switch cmd := cmd.(type) {
 		case gfx.CommandFill:
-			r.Fill(cmd.Shape, aff.Mul(cmd.Transform), cmd.FillRule, cmd.Paint)
+			r.FillCompiled(compiled[i], aff.Mul(cmd.Transform), cmd.Paint)
 		case gfx.CommandPopLayer:
 			r.PopLayer()
 		case gfx.CommandPushLayer:
-			r.PushLayer(Layer{
-				BlendMode:     cmd.Layer.BlendMode,
-				Opacity:       cmd.Layer.Opacity,
-				Clip:          cmd.Layer.Clip,
-				ClipTransform: aff.Mul(cmd.Transform),
-				ClipFillRule:  cmd.FillRule,
-			})
+			lc := LayerCompiled{
+				BlendMode: cmd.Layer.BlendMode,
+				Opacity:   cmd.Layer.Opacity,
+			}
+			if cmd.Layer.Clip != nil {
+				lc.Clip = maybe.Some(compiled[i])
+			}
+			r.PushLayerCompiled(lc)
 		case gfx.CommandPopClip:
 			r.PopClip()
 		case gfx.CommandPushClip:
-			r.PushClip(cmd.Clip, cmd.Transform, cmd.FillRule)
+			r.PushClipCompiled(compiled[i])
 		case gfx.CommandStroke:
-			r.Stroke(cmd.Shape, aff.Mul(cmd.Transform), cmd.Stroke, cmd.Paint)
+			r.StrokeCompiled(compiled[i], aff.Mul(cmd.Transform), cmd.Paint)
 		case gfx.CommandPlayRecording:
 			PlayRecording(cmd.Recording, r, aff.Mul(cmd.Transform))
 		case nil:
@@ -612,6 +640,10 @@ func (ctx *Renderer) Fill(
 	paint gfx.Paint,
 ) {
 	p := CompileFillPath(shape, transform, fillRule, ctx.width, ctx.height)
+	ctx.renderPath(p, encodePaint(paint, transform))
+}
+
+func (ctx *Renderer) StrokeCompiled(p Path, transform curve.Affine, paint gfx.Paint) {
 	ctx.renderPath(p, encodePaint(paint, transform))
 }
 
