@@ -66,9 +66,7 @@ func (p *PackerUint8SRGB) PackSimple(x0, y0, x1, y1 uint16, c [4]float32) {
 
 	for range outHeight {
 		row := out[:min(len(out), int(outWidth))]
-		for x := range row {
-			row[x] = px
-		}
+		memsetUint8Pixels(row, px)
 		out = out[min(uint(len(out)), uint(p.Width)):]
 	}
 }
