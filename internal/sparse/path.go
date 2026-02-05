@@ -68,6 +68,7 @@ func CompileStrokedPath(
 	path := shape.PathElements(0.1)
 	lines := stroke(path, stroke_, affine)
 	strips, alphas := renderPathCommon(lines, gfx.NonZero, width, height)
+	lineBufPool.Put(lines[:0])
 	return Path{strips, alphas}
 }
 
