@@ -45,20 +45,17 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) []flatLine {
 			}
 		}
 	}
-	closePath := func(start, p0 curve.Point) {
-		pt0 := vec2{float32(p0.X), float32(p0.Y)}
-		pt1 := vec2{float32(start.X), float32(start.Y)}
-		if pt0 != pt1 {
-			lineBuf = append(lineBuf, flatLine{pt0, pt1})
-		}
-	}
 
 	closed := true
 	for el := range curve.Flatten(iter, flattenTolerance) {
 		switch el.Kind {
 		case curve.MoveToKind:
 			if !closed && p0 != start {
-				closePath(start, p0)
+				pt0 := vec2{float32(p0.X), float32(p0.Y)}
+				pt1 := vec2{float32(start.X), float32(start.Y)}
+				if pt0 != pt1 {
+					lineBuf = append(lineBuf, flatLine{pt0, pt1})
+				}
 			}
 			closed = false
 			start = el.P0
@@ -71,7 +68,11 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) []flatLine {
 			p0 = p
 		case curve.ClosePathKind:
 			closed = true
-			closePath(start, p0)
+			pt0 := vec2{float32(p0.X), float32(p0.Y)}
+			pt1 := vec2{float32(start.X), float32(start.Y)}
+			if pt0 != pt1 {
+				lineBuf = append(lineBuf, flatLine{pt0, pt1})
+			}
 
 		default:
 			panic(fmt.Sprintf("unreachable: %v", el.Kind))
@@ -79,7 +80,11 @@ func fill(path iter.Seq[curve.PathElement], affine curve.Affine) []flatLine {
 	}
 
 	if !closed {
-		closePath(start, p0)
+		pt0 := vec2{float32(p0.X), float32(p0.Y)}
+		pt1 := vec2{float32(start.X), float32(start.Y)}
+		if pt0 != pt1 {
+			lineBuf = append(lineBuf, flatLine{pt0, pt1})
+		}
 	}
 
 	return lineBuf
