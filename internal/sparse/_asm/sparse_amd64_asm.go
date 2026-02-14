@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2025 Dominik Honnef and contributors
 //
 // SPDX-License-Identifier: MIT
+// SPDX-FileAttributionText: https://github.com/thomcc/fast-srgb8
+// SPDX-FileAttributionText: https://github.com/linebender/fearless_simd/blob/c3632abfdbe3357ddb68496f9c4dd001ff13e218/fearless_simd/examples/srgb.rs
 
 package main
 
@@ -16,8 +18,18 @@ import (
 	"github.com/mmcloughlin/avo/reg"
 )
 
+var uint64Consts = map[uint64]Mem{}
 var floatConsts = map[float32]Mem{}
 var floatConsts4 = map[float32]Mem{}
+
+func uint64Const(v uint64) Mem {
+	if k, ok := uint64Consts[v]; ok {
+		return k
+	}
+	k := ConstData(fmt.Sprintf("q_%08x", v), U64(v))
+	uint64Consts[v] = k
+	return k
+}
 
 func floatConst(f float32) Mem {
 	if k, ok := floatConsts[f]; ok {
@@ -76,6 +88,9 @@ func main() {
 
 	computeAlphasNonZeroSSE()
 	computeAlphasNonZeroAVX()
+
+	linearRgbaF32ToSrgbU8_LUT_AVX2()
+	linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3()
 
 	Generate()
 }
@@ -297,19 +312,9 @@ func computeAlphasNonZeroAVX() {
 	// 16 useful values)
 	VPACKUSWB(areas[0], areas[0], areas[0])
 
-	memBlendMask := GLOBL("permMask", RODATA|NOPTR)
-	DATA(0, U32(0))
-	DATA(4, U32(4))
-	DATA(8, U32(1))
-	DATA(12, U32(5))
-	DATA(16, U32(2))
-	DATA(20, U32(6))
-	DATA(24, U32(3))
-	DATA(28, U32(7))
-
-	blendMask := YMM()
-	VMOVUPS(memBlendMask, blendMask)
-	VPERMD(areas[0], blendMask, areas[0])
+	permMask := YMM()
+	VPMOVSXBD(uint64Const(0x0703060205010400), permMask)
+	VPERMD(areas[0], permMask, areas[0])
 
 	// Store sixteen uint8 to memory
 	d1, _ := tail.Index(0).Index(0).Resolve()
@@ -317,4 +322,358 @@ func computeAlphasNonZeroAVX() {
 
 	VZEROUPPER()
 	RET()
+}
+
+func linearRgbaF32ToSrgbU8_LUT_AVX2() {
+	Implement("linearRgbaF32ToSrgbU8_LUT_AVX2")
+	const batchSizeInFloats = 32
+
+	inLen := Load(Param("in").Len(), GP64())
+	inData := Load(Param("in").Base(), GP64())
+
+	// We treat a slice of pixels as a slice of floats, and there are 4 floats
+	// in a pixel.
+	SHLQ(Imm(2), inLen)
+
+	outData := Load(Param("out").Base(), GP64())
+
+	LEAQ(Mem{Base: inData, Index: inLen, Scale: 4}, inData)
+	LEAQ(Mem{Base: outData, Index: inLen, Scale: 1}, outData)
+	NEGQ(inLen)
+
+	lutData := GP64()
+	LEAQ(NewDataAddr(Symbol{Name: "·toSrgbTable"}, 0), lutData)
+
+	minv := YMM()
+	maxv := YMM()
+	entryMask := YMM()
+	colorMask := YMM()
+	lhsMask := YMM()
+	maxByte := YMM()
+	VBROADCASTSS(floatConst(math.Float32frombits(0x39000000)), minv)
+	VBROADCASTSS(floatConst(math.Float32frombits(0x3f7fffff)), maxv)
+	VBROADCASTSS(floatConst(255), maxByte)
+	allOnes := YMM()
+	VPCMPEQD(allOnes, allOnes, allOnes)
+	VPSRLD(Imm(16), allOnes, entryMask) // broadcast 0x0000FFFF
+	VPSRLD(Imm(24), allOnes, colorMask) // broadcast 0x000000FF
+	VPSLLD(Imm(16), allOnes, lhsMask)   // broadcast 0xFFFF0000
+
+	Label("loop")
+	Comment("load data")
+	channels := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
+	for i, reg := range channels {
+		VMOVUPS(Mem{Base: inData, Index: inLen, Scale: 4, Disp: i * 8 * 4}, reg)
+	}
+
+	packedRgbaF32ToPlanaRgbaF32(channels, channels)
+
+	unpremul := Load(Param("unpremul"), GP8())
+	TESTB(unpremul, unpremul)
+	JZ(LabelRef("skipUnpremul"))
+
+	for _, reg := range channels[:3] {
+		VDIVPS(channels[3], reg, reg)
+	}
+
+	Label("skipUnpremul")
+
+	// We have to apply min and max after unpremultiplication. maxv is < 1,
+	// which for an alpha of 1 and a color value of 1 would lead to an
+	// unpremultiplied value that is larger than 1. Similarly, minv is > 0,
+	// which will make fully transparent pixels visible.
+	//
+	// Doing it afterwards also takes care of handling NaNs caused by dividing
+	// by 0.
+	for _, reg := range channels {
+		VMINPS(reg, maxv, reg)
+	}
+
+	// minv argument has to be first so that NaN becomes minv.
+	for _, reg := range channels {
+		VMAXPS(minv, reg, reg)
+	}
+
+	entries := [3]reg.VecVirtual{YMM(), YMM(), YMM()}
+	for i, reg := range channels[:3] {
+		Commentf("plane %d, step 1", i)
+
+		indices := YMM()
+		VPSUBD(minv, reg, indices)
+		VPSRLD(Imm(20), indices, indices)
+		allOnesCopy := YMM()
+		VMOVDQA(allOnes, allOnesCopy)
+		// VPGATHERDD modifies the mask, so we copy allOnes first.
+		VPGATHERDD(allOnesCopy, Mem{Base: lutData, Index: indices, Scale: 4}, entries[i])
+	}
+
+	for i, reg := range channels[:3] {
+		Commentf("plane %d, step 2", i)
+		// Compute (entries << 16) >> 9 but with an AND and a shift instead, as the
+		// AND is theoretically faster (though benchmarking showed no measurable
+		// difference.)
+		//
+		// VPSRLD(Imm(16), entries, lhs)
+		// VPSLLD(Imm(9), lhs, lhs)
+		lhs := YMM()
+		VPAND(entries[i], lhsMask, lhs)
+		VPSRLD(Imm(7), lhs, lhs)
+
+		entriesMasked := YMM()
+		VPAND(entryMask, entries[i], entriesMasked)
+		colorsBytes := YMM()
+		VPSRLD(Imm(12), reg, colorsBytes)
+		VPAND(colorMask, colorsBytes, colorsBytes)
+
+		rhs := YMM()
+		VPMULLD(entriesMasked, colorsBytes, rhs)
+
+		VPADDD(lhs, rhs, reg)
+		VPSRLD(Imm(16), reg, reg)
+	}
+
+	Comment("plane 3")
+	VMULPS(channels[3], maxByte, channels[3])
+	VCVTPS2DQ(channels[3], channels[3])
+
+	Comment("footer")
+	rgba := YMM()
+	planarRgbaU32ToPackedRgbaU8(channels, rgba)
+	VMOVUPS(rgba, Mem{Base: outData, Index: inLen, Scale: 1})
+
+	ADDQ(Imm(batchSizeInFloats), inLen)
+	JL(LabelRef("loop"))
+
+	VZEROUPPER()
+	RET()
+}
+
+func linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3() {
+	// This function uses a degree 5 polynomial to approximate the non-linear
+	// portion of the linear to sRGB transfer function.
+	//
+	// This is based on Raph Levien's math in
+	// https://colab.research.google.com/drive/13HdyQAABQKVsJbTBCojzdBEeTibsPfVF#scrollTo=CCm2xKs5h3-G
+	// and the two implementations at
+	// https://gist.github.com/raphlinus/8a39ed43ecfd5eb28a9b3bb2c9ad6dc0 and
+	// https://github.com/linebender/fearless_simd/blob/c3632abfdbe3357ddb68496f9c4dd001ff13e218/fearless_simd/examples/srgb.rs.
+	//
+	// For the conversion to 8-bit bytes, this function provides results of very
+	// similar quality to the LUT-based approach, at over twice the speed. This
+	// function could also be repurposed to produce sRGB values in float32 at
+	// well over 8-bits of accuracy.
+
+	Implement("linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3")
+	const batchSizeInFloats = 32
+
+	inLen := Load(Param("in").Len(), GP64())
+	inData := Load(Param("in").Base(), GP64())
+
+	// We treat a slice of pixels as a slice of floats, and there are 4 floats
+	// in a pixel.
+	SHLQ(Imm(2), inLen)
+
+	outData := Load(Param("out").Base(), GP64())
+
+	LEAQ(Mem{Base: inData, Index: inLen, Scale: 4}, inData)
+	LEAQ(Mem{Base: outData, Index: inLen, Scale: 1}, outData)
+	NEGQ(inLen)
+
+	c5, c4, c2, c0, c3, c1, threshold :=
+		YMM(), YMM(), YMM(), YMM(), YMM(), YMM(), YMM()
+	VBROADCASTSS(floatConst(-2.88143143e-02), c0)
+	VBROADCASTSS(floatConst(1.40194533e+00), c1)
+	VBROADCASTSS(floatConst(-9.12795913e-01), c2)
+	VBROADCASTSS(floatConst(1.06133172e+00), c3)
+	VBROADCASTSS(floatConst(-7.29192910e-01), c4)
+	VBROADCASTSS(floatConst(2.07758287e-01), c5)
+	VBROADCASTSS(floatConst(0.0031308), threshold)
+
+	Label("loop")
+
+	Comment("load data")
+	channels := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
+	for i, reg := range channels {
+		VMOVUPS(Mem{Base: inData, Index: inLen, Scale: 4, Disp: i * 8 * 4}, reg)
+	}
+
+	packedRgbaF32ToPlanaRgbaF32(channels, channels)
+
+	unpremul := Load(Param("unpremul"), GP8())
+	TESTB(unpremul, unpremul)
+	JZ(LabelRef("skipUnpremul"))
+
+	zero, one := YMM(), YMM()
+	VXORPS(zero, zero, zero)
+	VBROADCASTSS(floatConst(1), one)
+	for _, reg := range channels[:3] {
+		VDIVPS(channels[3], reg, reg)
+		VMINPS(one, reg, reg)
+		VMAXPS(zero, reg, reg)
+	}
+	VMINPS(one, channels[3], channels[3])
+	VMAXPS(zero, channels[3], channels[3])
+
+	Label("skipUnpremul")
+
+	for i, reg := range channels[:3] {
+		Commentf("plane %d", i)
+
+		x := YMM()
+		bias := YMM()
+		VBROADCASTSS(floatConst(-5.35862651e-04), bias)
+		VADDPS(bias, reg, x)
+
+		even1, even2, odd1, sqrtX, x2 :=
+			YMM(), YMM(), YMM(), YMM(), YMM()
+		VMOVAPS(x, even1)
+		VFMADD132PS(c2, c0, even1)
+
+		VMOVAPS(x, odd1)
+		VFMADD132PS(c3, c1, odd1)
+
+		VMULPS(x, x, x2)
+		VMOVAPS(x2, even2)
+		VFMADD132PS(c4, even1, even2)
+
+		VFMADD132PS(c5, odd1, x2)
+		odd2, x2 := x2, nil
+
+		VSQRTPS(x, sqrtX)
+		VFMADD132PS(sqrtX, even2, odd2)
+		poly, odd2 := odd2, nil
+
+		lin := YMM()
+		mult := YMM()
+		VBROADCASTSS(floatConst(12.92), mult)
+		VMULPS(mult, reg, lin)
+
+		m := YMM()
+		VCMPPS(Imm(0xE), threshold, reg, m)
+
+		res := reg
+		VPBLENDVB(m, poly, lin, res)
+		maxByte := YMM()
+		VBROADCASTSS(floatConst(255), maxByte)
+		VMULPS(res, maxByte, res)
+
+		// The DirectX spec requires rounding via floor(c + 0.5), which, for
+		// positive values, is round to nearest, round half up (with some
+		// inaccuracies caused by precision; for example
+		// float32(0.49999997) + 0.5 = 1).
+		//
+		// VCVTPS2DQ will round to nearest, round half to even instead (with the
+		// default value of MXCSR.) With our approximation, it doesn't matter.
+		// Our worst error is >0.5 ULP either way, and all interesting metrics
+		// (max error, cumulative error, number of wrongly rounded values) are
+		// virtually identical between the two rounding modes. Plus, the spec's
+		// behavior isn't consistent between 32-bit and 64-bit floats, anyway.
+		VCVTPS2DQ(res, res)
+	}
+
+	Comment("plane 3")
+	maxByte := YMM()
+	VBROADCASTSS(floatConst(255), maxByte)
+	VMULPS(channels[3], maxByte, channels[3])
+	VCVTPS2DQ(channels[3], channels[3])
+
+	Comment("footer")
+	rgba := YMM()
+	planarRgbaU32ToPackedRgbaU8(channels, rgba)
+	VMOVUPS(rgba, Mem{Base: outData, Index: inLen, Scale: 1})
+
+	ADDQ(Imm(batchSizeInFloats), inLen)
+	JL(LabelRef("loop"))
+
+	VZEROUPPER()
+	RET()
+}
+
+func _MM_SHUFFLE(fp3, fp2, fp1, fp0 uint8) Constant {
+	return Imm(uint64((fp3 << 6) | (fp2 << 4) | (fp1 << 2) | fp0))
+}
+
+// rgbaPlanarToPacked takes four input registers, one per R, G, B, and A plane,
+// each containing eight float32 values and stores to four output registers
+// packed RGBA pixels, each containing two pixels.
+func rgbaPlanarToPacked(in [4]reg.VecVirtual, out [4]reg.VecVirtual) {
+	// XXX verify that this function actually works
+	Comment("planar to packed")
+	r, g, b, a := in[0], in[1], in[2], in[3]
+
+	rgLo, baLo, rgHi, baHi := YMM(), YMM(), YMM(), YMM()
+	VUNPCKLPS(g, r, rgLo) // rgLo = [r0 g0 r1 g1 | r4 g4 r5 g5]
+	VUNPCKHPS(g, r, rgHi) // rgHi = [r2 g2 r3 g3 | r6 g6 r7 g7]
+	VUNPCKLPS(a, b, baLo) // baLo = [b0 a0 b1 a1 | b4 a4 b5 a5]
+	VUNPCKHPS(a, b, baHi) // baHi = [b2 a2 b3 a3 | b6 a6 b7 a7]
+
+	chunky0, chunky1, chunky2, chunky3 := YMM(), YMM(), YMM(), YMM()
+	VSHUFPS(_MM_SHUFFLE(2, 0, 2, 0), baLo, rgLo, chunky0) // chunky0 = [r0 g0 b0 a0 | r1 g1 b1 a1]
+	VSHUFPS(_MM_SHUFFLE(3, 1, 3, 1), baLo, rgLo, chunky1) // chunky1 = [r4 g4 b4 a4 | r5 g5 b5 a5]
+	VSHUFPS(_MM_SHUFFLE(2, 0, 2, 0), baHi, rgHi, chunky2) // chunky2 = [r2 g2 b2 a2 | r3 g3 b3 a3]
+	VSHUFPS(_MM_SHUFFLE(3, 1, 3, 1), baHi, rgHi, chunky3) // chunky3 = [r6 g6 b6 a6 | r7 g7 b7 a7]
+
+	VPERM2F128(Imm(0x20), chunky2, chunky0, out[0])
+	VPERM2F128(Imm(0x31), chunky2, chunky0, out[1])
+	VPERM2F128(Imm(0x20), chunky3, chunky1, out[2])
+	VPERM2F128(Imm(0x31), chunky3, chunky1, out[3])
+}
+
+// packedRgbaF32ToPlanaRgbaF32 takes four input registers, each containing eight packed
+// float32 RGBA pixels and stores to four output registers separated R, G, B,
+// and A planes, each containing eight float32 values.
+func packedRgbaF32ToPlanaRgbaF32(in [4]reg.VecVirtual, out [4]reg.VecVirtual) {
+	Comment("packed to planar")
+
+	// Inputs:
+	//
+	// in[0] = [r0 g0 b0 a0 | r1 g1 b1 a1]
+	// in[1] = [r2 g2 b2 a2 | r3 g3 b3 a3]
+	// in[2] = [r4 g4 b4 a4 | r5 g5 b5 a5]
+	// in[3] = [r6 g6 b6 a6 | r7 g7 b7 a7]
+
+	t0, t1, t2, t3 := YMM(), YMM(), YMM(), YMM()
+	VUNPCKLPS(in[1], in[0], t0) // t0 = [r0 r2 g0 g2 | r1 r3 g1 g3]
+	VUNPCKHPS(in[1], in[0], t1) // t1 = [b0 b2 a0 a2 | b1 b3 a1 a3]
+	VUNPCKLPS(in[3], in[2], t2) // t2 = [r4 r6 g4 g6 | r5 r7 g5 g7]
+	VUNPCKHPS(in[3], in[2], t3) // t3 = [b4 b6 a4 a6 | b5 b7 a5 a7]
+
+	VSHUFPS(Imm(0x44), t2, t0, out[0]) // out[0] = [r0 r2 r4 r6 | r1, r3, r5, r7]
+	VSHUFPS(Imm(0xEE), t2, t0, out[1]) // out[1] = [g0 g2 g4 g6 | g1, g3, g5, g7]
+	VSHUFPS(Imm(0x44), t3, t1, out[2]) // out[2] = [b0 b2 b4 b6 | b1, b3, b5, b7]
+	VSHUFPS(Imm(0xEE), t3, t1, out[3]) // out[3] = [a0 a2 a4 a6 | a1, a3, a5, a7]
+
+	for i, src := range out {
+		dst := out[i]
+
+		swapped := YMM()
+		hi, lo := YMM(), YMM()
+		VPERM2F128(Imm(1), src, src, swapped) // swapped = [r1 r3 r5 r7 | r0 r2 r4 r6]
+		VUNPCKLPS(swapped, src, lo)           // lo      = [r0 r1 r2 r3 |  ?  ?  ?  ?]
+		VUNPCKHPS(swapped, src, hi)           // hi      = [r4 r5 r6 r7 |  ?  ?  ?  ?]
+		VPERM2F128(Imm(0x20), hi, lo, dst)    // dst     = [r0 r1 r2 r3 | r4 r5 r6 r7]
+	}
+}
+
+// planarRgbaU32ToPackedRgbaU8 takes four input registers, one per R, G, B,
+// and A plane, each containing eight uint32 values in the range [0, 255]. It
+// stores to out eight packed uint8 RGBA pixels.
+func planarRgbaU32ToPackedRgbaU8(in [4]reg.VecVirtual, out reg.VecVirtual) {
+	// Each vector in 'in' contains eight 32-bit values in the range [0, 255],
+	// which means only their lowest byte is nonzero. Each vector is one of the
+	// RGBA planes. To pack them into 32 8-bit values in a single register, we
+	// simply shift over the planes and OR them together. On most platforms this
+	// should outperform, or be at parity with, using a sequence of VPACKUSDW,
+	// VPACKUSWB, and VPSHUFB.
+	r, g, b, a := in[0], in[1], in[2], in[3]
+
+	gs, bs, as := YMM(), YMM(), YMM()
+	VPSLLD(Imm(8), g, gs)
+	VPSLLD(Imm(16), b, bs)
+	VPSLLD(Imm(24), a, as)
+
+	rg, ba := YMM(), YMM()
+	VPOR(r, gs, rg)
+	VPOR(bs, as, ba)
+	VPOR(rg, ba, out)
 }

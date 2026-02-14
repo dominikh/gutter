@@ -25,38 +25,97 @@ var toSrgbTable = [104]uint32{
 	0x5e0c0a23, 0x631c0980, 0x67db08f6, 0x6c55087f, 0x70940818, 0x74a007bd, 0x787d076c, 0x7c330723,
 }
 
-func float32ToSrgb8(f float32) uint8 {
-	const maxvBits = 0x3f7fffff // 1.0 - f32::EPSILON
-	const minvBits = 0x39000000 // 2^(-13)
-	minv := math.Float32frombits(minvBits)
-	maxv := math.Float32frombits(maxvBits)
-	// written like this to handle nans.
-	if !(f > minv) {
-		f = minv
+func linearRgbaF32ToSrgbU8_LUT_Scalar_One(px [4]float32, unpremul bool) [4]uint8 {
+	var out [4]uint8
+	if unpremul {
+		px[0] /= px[3]
+		px[1] /= px[3]
+		px[2] /= px[3]
 	}
-	if f > maxv {
-		f = maxv
-	}
-	fu := math.Float32bits(f)
-	// Safety: all input floats are clamped into the {minv, maxv} range, which
-	// turns out in this case to guarantee that their bitwise reprs are clamped
-	// to the {MINV_BITS, MAXV_BITS} range (guaranteed by the fact that
-	// minv/maxv are the normal, finite, the same sign, and not zero).
-	//
-	// Because of that, the smallest result of `fu - MINV_BITS` is 0 (when `fu`
-	// is `MINV_BITS`), and the largest is `0x067fffff`, (when `fu` is
-	// `MAXV_BITS`). `0x067fffff >> 20` is 0x67, i.e. 103, and thus all possible
-	// results are inbounds for the (104 item) table. This is all verified in
-	// test code.
-	//
-	// Note that the compiler can't figure this out on it's own, so the
-	// get_unchecked does help some.
-	// OPT(dh): use safeish.Index?
-	i := ((fu - minvBits) >> 20) // as usize;
-	entry := toSrgbTable[i]
-	// bottom 16 bits are bias, top 9 are scale.
-	// lerp to the next highest mantissa bits.
+	for k, f := range px[:3] {
+		const maxvBits = 0x3f7fffff // 1.0 - f32::EPSILON
+		const minvBits = 0x39000000 // 2^(-13)
+		minv := math.Float32frombits(minvBits)
+		maxv := math.Float32frombits(maxvBits)
+		// written like this to handle nans.
+		if !(f > minv) {
+			f = minv
+		}
+		if f > maxv {
+			f = maxv
+		}
+		fu := math.Float32bits(f)
+		// Safety: all input floats are clamped into the {minv, maxv} range, which
+		// turns out in this case to guarantee that their bitwise reprs are clamped
+		// to the {MINV_BITS, MAXV_BITS} range (guaranteed by the fact that
+		// minv/maxv are the normal, finite, the same sign, and not zero).
+		//
+		// Because of that, the smallest result of `fu - MINV_BITS` is 0 (when `fu`
+		// is `MINV_BITS`), and the largest is `0x067fffff`, (when `fu` is
+		// `MAXV_BITS`). `0x067fffff >> 20` is 0x67, i.e. 103, and thus all possible
+		// results are inbounds for the (104 item) table. This is all verified in
+		// test code.
+		//
+		// Note that the compiler can't figure this out on it's own, so the
+		// get_unchecked does help some.
+		// OPT(dh): use safeish.Index?
+		i := ((fu - minvBits) >> 20) // as usize;
+		entry := toSrgbTable[i]
+		// bottom 16 bits are bias, top 9 are scale.
+		// lerp to the next highest mantissa bits.
 
-	// We should use some local variables, but those cost inlining budget...
-	return uint8((((entry >> 16) << 9) + (entry&0xffff)*((fu>>12)&0xff)) >> 16)
+		// We should use some local variables, but those cost inlining budget...
+		out[k] = uint8((((entry >> 16) << 9) + (entry&0xffff)*((fu>>12)&0xff)) >> 16)
+	}
+	out[3] = uint8(px[3]*255 + 0.5)
+
+	return out
+}
+
+func linearRgbaF32ToSrgbU8_LUT_Scalar(in [][4]float32, out [][4]uint8, unpremul bool) {
+	// OPT(dh): avoid bounds checks on out
+	for j, px := range in {
+		// OPT(dh): god I hope this inlines
+		out[j] = linearRgbaF32ToSrgbU8_LUT_Scalar_One(px, unpremul)
+	}
+}
+
+func linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px [4]float32, unpremul bool) [4]uint8 {
+	var out [4]uint8
+
+	if unpremul {
+		px[0] /= px[3]
+		px[1] /= px[3]
+		px[2] /= px[3]
+	}
+
+	for k, v := range px[:3] {
+		if v <= 0.0031308 {
+			lin := v * 12.92
+			out[k] = uint8(lin*255 + 0.5)
+			continue
+		}
+
+		x := v - 5.35862651e-04
+		x2 := x * x
+		even1 := x*-9.12795913e-01 + -2.88143143e-02
+		even2 := x2*-7.29192910e-01 + even1
+		odd1 := x*1.06133172e+00 + 1.40194533e+00
+		odd2 := x2*2.07758287e-01 + odd1
+		poly := odd2*float32(math.Sqrt(float64(x))) + even2
+		out[k] = uint8(poly*255 + 0.5)
+	}
+	out[3] = uint8(px[3]*255 + 0.5)
+	return out
+}
+
+func linearRgbaF32ToSrgbU8_Polynomial_Scalar(in [][4]float32, out [][4]uint8, unpremul bool) {
+	// See linearF32ToSrgbU8_Polynomial_AVX2_FMA3 in ./_asm/sparse_amd64_asm.go for an
+	// explanation of this algorithm.
+
+	for i, px := range in {
+		// OPT(dh): god I hope this inlines
+		// OPT(dh): avoid bounds checks on out
+		out[i] = linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px, unpremul)
+	}
 }

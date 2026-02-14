@@ -172,6 +172,9 @@ func PlayRecording(cmds gfx.Recording, r *Renderer, aff curve.Affine) {
 
 	// OPT(dh): reuse this slice between multiple renders
 	compiled := make([]Path, len(cmds))
+	// OPT(dh): if we compiled paths as part of recording instead of playback
+	// we'd be able to exploit more parallelism, between command generation and
+	// path compilation.
 	syncutil.Distribute(cmds, -1, func(group, step int, items gfx.Recording) error {
 		for i, cmd := range items {
 			switch cmd := cmd.(type) {
