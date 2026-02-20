@@ -4,7 +4,28 @@
 
 package sparse
 
-import "honnef.co/go/gutter/gfx"
+import (
+	"honnef.co/go/gutter/debug"
+	"honnef.co/go/gutter/gfx"
+)
+
+type packUint8Fn func(
+	in *WideTileBuffer,
+	out [][4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+)
+
+type packUint8FnSimd func(
+	in *WideTileBuffer,
+	out *[4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+)
 
 type Packer interface {
 	PackSimple(x0, y0, x1, y1 uint16, c gfx.PlainColor)
@@ -64,39 +85,19 @@ func (p *PackerUint8SRGB) PackComplex(x0, y0, x1, y1 uint16, src *WideTileBuffer
 	// This method writes a single wide tile to the buffer, covering the buffer
 	// region (x0, y0)--(x1, y1), possibly truncated to the buffer's bounds.
 
-	baseIdx := int(y0)*p.Width + int(x0)
-	out := p.Out[baseIdx:]
-	// According to
-	// https://web.archive.org/web/20250815165940/https://hacksoflife.blogspot.com/2022/06/srgb-pre-multiplied-alpha-and.html
-	// whether the color needs to be premultiplied with alpha before or
-	// after converting it to sRGB depends on the consumer of the data and
-	// whether they will blend in linear or sRGB space. But we can't know
-	// what our consumer (likely a display manager) will do… We'll assume
-	// that they're modern and blend in linear space and premultiply our
-	// colors before conversion to sRGB. Because our colors are already
-	// stored premultiplied this saves us work, too.
-	//
-	// https://web.archive.org/web/20250829113330/https://ssp.impulsetrain.com/gamma-premult.html
-	// covers the same topic and says that premultiplying before encoding in
-	// sRGB is the right thing to do for GPU textures.
-	var srgb [wideTileWidth][stripHeight][4]uint8
-	linearRgbaF32ToSrgbU8(src, &srgb, !p.PremulAlpha)
-
-	// x0 and y0 are guaranteed to be in bounds, which means that even after
-	// this, x1 and y1 are >= x0 and y0 and the computation of outWidth and
-	// outHeight cannot wrap around.
 	x1 = min(x1, uint16(p.Width))
 	y1 = min(y1, uint16(p.Height))
 	outWidth := x1 - x0
 	outHeight := y1 - y0
-	for y := range outHeight {
-		row := out[:min(len(out), int(outWidth))]
-		for x := range row {
-			// This doesn't do proper gamut mapping. Doing it would be far too slow.
-			row[x] = srgb[x][y]
-		}
-		out = out[min(uint(len(out)), uint(p.Width)):]
-	}
+	baseIdx := int(y0)*p.Width + int(x0)
+	packUint8SRGB(
+		src,
+		p.Out[baseIdx:],
+		p.Width,
+		int(outWidth),
+		int(outHeight),
+		!p.PremulAlpha,
+	)
 }
 
 type PackerFloat32 struct {
@@ -227,5 +228,105 @@ func (p *PackerUint16) PackComplex(x0, y0, x1, y1 uint16, src *WideTileBuffer) {
 			}
 			out = out[min(uint(len(out)), uint(p.Width)):]
 		}
+	}
+}
+
+func packUint8SRGB_LUT_Scalar(
+	in *WideTileBuffer,
+	out [][4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+) {
+	packUint8SRGB_Scalar(
+		in,
+		out,
+		stride,
+		outWidth,
+		outHeight,
+		unpremul,
+		linearRgbaF32ToSrgbU8_LUT_Scalar_One,
+	)
+}
+
+func packUint8SRGB_Polynomial_Scalar(
+	in *WideTileBuffer,
+	out [][4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+) {
+	packUint8SRGB_Scalar(
+		in,
+		out,
+		stride,
+		outWidth,
+		outHeight,
+		unpremul,
+		linearRgbaF32ToSrgbU8_Polynomial_Scalar_One,
+	)
+}
+
+func packUint8SRGB_Scalar(
+	in *WideTileBuffer,
+	out [][4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+	fn func(px gfx.PlainColor, unpremul bool) [4]uint8,
+) {
+	debug.Assert(outWidth <= stride)
+	debug.Assert(outWidth <= len(in))
+	debug.Assert(outHeight <= len(in[0]))
+
+	for y := range outHeight {
+		row := out[y*stride:][:outWidth]
+		for x := range outWidth {
+			row[x] = fn(in[x][y], unpremul)
+		}
+	}
+}
+
+func packUint8SRGB_SIMD(
+	in *WideTileBuffer,
+	out [][4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+	widthMultiple int,
+	fn packUint8FnSimd,
+) {
+	debug.Assert(stride > 0)
+	debug.Assert(outWidth > 0)
+	debug.Assert(outHeight > 0)
+	debug.Assert(outWidth <= stride)
+	debug.Assert(outWidth <= len(in))
+	debug.Assert(outHeight <= len(in[0]))
+
+	if outHeight == stripHeight {
+		// The AVX2 implementation operates on 32 pixels at a time.
+		w := outWidth / widthMultiple * widthMultiple
+
+		// This check doesn't help the optimizer, but protects the assembly
+		// implementation.
+		_ = out[(outHeight-1)*stride+outWidth-1]
+		fn(in, &out[0], stride, w, outHeight, unpremul)
+
+		if w < outWidth {
+			for y := range outHeight {
+				row := out[y*stride:][:outWidth]
+				// Convert w to uint to help BCE.
+				for x := uint(w); x < uint(outWidth); x++ {
+					px := in[x][y]
+					row[x] = linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px, unpremul)
+				}
+			}
+		}
+	} else {
+		packUint8SRGB_Polynomial_Scalar(in, out, stride, outWidth, outHeight, unpremul)
 	}
 }

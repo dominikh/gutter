@@ -21,23 +21,37 @@ func processOutOfBoundsWindingSSE(
 )
 
 //go:noescape
-func computeAlphasNonZeroAVX(tail *[tileWidth][tileHeight]uint8, locationWinding *[tileWidth][tileHeight]float32)
+func computeAlphasNonZeroAVX(
+	tail *[tileWidth][tileHeight]uint8,
+	locationWinding *[tileWidth][tileHeight]float32,
+)
 
-// linearRgbaF32ToSrgbU8_Polynomial_AVX2 converts linear RGBA values to 8-bit sRGB using a
-// degree 5 polynomial approximation. If unpremul is true, colors will be
-// unpremultiplied before conversion to sRGB. The maximum error of the
-// approximation is less than 0.5221.
-//
-// Needs AVX2 and FMA3. The scalar implementation is at
-// [linearRgbaF32ToSrgbU8_Polynomial_Scalar].
-//
-// For a function that automatically selects the best implementation of linear
-// to sRGB conversion and that handles sizes that aren't multiplies of 32 see
-// [linearRgbaF32ToSrgbU8].
-//
 //go:noescape
-func linearRgbaF32ToSrgbU8_Polynomial_AVX2(
+func packUint8SRGB_AVX2_Impl(
 	in *WideTileBuffer,
-	out *[wideTileWidth][stripHeight][4]uint8,
+	out *[4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
 	unpremul bool,
 )
+
+func packUint8SRGB_AVX2(
+	in *WideTileBuffer,
+	out [][4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+) {
+	packUint8SRGB_SIMD(
+		in,
+		out,
+		stride,
+		outWidth,
+		outHeight,
+		unpremul,
+		32,
+		packUint8SRGB_AVX2_Impl,
+	)
+}

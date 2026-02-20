@@ -84,7 +84,7 @@ func main() {
 	memsetColumnsAVX()
 	processOutOfBoundsWindingSSE()
 	computeAlphasNonZeroAVX()
-	linearRgbaF32ToSrgbU8_Polynomial_AVX2()
+	packUint8SRGB_AVX2()
 
 	Generate()
 }
@@ -254,7 +254,7 @@ func computeAlphasNonZeroAVX() {
 	RET()
 }
 
-func linearRgbaF32ToSrgbU8_Polynomial_AVX2() {
+func packUint8SRGB_AVX2() {
 	// This function uses a degree 5 polynomial to approximate the non-linear
 	// portion of the linear to sRGB transfer function.
 	//
@@ -269,20 +269,17 @@ func linearRgbaF32ToSrgbU8_Polynomial_AVX2() {
 	// function could also be repurposed to produce sRGB values in float32 at
 	// well over 8-bits of accuracy.
 
-	Implement("linearRgbaF32ToSrgbU8_Polynomial_AVX2")
-	const batchSizeInFloats = 32
+	Implement("packUint8SRGB_AVX2_Impl")
 
-	// inLen := Load(Param("in").Len(), GP64())
 	inData := Load(Param("in"), GP64())
-	inLen := GP64()
-	// width * height * 4 floats per pixel
-	MOVQ(U32(256*4*4), inLen)
-
 	outData := Load(Param("out"), GP64())
+	stride := Load(Param("stride"), GP64())
+	outWidth := Load(Param("outWidth"), GP64())
+	unpremul := Load(Param("unpremul"), GP8())
 
-	LEAQ(Mem{Base: inData, Index: inLen, Scale: 4}, inData)
-	LEAQ(Mem{Base: outData, Index: inLen, Scale: 1}, outData)
-	NEGQ(inLen)
+	outWidthBytes := GP64()
+	MOVQ(outWidth, outWidthBytes)
+	SHLQ(Imm(2), outWidthBytes)
 
 	c5, c4, c2, c0, c3, c1, threshold :=
 		YMM(), YMM(), YMM(), YMM(), YMM(), YMM(), YMM()
@@ -294,102 +291,163 @@ func linearRgbaF32ToSrgbU8_Polynomial_AVX2() {
 	VBROADCASTSS(floatConst(2.07758287e-01), c5)
 	VBROADCASTSS(floatConst(0.0031308), threshold)
 
+	row0, row1, row2, row3 := outData, GP64(), GP64(), GP64()
+	LEAQ(Mem{Base: row0, Index: stride, Scale: 4}, row1)
+	LEAQ(Mem{Base: row1, Index: stride, Scale: 4}, row2)
+	LEAQ(Mem{Base: row2, Index: stride, Scale: 4}, row3)
+
+	inOffset := GP64()
+	rowOffset := GP64()
+	XORQ(inOffset, inOffset)
+	XORQ(rowOffset, rowOffset)
+
+	// Allocate stack space for 4 intermediate YMM results (128 bytes)
+	stackBuf := AllocLocal(128)
+
 	Label("loop")
 
-	Comment("load data")
-	channels := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
-	for i, reg := range channels {
-		VMOVUPS(Mem{Base: inData, Index: inLen, Scale: 4, Disp: i * 8 * 4}, reg)
-	}
+	// Check output bounds (need space for 8 pixels = 32 bytes)
+	remaining := GP64()
+	MOVQ(outWidthBytes, remaining)
+	SUBQ(rowOffset, remaining)
+	CMPQ(remaining, Imm(32))
+	JL(LabelRef("done"))
 
-	packedRgbaF32ToPlanaRgbaF32(channels, channels)
+	// Process 4 batches of 2 columns/8 pixels
+	for batch := range 4 {
+		Commentf("batch %d: columns %d-%d", batch, batch*2, batch*2+1)
 
-	unpremul := Load(Param("unpremul"), GP8())
-	TESTB(unpremul, unpremul)
-	JZ(LabelRef("skipUnpremul"))
+		// Input offset for this batch: inOffset + batch * 2 cols * 4 rows * 16 bytes/pixel
+		batchDisp := batch * 2 * 4 * 16
 
-	zero, one := YMM(), YMM()
-	VXORPS(zero, zero, zero)
-	VBROADCASTSS(floatConst(1), one)
-	for _, reg := range channels[:3] {
-		VDIVPS(channels[3], reg, reg)
-		VMINPS(one, reg, reg)
-		VMAXPS(zero, reg, reg)
-	}
-	VMINPS(one, channels[3], channels[3])
-	VMAXPS(zero, channels[3], channels[3])
+		channels := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
+		for i, reg := range channels {
+			VMOVUPS(Mem{Base: inData, Index: inOffset, Scale: 1, Disp: batchDisp + i*32}, reg)
+		}
 
-	Label("skipUnpremul")
+		packedRgbaF32ToPlanaRgbaF32(channels, channels)
 
-	for i, reg := range channels[:3] {
-		Commentf("plane %d", i)
+		// According to
+		// https://web.archive.org/web/20250815165940/https://hacksoflife.blogspot.com/2022/06/srgb-pre-multiplied-alpha-and.html
+		// whether the color needs to be premultiplied with alpha before or
+		// after converting it to sRGB depends on the consumer of the data and
+		// whether they will blend in linear or sRGB space. But we can't know
+		// what our consumer (likely a display manager) will do… We'll assume
+		// that they're modern and blend in linear space and premultiply our
+		// colors before conversion to sRGB. Because our colors are already
+		// stored premultiplied this saves us work, too.
+		//
+		// https://web.archive.org/web/20250829113330/https://ssp.impulsetrain.com/gamma-premult.html
+		// covers the same topic and says that premultiplying before encoding in
+		// sRGB is the right thing to do for GPU textures.
+		TESTB(unpremul, unpremul)
+		JZ(LabelRef(fmt.Sprintf("skipUnpremul%d", batch)))
+		zero, one := YMM(), YMM()
+		VXORPS(zero, zero, zero)
+		VBROADCASTSS(floatConst(1), one)
+		for _, reg := range channels[:3] {
+			VDIVPS(channels[3], reg, reg)
+			VMINPS(one, reg, reg)
+			VMAXPS(zero, reg, reg)
+		}
+		VMINPS(one, channels[3], channels[3])
+		VMAXPS(zero, channels[3], channels[3])
 
-		x := YMM()
-		bias := YMM()
-		VBROADCASTSS(floatConst(-5.35862651e-04), bias)
-		VADDPS(bias, reg, x)
+		Label(fmt.Sprintf("skipUnpremul%d", batch))
 
-		even1, even2, odd1, sqrtX, x2 :=
-			YMM(), YMM(), YMM(), YMM(), YMM()
-		VMOVAPS(x, even1)
-		VFMADD132PS(c2, c0, even1)
+		// Convert RGB channels using polynomial approximation
+		for i, reg := range channels[:3] {
+			Commentf("plane %d", i)
 
-		VMOVAPS(x, odd1)
-		VFMADD132PS(c3, c1, odd1)
+			x := YMM()
+			bias := YMM()
+			VBROADCASTSS(floatConst(-5.35862651e-04), bias)
+			VADDPS(bias, reg, x)
 
-		VMULPS(x, x, x2)
-		VMOVAPS(x2, even2)
-		VFMADD132PS(c4, even1, even2)
+			even1, even2, odd1, sqrtX, x2 :=
+				YMM(), YMM(), YMM(), YMM(), YMM()
+			VMOVAPS(x, even1)
+			VFMADD132PS(c2, c0, even1)
 
-		VFMADD132PS(c5, odd1, x2)
-		odd2, x2 := x2, nil
+			VMOVAPS(x, odd1)
+			VFMADD132PS(c3, c1, odd1)
 
-		VSQRTPS(x, sqrtX)
-		VFMADD132PS(sqrtX, even2, odd2)
-		poly, odd2 := odd2, nil
+			VMULPS(x, x, x2)
+			VMOVAPS(x2, even2)
+			VFMADD132PS(c4, even1, even2)
 
-		lin := YMM()
-		mult := YMM()
-		VBROADCASTSS(floatConst(12.92), mult)
-		VMULPS(mult, reg, lin)
+			VFMADD132PS(c5, odd1, x2)
+			odd2, x2 := x2, nil
 
-		m := YMM()
-		VCMPPS(Imm(0xE), threshold, reg, m)
+			VSQRTPS(x, sqrtX)
+			VFMADD132PS(sqrtX, even2, odd2)
+			poly, odd2 := odd2, nil
 
-		res := reg
-		VPBLENDVB(m, poly, lin, res)
+			lin := YMM()
+			mult := YMM()
+			VBROADCASTSS(floatConst(12.92), mult)
+			VMULPS(mult, reg, lin)
+
+			m := YMM()
+			VCMPPS(Imm(0xE), threshold, reg, m)
+
+			VPBLENDVB(m, poly, lin, reg)
+			maxByte := YMM()
+			VBROADCASTSS(floatConst(255), maxByte)
+			VMULPS(reg, maxByte, reg)
+
+			// The DirectX spec requires rounding via floor(c + 0.5), which, for
+			// positive values, is round to nearest, round half up (with some
+			// inaccuracies caused by precision; for example
+			// float32(0.49999997) + 0.5 = 1).
+			//
+			// VCVTPS2DQ will round to nearest, round half to even instead (with the
+			// default value of MXCSR.) With our approximation, it doesn't matter.
+			// Our worst error is >0.5 ULP either way, and all interesting metrics
+			// (max error, cumulative error, number of wrongly rounded values) are
+			// virtually identical between the two rounding modes. Plus, the spec's
+			// behavior isn't consistent between 32-bit and 64-bit floats, anyway.
+			VCVTPS2DQ(reg, channels[i])
+		}
+
+		Comment("plane 3")
 		maxByte := YMM()
 		VBROADCASTSS(floatConst(255), maxByte)
-		VMULPS(res, maxByte, res)
+		VMULPS(channels[3], maxByte, channels[3])
+		VCVTPS2DQ(channels[3], channels[3])
 
-		// The DirectX spec requires rounding via floor(c + 0.5), which, for
-		// positive values, is round to nearest, round half up (with some
-		// inaccuracies caused by precision; for example
-		// float32(0.49999997) + 0.5 = 1).
-		//
-		// VCVTPS2DQ will round to nearest, round half to even instead (with the
-		// default value of MXCSR.) With our approximation, it doesn't matter.
-		// Our worst error is >0.5 ULP either way, and all interesting metrics
-		// (max error, cumulative error, number of wrongly rounded values) are
-		// virtually identical between the two rounding modes. Plus, the spec's
-		// behavior isn't consistent between 32-bit and 64-bit floats, anyway.
-		VCVTPS2DQ(res, res)
+		Comment("pack")
+		rgba := YMM()
+		planarRgbaU32ToPackedRgbaU8(channels, rgba)
+
+		// Store to stack buffer
+		VMOVDQU(rgba, stackBuf.Offset(batch*32))
 	}
 
-	Comment("plane 3")
-	maxByte := YMM()
-	VBROADCASTSS(floatConst(255), maxByte)
-	VMULPS(channels[3], maxByte, channels[3])
-	VCVTPS2DQ(channels[3], channels[3])
+	Comment("transpose 4x8 matrix of pixels")
 
-	Comment("footer")
-	rgba := YMM()
-	planarRgbaU32ToPackedRgbaU8(channels, rgba)
-	VMOVUPS(rgba, Mem{Base: outData, Index: inLen, Scale: 1})
+	// Load the 4 results from stack
+	c01, c23, c45, c67 := YMM(), YMM(), YMM(), YMM()
+	VMOVDQU(stackBuf.Offset(0), c01)
+	VMOVDQU(stackBuf.Offset(32), c23)
+	VMOVDQU(stackBuf.Offset(64), c45)
+	VMOVDQU(stackBuf.Offset(96), c67)
 
-	ADDQ(Imm(batchSizeInFloats), inLen)
+	u0, u1, u2, u3 := transpose8x4(c01, c23, c45, c67)
+
+	// Store to 4 output rows
+	VMOVDQU(u0, Mem{Base: row0, Index: rowOffset, Scale: 1})
+	VMOVDQU(u1, Mem{Base: row1, Index: rowOffset, Scale: 1})
+	VMOVDQU(u2, Mem{Base: row2, Index: rowOffset, Scale: 1})
+	VMOVDQU(u3, Mem{Base: row3, Index: rowOffset, Scale: 1})
+
+	// Advance pointers
+	ADDQ(U32(8*4*16), inOffset) // 8 cols × 4 rows × 16 bytes/pixel = 512 bytes
+	ADDQ(Imm(32), rowOffset)    // 8 pixels × 4 bytes
+	CMPQ(inOffset, U32(256*4*16))
 	JL(LabelRef("loop"))
 
+	Label("done")
 	VZEROUPPER()
 	RET()
 }
@@ -481,4 +539,37 @@ func planarRgbaU32ToPackedRgbaU8(in [4]reg.VecVirtual, out reg.VecVirtual) {
 	VPOR(r, gs, rg)
 	VPOR(bs, as, ba)
 	VPOR(rg, ba, out)
+}
+
+func transpose8x4(c01, c23, c45, c67 reg.VecVirtual) (r0, r1, r2, r3 reg.VecVirtual) {
+	// Each element is a [4]byte, i.e. a double word.
+	//
+	// c01 = [c0r0, c0r1, c0r2, c0r3 | c1r0, c1r1, c1r2, c1r3]
+	// c23 = [c2r0, c2r1, c2r2, c2r3 | c3r0, c3r1, c3r2, c3r3]
+	// c45 = [c4r0, c4r1, c4r2, c4r3 | c5r0, c5r1, c5r2, c5r3]
+	// c67 = [c6r0, c6r1, c6r2, c6r3 | c7r0, c7r1, c7r2, c7r3]
+
+	// Step 1: 32-bit interleave
+	t0, t1, t2, t3 := YMM(), YMM(), YMM(), YMM()
+	VPUNPCKLDQ(c23, c01, t0) // t0 = [c0r0, c2r0, c0r1, c2r1 | c1r0, c3r0, c1r1, c3r1]
+	VPUNPCKHDQ(c23, c01, t1) // t1 = [c0r2, c2r2, c0r3, c2r3 | c1r2, c3r2, c1r3, c3r3]
+	VPUNPCKLDQ(c67, c45, t2) // t2 = [c4r0, c6r0, c4r1, c6r1 | c5r0, c7r0, c5r1, c7r1]
+	VPUNPCKHDQ(c67, c45, t3) // t3 = [c4r2, c6r2, c4r3, c6r3 | c5r2, c7r2, c5r3, c7r3]
+
+	// Step 2: 64-bit interleave
+	u0, u1, u2, u3 := YMM(), YMM(), YMM(), YMM()
+	VPUNPCKLQDQ(t2, t0, u0) // u0 = [c0r0, c2r0, c4r0, c6r0 | c1r0, c3r0, c5r0, c7r0]
+	VPUNPCKHQDQ(t2, t0, u1) // u1 = [c0r1, c2r1, c4r1, c6r1 | c1r1, c3r1, c5r1, c7r1]
+	VPUNPCKLQDQ(t3, t1, u2) // u2 = [c0r2, c2r2, c4r2, c6r2 | c1r2, c3r2, c5r2, c7r2]
+	VPUNPCKHQDQ(t3, t1, u3) // u3 = [c0r3, c2r3, c4r3, c6r3 | c1r3, c3r3, c5r3, c7r3]
+
+	// Step 3: Fix lane ordering with vpermd
+	permMask := YMM()
+	VPMOVSXBD(uint64Const(0x0703060205010400), permMask)
+	VPERMD(u0, permMask, u0) // u0 = [c0r0, c1r0, c2r0, c3r0 | c3r0, c5r0, c6r0, c7r0]
+	VPERMD(u1, permMask, u1) // u1 = [c0r1, c1r1, c2r1, c3r1 | c3r1, c5r1, c6r1, c7r1]
+	VPERMD(u2, permMask, u2) // u2 = [c0r2, c1r2, c2r2, c3r2 | c3r2, c5r2, c6r2, c7r2]
+	VPERMD(u3, permMask, u3) // u3 = [c0r3, c1r3, c2r3, c3r3 | c3r3, c5r3, c6r3, c7r3]
+
+	return u0, u1, u2, u3
 }

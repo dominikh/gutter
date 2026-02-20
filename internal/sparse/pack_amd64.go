@@ -2,47 +2,35 @@
 //
 // SPDX-License-Identifier: MIT
 
+//go:build !purego
+
 package sparse
 
 import (
-	. "simd/archsimd"
-	"unsafe"
-
 	"honnef.co/go/gutter/internal/arch"
 )
 
-func memsetUint8PixelsAVX(b [][4]byte, v [4]byte) {
-	vf8 := Float32x4{}.SetElem(0, *(*float32)(unsafe.Pointer(&v))).Broadcast1To8()
+var hasAVX2AndFMA3 = arch.AVX2() && arch.FMA()
 
-	var i int
-	if len(b) >= 32 {
-		ptr := unsafe.Pointer(unsafe.SliceData(b))
-		for {
-			vf8.Store((*[8]float32)(ptr))
-			vf8.Store((*[8]float32)(unsafe.Add(ptr, 1*8*4)))
-			vf8.Store((*[8]float32)(unsafe.Add(ptr, 2*8*4)))
-			vf8.Store((*[8]float32)(unsafe.Add(ptr, 3*8*4)))
-			if i >= len(b)-31 {
-				break
-			}
-			i += 32
-			ptr = unsafe.Add(ptr, 4*8*4)
-		}
+func packUint8SRGB(
+	in *WideTileBuffer,
+	out [][4]uint8,
+	stride int,
+	outWidth int,
+	outHeight int,
+	unpremul bool,
+) {
+	if arch.GOAMD64 >= 3 || hasAVX2AndFMA3 {
+		packUint8SRGB_AVX2(in, out, stride, outWidth, outHeight, unpremul)
+	} else {
+		packUint8SRGB_LUT_Scalar(in, out, stride, outWidth, outHeight, unpremul)
 	}
-	if i >= 0 { // To prove that i isn't negative
-		for ; i < len(b); i++ {
-			b[i] = v
-		}
-	}
-	ClearAVXUpperBits()
 }
 
-func memsetUint8Pixels(b [][4]byte, v [4]byte) {
-	if arch.AVX() {
-		memsetUint8PixelsAVX(b, v)
+func linearRgbaF32ToSrgbU8One(in [4]float32, unpremul bool) [4]uint8 {
+	if arch.GOAMD64 >= 3 || hasAVX2AndFMA3 {
+		return linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(in, unpremul)
 	} else {
-		for i := range b {
-			b[i] = v
-		}
+		return linearRgbaF32ToSrgbU8_LUT_Scalar_One(in, unpremul)
 	}
 }

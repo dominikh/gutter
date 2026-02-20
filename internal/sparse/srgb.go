@@ -74,21 +74,17 @@ func linearRgbaF32ToSrgbU8_LUT_Scalar_One(px gfx.PlainColor, unpremul bool) [4]u
 	return out
 }
 
-func linearRgbaF32ToSrgbU8_LUT_Scalar(
-	in *WideTileBuffer,
-	out *[wideTileWidth][stripHeight][4]uint8,
-	unpremul bool,
-) {
-	// OPT(dh): avoid bounds checks on out
-	for x := range in {
-		for y, px := range &in[x] {
-			// OPT(dh): god I hope this inlines
-			out[x][y] = linearRgbaF32ToSrgbU8_LUT_Scalar_One(px, unpremul)
-		}
-	}
-}
-
 func linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px gfx.PlainColor, unpremul bool) [4]uint8 {
+	// This function uses a degree 5 polynomial to approximate the non-linear
+	// portion of the linear to sRGB transfer function.
+	//
+	// This is based on Raph Levien's math in
+	// https://colab.research.google.com/drive/13HdyQAABQKVsJbTBCojzdBEeTibsPfVF#scrollTo=CCm2xKs5h3-G
+	// and the two implementations at
+	// https://gist.github.com/raphlinus/8a39ed43ecfd5eb28a9b3bb2c9ad6dc0 and
+	// https://github.com/linebender/fearless_simd/blob/c3632abfdbe3357ddb68496f9c4dd001ff13e218/fearless_simd/examples/srgb.rs.
+	//
+
 	var out [4]uint8
 
 	if unpremul {
@@ -115,20 +111,4 @@ func linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px gfx.PlainColor, unpremul boo
 	}
 	out[3] = uint8(px[3]*255 + 0.5)
 	return out
-}
-
-func linearRgbaF32ToSrgbU8_Polynomial_Scalar(
-	in *WideTileBuffer,
-	out *[wideTileWidth][stripHeight][4]uint8,
-	unpremul bool,
-) {
-	// See linearF32ToSrgbU8_Polynomial_AVX2_FMA3 in ./_asm/sparse_amd64_asm.go for an
-	// explanation of this algorithm.
-
-	for x := range in {
-		for y, px := range &in[x] {
-			// OPT(dh): god I hope this inlines
-			out[x][y] = linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px, unpremul)
-		}
-	}
 }
