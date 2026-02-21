@@ -19,7 +19,7 @@ func linearRgbaF32ToSrgbU8(in [][4]float32, out [][4]uint8, unpremul bool) {
 	// implementation, to ensure consistent approximation error and rounding
 	// behavior for all pixels.
 	if nr > 0 {
-		linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3(in[:nr], out[:nr], unpremul)
+		linearRgbaF32ToSrgbU8_Polynomial_AVX2(in[:nr], out[:nr], unpremul)
 	}
 	linearRgbaF32ToSrgbU8_Polynomial_Scalar(in[nr:n], out[nr:n], unpremul)
 }

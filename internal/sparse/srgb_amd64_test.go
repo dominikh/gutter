@@ -16,16 +16,8 @@ func init() {
 			name:     "polynomial",
 			instr:    "avx",
 			maxError: 0.5221,
-			fn:       linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3,
+			fn:       linearRgbaF32ToSrgbU8_Polynomial_AVX2,
 			disabled: !(archsimd.X86.AVX2() && archsimd.X86.FMA()),
-		},
-
-		srgbTest{
-			name:     "lut",
-			instr:    "avx",
-			maxError: 0.545,
-			fn:       linearRgbaF32ToSrgbU8_LUT_AVX2,
-			disabled: !archsimd.X86.AVX2(),
 		},
 	)
 }

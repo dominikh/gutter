@@ -89,8 +89,7 @@ func main() {
 	computeAlphasNonZeroSSE()
 	computeAlphasNonZeroAVX()
 
-	linearRgbaF32ToSrgbU8_LUT_AVX2()
-	linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3()
+	linearRgbaF32ToSrgbU8_Polynomial_AVX2()
 
 	Generate()
 }
@@ -324,131 +323,7 @@ func computeAlphasNonZeroAVX() {
 	RET()
 }
 
-func linearRgbaF32ToSrgbU8_LUT_AVX2() {
-	Implement("linearRgbaF32ToSrgbU8_LUT_AVX2")
-	const batchSizeInFloats = 32
-
-	inLen := Load(Param("in").Len(), GP64())
-	inData := Load(Param("in").Base(), GP64())
-
-	// We treat a slice of pixels as a slice of floats, and there are 4 floats
-	// in a pixel.
-	SHLQ(Imm(2), inLen)
-
-	outData := Load(Param("out").Base(), GP64())
-
-	LEAQ(Mem{Base: inData, Index: inLen, Scale: 4}, inData)
-	LEAQ(Mem{Base: outData, Index: inLen, Scale: 1}, outData)
-	NEGQ(inLen)
-
-	lutData := GP64()
-	LEAQ(NewDataAddr(Symbol{Name: "·toSrgbTable"}, 0), lutData)
-
-	minv := YMM()
-	maxv := YMM()
-	entryMask := YMM()
-	colorMask := YMM()
-	lhsMask := YMM()
-	maxByte := YMM()
-	VBROADCASTSS(floatConst(math.Float32frombits(0x39000000)), minv)
-	VBROADCASTSS(floatConst(math.Float32frombits(0x3f7fffff)), maxv)
-	VBROADCASTSS(floatConst(255), maxByte)
-	allOnes := YMM()
-	VPCMPEQD(allOnes, allOnes, allOnes)
-	VPSRLD(Imm(16), allOnes, entryMask) // broadcast 0x0000FFFF
-	VPSRLD(Imm(24), allOnes, colorMask) // broadcast 0x000000FF
-	VPSLLD(Imm(16), allOnes, lhsMask)   // broadcast 0xFFFF0000
-
-	Label("loop")
-	Comment("load data")
-	channels := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
-	for i, reg := range channels {
-		VMOVUPS(Mem{Base: inData, Index: inLen, Scale: 4, Disp: i * 8 * 4}, reg)
-	}
-
-	packedRgbaF32ToPlanaRgbaF32(channels, channels)
-
-	unpremul := Load(Param("unpremul"), GP8())
-	TESTB(unpremul, unpremul)
-	JZ(LabelRef("skipUnpremul"))
-
-	for _, reg := range channels[:3] {
-		VDIVPS(channels[3], reg, reg)
-	}
-
-	Label("skipUnpremul")
-
-	// We have to apply min and max after unpremultiplication. maxv is < 1,
-	// which for an alpha of 1 and a color value of 1 would lead to an
-	// unpremultiplied value that is larger than 1. Similarly, minv is > 0,
-	// which will make fully transparent pixels visible.
-	//
-	// Doing it afterwards also takes care of handling NaNs caused by dividing
-	// by 0.
-	for _, reg := range channels {
-		VMINPS(reg, maxv, reg)
-	}
-
-	// minv argument has to be first so that NaN becomes minv.
-	for _, reg := range channels {
-		VMAXPS(minv, reg, reg)
-	}
-
-	entries := [3]reg.VecVirtual{YMM(), YMM(), YMM()}
-	for i, reg := range channels[:3] {
-		Commentf("plane %d, step 1", i)
-
-		indices := YMM()
-		VPSUBD(minv, reg, indices)
-		VPSRLD(Imm(20), indices, indices)
-		allOnesCopy := YMM()
-		VMOVDQA(allOnes, allOnesCopy)
-		// VPGATHERDD modifies the mask, so we copy allOnes first.
-		VPGATHERDD(allOnesCopy, Mem{Base: lutData, Index: indices, Scale: 4}, entries[i])
-	}
-
-	for i, reg := range channels[:3] {
-		Commentf("plane %d, step 2", i)
-		// Compute (entries << 16) >> 9 but with an AND and a shift instead, as the
-		// AND is theoretically faster (though benchmarking showed no measurable
-		// difference.)
-		//
-		// VPSRLD(Imm(16), entries, lhs)
-		// VPSLLD(Imm(9), lhs, lhs)
-		lhs := YMM()
-		VPAND(entries[i], lhsMask, lhs)
-		VPSRLD(Imm(7), lhs, lhs)
-
-		entriesMasked := YMM()
-		VPAND(entryMask, entries[i], entriesMasked)
-		colorsBytes := YMM()
-		VPSRLD(Imm(12), reg, colorsBytes)
-		VPAND(colorMask, colorsBytes, colorsBytes)
-
-		rhs := YMM()
-		VPMULLD(entriesMasked, colorsBytes, rhs)
-
-		VPADDD(lhs, rhs, reg)
-		VPSRLD(Imm(16), reg, reg)
-	}
-
-	Comment("plane 3")
-	VMULPS(channels[3], maxByte, channels[3])
-	VCVTPS2DQ(channels[3], channels[3])
-
-	Comment("footer")
-	rgba := YMM()
-	planarRgbaU32ToPackedRgbaU8(channels, rgba)
-	VMOVUPS(rgba, Mem{Base: outData, Index: inLen, Scale: 1})
-
-	ADDQ(Imm(batchSizeInFloats), inLen)
-	JL(LabelRef("loop"))
-
-	VZEROUPPER()
-	RET()
-}
-
-func linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3() {
+func linearRgbaF32ToSrgbU8_Polynomial_AVX2() {
 	// This function uses a degree 5 polynomial to approximate the non-linear
 	// portion of the linear to sRGB transfer function.
 	//
@@ -463,7 +338,7 @@ func linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3() {
 	// function could also be repurposed to produce sRGB values in float32 at
 	// well over 8-bits of accuracy.
 
-	Implement("linearRgbaF32ToSrgbU8_Polynomial_AVX2_FMA3")
+	Implement("linearRgbaF32ToSrgbU8_Polynomial_AVX2")
 	const batchSizeInFloats = 32
 
 	inLen := Load(Param("in").Len(), GP64())
