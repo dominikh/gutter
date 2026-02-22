@@ -7,6 +7,8 @@ package sparse
 
 import (
 	"math"
+
+	"honnef.co/go/gutter/gfx"
 )
 
 var toSrgbTable = [104]uint32{
@@ -25,7 +27,7 @@ var toSrgbTable = [104]uint32{
 	0x5e0c0a23, 0x631c0980, 0x67db08f6, 0x6c55087f, 0x70940818, 0x74a007bd, 0x787d076c, 0x7c330723,
 }
 
-func linearRgbaF32ToSrgbU8_LUT_Scalar_One(px [4]float32, unpremul bool) [4]uint8 {
+func linearRgbaF32ToSrgbU8_LUT_Scalar_One(px gfx.PlainColor, unpremul bool) [4]uint8 {
 	var out [4]uint8
 	if unpremul {
 		px[0] /= px[3]
@@ -72,15 +74,21 @@ func linearRgbaF32ToSrgbU8_LUT_Scalar_One(px [4]float32, unpremul bool) [4]uint8
 	return out
 }
 
-func linearRgbaF32ToSrgbU8_LUT_Scalar(in [][4]float32, out [][4]uint8, unpremul bool) {
+func linearRgbaF32ToSrgbU8_LUT_Scalar(
+	in *WideTileBuffer,
+	out *[wideTileWidth][stripHeight][4]uint8,
+	unpremul bool,
+) {
 	// OPT(dh): avoid bounds checks on out
-	for j, px := range in {
-		// OPT(dh): god I hope this inlines
-		out[j] = linearRgbaF32ToSrgbU8_LUT_Scalar_One(px, unpremul)
+	for x := range in {
+		for y, px := range &in[x] {
+			// OPT(dh): god I hope this inlines
+			out[x][y] = linearRgbaF32ToSrgbU8_LUT_Scalar_One(px, unpremul)
+		}
 	}
 }
 
-func linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px [4]float32, unpremul bool) [4]uint8 {
+func linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px gfx.PlainColor, unpremul bool) [4]uint8 {
 	var out [4]uint8
 
 	if unpremul {
@@ -109,13 +117,18 @@ func linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px [4]float32, unpremul bool) [
 	return out
 }
 
-func linearRgbaF32ToSrgbU8_Polynomial_Scalar(in [][4]float32, out [][4]uint8, unpremul bool) {
+func linearRgbaF32ToSrgbU8_Polynomial_Scalar(
+	in *WideTileBuffer,
+	out *[wideTileWidth][stripHeight][4]uint8,
+	unpremul bool,
+) {
 	// See linearF32ToSrgbU8_Polynomial_AVX2_FMA3 in ./_asm/sparse_amd64_asm.go for an
 	// explanation of this algorithm.
 
-	for i, px := range in {
-		// OPT(dh): god I hope this inlines
-		// OPT(dh): avoid bounds checks on out
-		out[i] = linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px, unpremul)
+	for x := range in {
+		for y, px := range &in[x] {
+			// OPT(dh): god I hope this inlines
+			out[x][y] = linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px, unpremul)
+		}
 	}
 }

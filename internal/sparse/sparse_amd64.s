@@ -202,16 +202,15 @@ GLOBL f_80000000<>(SB), RODATA|NOPTR, $4
 DATA q_703060205010400<>+0(SB)/8, $0x0703060205010400
 GLOBL q_703060205010400<>(SB), RODATA|NOPTR, $8
 
-// func linearRgbaF32ToSrgbU8_Polynomial_AVX2(in [][4]float32, out [][4]uint8, unpremul bool)
+// func linearRgbaF32ToSrgbU8_Polynomial_AVX2(in *WideTileBuffer, out *[256][4][4]uint8, unpremul bool)
 // Requires: AVX, AVX2, FMA3
-TEXT ·linearRgbaF32ToSrgbU8_Polynomial_AVX2(SB), $0-49
-	MOVQ         in_len+8(FP), AX
-	MOVQ         in_base+0(FP), CX
-	SHLQ         $0x02, AX
-	MOVQ         out_base+24(FP), DX
-	LEAQ         (CX)(AX*4), CX
-	LEAQ         (DX)(AX*1), DX
-	NEGQ         AX
+TEXT ·linearRgbaF32ToSrgbU8_Polynomial_AVX2(SB), $0-17
+	MOVQ         in+0(FP), AX
+	MOVQ         $0x00001000, CX
+	MOVQ         out+8(FP), DX
+	LEAQ         (AX)(CX*4), AX
+	LEAQ         (DX)(CX*1), DX
+	NEGQ         CX
 	VBROADCASTSS f_bcec0bff<>+0(SB), Y3
 	VBROADCASTSS f_3fb372f2<>+0(SB), Y5
 	VBROADCASTSS f_bf69acfe<>+0(SB), Y2
@@ -222,10 +221,10 @@ TEXT ·linearRgbaF32ToSrgbU8_Polynomial_AVX2(SB), $0-49
 
 loop:
 	// load data
-	VMOVUPS (CX)(AX*4), Y7
-	VMOVUPS 32(CX)(AX*4), Y8
-	VMOVUPS 64(CX)(AX*4), Y9
-	VMOVUPS 96(CX)(AX*4), Y10
+	VMOVUPS (AX)(CX*4), Y7
+	VMOVUPS 32(AX)(CX*4), Y8
+	VMOVUPS 64(AX)(CX*4), Y9
+	VMOVUPS 96(AX)(CX*4), Y10
 
 	// packed to planar
 	VUNPCKLPS    Y8, Y7, Y11
@@ -252,7 +251,7 @@ loop:
 	VUNPCKLPS    Y11, Y10, Y12
 	VUNPCKHPS    Y11, Y10, Y10
 	VPERM2F128   $0x20, Y10, Y12, Y10
-	MOVB         unpremul+48(FP), BL
+	MOVB         unpremul+16(FP), BL
 	TESTB        BL, BL
 	JZ           skipUnpremul
 	VXORPS       Y11, Y11, Y11
@@ -345,8 +344,8 @@ skipUnpremul:
 	VPOR    Y7, Y8, Y7
 	VPOR    Y9, Y10, Y8
 	VPOR    Y7, Y8, Y7
-	VMOVUPS Y7, (DX)(AX*1)
-	ADDQ    $0x20, AX
+	VMOVUPS Y7, (DX)(CX*1)
+	ADDQ    $0x20, CX
 	JL      loop
 	VZEROUPPER
 	RET

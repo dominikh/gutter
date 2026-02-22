@@ -341,14 +341,13 @@ func linearRgbaF32ToSrgbU8_Polynomial_AVX2() {
 	Implement("linearRgbaF32ToSrgbU8_Polynomial_AVX2")
 	const batchSizeInFloats = 32
 
-	inLen := Load(Param("in").Len(), GP64())
-	inData := Load(Param("in").Base(), GP64())
+	// inLen := Load(Param("in").Len(), GP64())
+	inData := Load(Param("in"), GP64())
+	inLen := GP64()
+	// width * height * 4 floats per pixel
+	MOVQ(U32(256*4*4), inLen)
 
-	// We treat a slice of pixels as a slice of floats, and there are 4 floats
-	// in a pixel.
-	SHLQ(Imm(2), inLen)
-
-	outData := Load(Param("out").Base(), GP64())
+	outData := Load(Param("out"), GP64())
 
 	LEAQ(Mem{Base: inData, Index: inLen, Scale: 4}, inData)
 	LEAQ(Mem{Base: outData, Index: inLen, Scale: 1}, outData)

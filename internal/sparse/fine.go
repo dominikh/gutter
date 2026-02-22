@@ -16,7 +16,7 @@ import (
 )
 
 // [x][y]Color
-type fineScratch = [wideTileWidth][stripHeight]gfx.PlainColor
+type WideTileBuffer = [wideTileWidth][stripHeight]gfx.PlainColor
 
 type fine struct {
 	tile   *wideTile
@@ -26,11 +26,11 @@ type fine struct {
 	packer Packer
 
 	// free list of scratch space
-	freeScratches []*fineScratch
+	freeScratches []*WideTileBuffer
 }
 
 type fineLayer struct {
-	scratch     *fineScratch
+	scratch     *WideTileBuffer
 	singleColor gfx.PlainColor
 	// if complex is false, all pixels have the color stored in singleColor and
 	// the contents of scratch may be undefined.
@@ -55,26 +55,21 @@ func (f *fine) topLayer() *fineLayer {
 	return &f.layers[len(f.layers)-1]
 }
 
-func (f *fine) newScratch() *fineScratch {
+func (f *fine) newScratch() *WideTileBuffer {
 	// Align scratch memory to this many bytes. This should match the largest
 	// vector width that we use in assembly. Currently that is 32 for AVX. Has
 	// to be a power of 2.
 	const align = 32
 
-	scratch := make([]byte, unsafe.Sizeof(fineScratch{})+align)
+	scratch := make([]byte, unsafe.Sizeof(WideTileBuffer{})+align)
 	ptr := unsafe.Pointer(&scratch[0])
 	alignedPtr := unsafe.Pointer((uintptr(ptr) + align - 1) &^ (align - 1))
-	return (*fineScratch)(alignedPtr)
+	return (*WideTileBuffer)(alignedPtr)
 }
 
 func (l *fineLayer) clear(c gfx.PlainColor) {
 	l.complex = false
 	l.singleColor = c
-}
-
-type Packer interface {
-	PackSimple(x0, y0, x1, y1 uint16, c [4]float32)
-	PackComplex(x0, y0, x1, y1 uint16, tile [][4]float32)
 }
 
 // pack writes the tile at (tileX, tileY) to the output buffer.
@@ -105,7 +100,7 @@ func (f *fine) packComplex(l *fineLayer, tileX, tileY uint16) {
 	x1 := x0 + outWidth
 	y0 := tileY * stripHeight
 	y1 := y0 + outHeight
-	f.packer.PackComplex(x0, y0, x1, y1, safeish.SliceCast[[][4]float32](l.scratch[:]))
+	f.packer.PackComplex(x0, y0, x1, y1, l.scratch)
 }
 
 func memsetColumnsNative(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
@@ -127,7 +122,7 @@ func (f *fine) materialize(l *fineLayer) {
 	l.complex = true
 }
 
-func (f *fine) allocScratch(width int) *fineScratch {
+func (f *fine) allocScratch(width int) *WideTileBuffer {
 	if len(f.freeScratches) > 0 {
 		scratch := f.freeScratches[len(f.freeScratches)-1]
 		clear(scratch[:width])
@@ -138,7 +133,7 @@ func (f *fine) allocScratch(width int) *fineScratch {
 	}
 }
 
-func (f *fine) freeScratch(scratch *fineScratch) {
+func (f *fine) freeScratch(scratch *WideTileBuffer) {
 	f.freeScratches = append(f.freeScratches, scratch)
 }
 

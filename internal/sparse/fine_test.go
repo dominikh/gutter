@@ -42,8 +42,8 @@ func renderAndCompare(t *testing.T, width, height uint16, transparent bool, name
 	compareRendered(t, ctx, name)
 }
 
-func render(ctx *Renderer) [][4]float32 {
-	pixmap := make([][4]float32, int(ctx.width)*int(ctx.height))
+func render(ctx *Renderer) []gfx.PlainColor {
+	pixmap := make([]gfx.PlainColor, int(ctx.width)*int(ctx.height))
 	packer := &PackerFloat32{
 		Out:    pixmap,
 		Width:  int(ctx.width),
@@ -518,7 +518,7 @@ func Test50pctGrey(t *testing.T) {
 	})
 }
 
-func writeF32AsU16(in [][4]float32, out [][8]uint8) {
+func writeF32AsU16(in []gfx.PlainColor, out [][8]uint8) {
 	_ = out[len(in)]
 	for i := range in {
 		px := in[i]
@@ -635,7 +635,7 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 				b.Fatalf("height %d isn't multiple of stripHeight", tt.height)
 			}
 
-			pixmap := make([][4]float32, int(tt.width)*int(tt.height))
+			pixmap := make([]gfx.PlainColor, int(tt.width)*int(tt.height))
 			packer := &PackerFloat32{
 				Out:    pixmap,
 				Width:  int(tt.width),

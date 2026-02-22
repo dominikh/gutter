@@ -492,7 +492,7 @@ type encodedGradient struct {
 }
 
 type gradientLUT struct {
-	lut   [][4]float32
+	lut   []gfx.PlainColor
 	scale float32
 }
 
@@ -500,7 +500,7 @@ func makeGradientLUT(ranges []gradientRange) gradientLUT {
 	// 11 bits of gradient accuracy. Good enough for our GUI rendering purposes.
 	const lutSize = 2048
 	const invLutSize = 1.0 / (lutSize - 1)
-	lut := make([][4]float32, 0, lutSize)
+	lut := make([]gfx.PlainColor, 0, lutSize)
 	curIdx := 0
 	for idx := range lutSize {
 		tVal := float32(idx) * invLutSize
@@ -509,7 +509,7 @@ func makeGradientLUT(ranges []gradientRange) gradientLUT {
 		}
 		rng := &ranges[curIdx]
 		bias := rng.bias
-		interpolated := [4]float32{
+		interpolated := gfx.PlainColor{
 			bias[0] + rng.scale[0]*tVal,
 			bias[1] + rng.scale[1]*tVal,
 			bias[2] + rng.scale[2]*tVal,
@@ -688,11 +688,11 @@ func approximateGradient(
 					target0[2] + 0.5*(target1[2]-target0[2]),
 					target0[3] + 0.5*(target1[3]-target0[3]),
 				}
-				var approxStraight [4]float32
+				var approxStraight gfx.PlainColor
 				if approxPm[3] == 0 || approxPm[3] == 1 {
 					approxStraight = approxPm
 				} else {
-					approxStraight = [4]float32{
+					approxStraight = gfx.PlainColor{
 						approxPm[0] / approxPm[3],
 						approxPm[1] / approxPm[3],
 						approxPm[2] / approxPm[3],

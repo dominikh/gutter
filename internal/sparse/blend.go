@@ -234,7 +234,7 @@ func blendComplexComplex(
 			mb := a * fb
 			oneMinusAlpha := 1 - a
 			if ma == 0 {
-				dstCol[j] = [4]float32{
+				dstCol[j] = gfx.PlainColor{
 					dstCol[j][0]*mb + oneMinusAlpha*dstCol[j][0],
 					dstCol[j][1]*mb + oneMinusAlpha*dstCol[j][1],
 					dstCol[j][2]*mb + oneMinusAlpha*dstCol[j][2],
@@ -245,7 +245,7 @@ func blendComplexComplex(
 					),
 				}
 			} else if blend.Mix == gfx.MixNormal {
-				dstCol[j] = [4]float32{
+				dstCol[j] = gfx.PlainColor{
 					tosCol[j][0]*ma + dstCol[j][0]*mb + oneMinusAlpha*dstCol[j][0],
 					tosCol[j][1]*ma + dstCol[j][1]*mb + oneMinusAlpha*dstCol[j][1],
 					tosCol[j][2]*ma + dstCol[j][2]*mb + oneMinusAlpha*dstCol[j][2],
@@ -256,7 +256,7 @@ func blendComplexComplex(
 					),
 				}
 			} else {
-				dstCol[j] = [4]float32{
+				dstCol[j] = gfx.PlainColor{
 					(Cr0*tosCol[j][3])*ma + dstCol[j][0]*mb + oneMinusAlpha*dstCol[j][0],
 					(Cr1*tosCol[j][3])*ma + dstCol[j][1]*mb + oneMinusAlpha*dstCol[j][1],
 					(Cr2*tosCol[j][3])*ma + dstCol[j][2]*mb + oneMinusAlpha*dstCol[j][2],

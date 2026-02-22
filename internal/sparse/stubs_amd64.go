@@ -34,8 +34,7 @@ func computeAlphasNonZeroAVX(tail *[tileWidth][tileHeight]uint8, locationWinding
 // unpremultiplied before conversion to sRGB. The maximum error of the
 // approximation is less than 0.5221.
 //
-// Needs AVX2 and FMA3. The length of 'in' must be a non-zero multiple of 32.
-// 'out' must be at least as long as 'in'. The scalar implementation is at
+// Needs AVX2 and FMA3. The scalar implementation is at
 // [linearRgbaF32ToSrgbU8_Polynomial_Scalar].
 //
 // For a function that automatically selects the best implementation of linear
@@ -43,4 +42,8 @@ func computeAlphasNonZeroAVX(tail *[tileWidth][tileHeight]uint8, locationWinding
 // [linearRgbaF32ToSrgbU8].
 //
 //go:noescape
-func linearRgbaF32ToSrgbU8_Polynomial_AVX2(in [][4]float32, out [][4]uint8, unpremul bool)
+func linearRgbaF32ToSrgbU8_Polynomial_AVX2(
+	in *WideTileBuffer,
+	out *[wideTileWidth][stripHeight][4]uint8,
+	unpremul bool,
+)
