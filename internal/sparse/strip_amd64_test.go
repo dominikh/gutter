@@ -21,7 +21,6 @@ func BenchmarkComputeAlphasNonZeroAMD64(b *testing.B) {
 		enabled bool
 	}{
 		{computeAlphasNonZeroNative, "purego", true},
-		{computeAlphasNonZeroSSE, "SSE", true},
 		{computeAlphasNonZeroAVX, "AVX2", cpu.X86.HasAVX2},
 	}
 

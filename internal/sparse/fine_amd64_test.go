@@ -45,7 +45,6 @@ func Benchmark_memsetColumnsAMD64(b *testing.B) {
 		enabled bool
 	}{
 		{memsetColumnsNative, "purego", true},
-		{memsetColumnsSSE, "SSE", true},
 		{memsetColumnsAVX, "AVX", cpu.X86.HasAVX},
 	}
 	for _, fn := range fns {

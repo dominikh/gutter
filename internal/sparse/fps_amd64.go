@@ -17,7 +17,7 @@ func memsetColumns(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
 	if cpu.X86.HasAVX {
 		memsetColumnsAVX(buf, c)
 	} else {
-		memsetColumnsSSE(buf, c)
+		memsetColumnsNative(buf, c)
 	}
 }
 
@@ -81,6 +81,6 @@ func computeAlphasNonZero(
 	if cpu.X86.HasAVX && cpu.X86.HasAVX2 {
 		computeAlphasNonZeroAVX(tail, locationWinding)
 	} else {
-		computeAlphasNonZeroSSE(tail, locationWinding)
+		computeAlphasNonZeroNative(tail, locationWinding)
 	}
 }

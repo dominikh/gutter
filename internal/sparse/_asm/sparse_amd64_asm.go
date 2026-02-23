@@ -82,13 +82,8 @@ func main() {
 	ConstraintExpr("!purego")
 
 	memsetColumnsAVX()
-	memsetColumnsSSE()
-
 	processOutOfBoundsWindingSSE()
-
-	computeAlphasNonZeroSSE()
 	computeAlphasNonZeroAVX()
-
 	linearRgbaF32ToSrgbU8_Polynomial_AVX2()
 
 	Generate()
@@ -156,23 +151,6 @@ func fillEpilogueSSE() {
 	RET()
 }
 
-func memsetColumnsSSE() {
-	Implement("memsetColumnsSSE")
-
-	outData, outLen, color := fillPrologueSSE()
-
-	// New color is opaque, replace old pixels
-	Label("loop")
-	const unroll = 2
-	for i := range unroll {
-		MOVAPS(color, Mem{Base: outData}.Idx(outLen, 1).Offset(i*4*4))
-	}
-	ADDQ(Imm(unroll*4*4), outLen)
-	JL(LabelRef("loop"))
-
-	fillEpilogueSSE()
-}
-
 func processOutOfBoundsWindingSSE() {
 	Implement("processOutOfBoundsWindingSSE")
 
@@ -227,53 +205,6 @@ func broadcastF32Param(param gotypes.Component, dst reg.VecVirtual) reg.VecVirtu
 		VBROADCASTSS(r.Addr, dst)
 		return dst
 	}
-}
-
-func computeAlphasNonZeroSSE() {
-	Implement("computeAlphasNonZeroSSE")
-
-	locationWinding := Dereference(Param("locationWinding"))
-	tail := Dereference(Param("tail"))
-	maxUint8 := XMM()
-	MOVUPS(floatConst4(255), maxUint8)
-	one := XMM()
-	MOVUPS(floatConst4(1), one)
-	oneHalf := XMM()
-	MOVUPS(floatConst4(0.5), oneHalf)
-	mask := XMM()
-	MOVUPS(absMask, mask)
-
-	var areas [4]reg.VecVirtual
-	for i := range 4 {
-		d, _ := locationWinding.Index(i).Index(0).Resolve()
-		areas[i] = XMM()
-		MOVUPS(d.Addr, areas[i])
-		tmp := XMM()
-		MOVAPS(mask, tmp)
-		ANDNPS(areas[i], tmp)
-		areas[i] = tmp
-		MINPS(one, areas[i])
-		MULPS(maxUint8, areas[i])
-		ADDPS(oneHalf, areas[i])
-	}
-
-	// Convert four float32 to four int32, four times
-	CVTTPS2PL(areas[0], areas[0]) // CVTTPS2DQ
-	CVTTPS2PL(areas[1], areas[1]) // CVTTPS2DQ
-	CVTTPS2PL(areas[2], areas[2]) // CVTTPS2DQ
-	CVTTPS2PL(areas[3], areas[3]) // CVTTPS2DQ
-
-	// Convert eight int32 (four from each argument) to eight int16, two times
-	PACKSSLW(areas[1], areas[0]) // PACKSSDW
-	PACKSSLW(areas[3], areas[2]) // PACKSSDW
-
-	// Convert sixteen int16 to sixteen uint8 (eight from each argument)
-	PACKUSWB(areas[2], areas[0])
-
-	// Store sixteen uint8 to memory
-	d1, _ := tail.Index(0).Index(0).Resolve()
-	MOVUPS(areas[0], d1.Addr)
-	RET()
 }
 
 func computeAlphasNonZeroAVX() {

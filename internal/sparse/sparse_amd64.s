@@ -41,28 +41,6 @@ exit:
 	VZEROUPPER
 	RET
 
-// func memsetColumnsSSE(buf [][4]gfx.PlainColor, color gfx.PlainColor)
-// Requires: SSE
-TEXT ·memsetColumnsSSE(SB), $0-40
-	MOVQ   buf_len+8(FP), AX
-	SHLQ   $0x02, AX
-	TESTQ  AX, AX
-	JZ     exit
-	MOVQ   buf_base+0(FP), CX
-	SHLQ   $0x04, AX
-	ADDQ   AX, CX
-	NEGQ   AX
-	MOVUPS color_0+24(FP), X0
-
-loop:
-	MOVAPS X0, (CX)(AX*1)
-	MOVAPS X0, 16(CX)(AX*1)
-	ADDQ   $0x20, AX
-	JL     loop
-
-exit:
-	RET
-
 // func processOutOfBoundsWindingSSE(ymin float32, ymax float32, sign float32, locationWinding *[4][4]float32, accumulatedWinding *[4]float32)
 // Requires: SSE
 TEXT ·processOutOfBoundsWindingSSE(SB), $0-32
@@ -98,67 +76,6 @@ TEXT ·processOutOfBoundsWindingSSE(SB), $0-32
 	ADDPS  X0, X1
 	MOVUPS X1, 48(AX)
 	RET
-
-// func computeAlphasNonZeroSSE(tail *[4][4]uint8, locationWinding *[4][4]float32)
-// Requires: SSE, SSE2
-TEXT ·computeAlphasNonZeroSSE(SB), $0-16
-	MOVQ      locationWinding+8(FP), AX
-	MOVQ      tail+0(FP), CX
-	MOVUPS    f4_437f0000<>+0(SB), X0
-	MOVUPS    f4_3f800000<>+0(SB), X1
-	MOVUPS    f4_3f000000<>+0(SB), X2
-	MOVUPS    absMask<>+0(SB), X3
-	MOVUPS    (AX), X4
-	MOVAPS    X3, X5
-	ANDNPS    X4, X5
-	MINPS     X1, X5
-	MULPS     X0, X5
-	ADDPS     X2, X5
-	MOVUPS    16(AX), X4
-	MOVAPS    X3, X6
-	ANDNPS    X4, X6
-	MINPS     X1, X6
-	MULPS     X0, X6
-	ADDPS     X2, X6
-	MOVUPS    32(AX), X4
-	MOVAPS    X3, X7
-	ANDNPS    X4, X7
-	MINPS     X1, X7
-	MULPS     X0, X7
-	ADDPS     X2, X7
-	MOVUPS    48(AX), X4
-	MOVAPS    X3, X3
-	ANDNPS    X4, X3
-	MINPS     X1, X3
-	MULPS     X0, X3
-	ADDPS     X2, X3
-	CVTTPS2PL X5, X5
-	CVTTPS2PL X6, X6
-	CVTTPS2PL X7, X7
-	CVTTPS2PL X3, X3
-	PACKSSLW  X6, X5
-	PACKSSLW  X3, X7
-	PACKUSWB  X7, X5
-	MOVUPS    X5, (CX)
-	RET
-
-DATA f4_437f0000<>+0(SB)/4, $(255.0)
-DATA f4_437f0000<>+4(SB)/4, $(255.0)
-DATA f4_437f0000<>+8(SB)/4, $(255.0)
-DATA f4_437f0000<>+12(SB)/4, $(255.0)
-GLOBL f4_437f0000<>(SB), RODATA|NOPTR, $16
-
-DATA f4_3f800000<>+0(SB)/4, $(1.0)
-DATA f4_3f800000<>+4(SB)/4, $(1.0)
-DATA f4_3f800000<>+8(SB)/4, $(1.0)
-DATA f4_3f800000<>+12(SB)/4, $(1.0)
-GLOBL f4_3f800000<>(SB), RODATA|NOPTR, $16
-
-DATA f4_3f000000<>+0(SB)/4, $(0.5)
-DATA f4_3f000000<>+4(SB)/4, $(0.5)
-DATA f4_3f000000<>+8(SB)/4, $(0.5)
-DATA f4_3f000000<>+12(SB)/4, $(0.5)
-GLOBL f4_3f000000<>(SB), RODATA|NOPTR, $16
 
 // func computeAlphasNonZeroAVX(tail *[4][4]uint8, locationWinding *[4][4]float32)
 // Requires: AVX, AVX2
