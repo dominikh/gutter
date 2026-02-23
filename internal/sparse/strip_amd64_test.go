@@ -11,7 +11,7 @@ import (
 	"math"
 	"testing"
 
-	"golang.org/x/sys/cpu"
+	"honnef.co/go/gutter/internal/arch"
 )
 
 func BenchmarkComputeAlphasNonZeroAMD64(b *testing.B) {
@@ -21,7 +21,7 @@ func BenchmarkComputeAlphasNonZeroAMD64(b *testing.B) {
 		enabled bool
 	}{
 		{computeAlphasNonZeroNative, "purego", true},
-		{computeAlphasNonZeroAVX, "AVX2", cpu.X86.HasAVX2},
+		{computeAlphasNonZeroAVX, "AVX2", arch.AVX2()},
 	}
 
 	// Ideally, these two variables would be in the scope of a single iteration,
@@ -69,7 +69,7 @@ func BenchmarkComputeWindingAMD64(b *testing.B) {
 		enabled bool
 	}{
 		{computeWindingScalar, "purego", true},
-		{computeWindingAVX, "AVX", cpu.X86.HasAVX},
+		{computeWindingAVX, "AVX", arch.AVX()},
 	}
 
 	// Ideally, these two variables would be in the scope of a single iteration,

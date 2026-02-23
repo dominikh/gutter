@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"testing"
 
-	"golang.org/x/sys/cpu"
 	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/internal/arch"
 )
 
 func Benchmark_fineFillComplexAMD64(b *testing.B) {
@@ -21,7 +21,7 @@ func Benchmark_fineFillComplexAMD64(b *testing.B) {
 		enabled bool
 	}{
 		{fineFillComplexScalar, "purego", true},
-		{fineFillComplexAVX, "AVX", cpu.X86.HasAVX},
+		{fineFillComplexAVX, "AVX", arch.AVX()},
 	}
 	for _, fn := range fns {
 		b.Run(fmt.Sprintf("instr=%s", fn.desc), func(b *testing.B) {
@@ -45,7 +45,7 @@ func Benchmark_memsetColumnsAMD64(b *testing.B) {
 		enabled bool
 	}{
 		{memsetColumnsNative, "purego", true},
-		{memsetColumnsAVX, "AVX", cpu.X86.HasAVX},
+		{memsetColumnsAVX, "AVX", arch.AVX()},
 	}
 	for _, fn := range fns {
 		b.Run(fmt.Sprintf("instr=%s", fn.desc), func(b *testing.B) {

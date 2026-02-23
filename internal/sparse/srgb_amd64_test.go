@@ -6,9 +6,7 @@
 
 package sparse
 
-import (
-	"simd/archsimd"
-)
+import "honnef.co/go/gutter/internal/arch"
 
 func init() {
 	linearRgbaF32ToSrgbU8Tests = append(linearRgbaF32ToSrgbU8Tests,
@@ -17,7 +15,7 @@ func init() {
 			instr:    "avx",
 			maxError: 0.5221,
 			fn:       linearRgbaF32ToSrgbU8_Polynomial_AVX2,
-			disabled: !(archsimd.X86.AVX2() && archsimd.X86.FMA()),
+			disabled: !(arch.AVX2() && arch.FMA()),
 		},
 	)
 }

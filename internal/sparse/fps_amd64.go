@@ -7,14 +7,12 @@
 package sparse
 
 import (
-	"simd/archsimd"
-
-	"golang.org/x/sys/cpu"
 	"honnef.co/go/gutter/gfx"
+	"honnef.co/go/gutter/internal/arch"
 )
 
 func memsetColumns(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
-	if cpu.X86.HasAVX {
+	if arch.AVX() {
 		memsetColumnsAVX(buf, c)
 	} else {
 		memsetColumnsNative(buf, c)
@@ -22,7 +20,7 @@ func memsetColumns(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
 }
 
 func fineFillComplex(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
-	if cpu.X86.HasAVX {
+	if arch.AVX() {
 		fineFillComplexAVX(buf, color)
 	} else {
 		fineFillComplexScalar(buf, color)
@@ -39,7 +37,7 @@ func computeWinding(
 	locationWinding *[tileWidth][tileHeight]float32,
 	accumulatedWinding *[tileHeight]float32,
 ) {
-	if archsimd.X86.AVX() {
+	if arch.AVX() {
 		computeWindingAVX(
 			lineTopY,
 			lineTopX,
@@ -78,7 +76,7 @@ func computeAlphasNonZero(
 	tail *[tileWidth][tileHeight]uint8,
 	locationWinding *[tileWidth][tileHeight]float32,
 ) {
-	if cpu.X86.HasAVX && cpu.X86.HasAVX2 {
+	if arch.AVX2() {
 		computeAlphasNonZeroAVX(tail, locationWinding)
 	} else {
 		computeAlphasNonZeroNative(tail, locationWinding)

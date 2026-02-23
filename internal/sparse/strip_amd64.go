@@ -7,6 +7,8 @@ package sparse
 import (
 	"math"
 	. "simd/archsimd"
+
+	"honnef.co/go/gutter/internal/arch"
 )
 
 var memPxLeftX = [2][8]float32{
@@ -111,7 +113,7 @@ func computeWindingAVX(
 	}
 
 	// Both fn and muladd get inlined.
-	if X86.FMA() {
+	if arch.FMA() {
 		muladd := func(a, b, c Float32x8) Float32x8 {
 			return a.MulAdd(b, c)
 		}

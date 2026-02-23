@@ -7,6 +7,8 @@ package sparse
 import (
 	. "simd/archsimd"
 	"unsafe"
+
+	"honnef.co/go/gutter/internal/arch"
 )
 
 func memsetUint8PixelsAVX(b [][4]byte, v [4]byte) {
@@ -36,7 +38,7 @@ func memsetUint8PixelsAVX(b [][4]byte, v [4]byte) {
 }
 
 func memsetUint8Pixels(b [][4]byte, v [4]byte) {
-	if X86.AVX() {
+	if arch.AVX() {
 		memsetUint8PixelsAVX(b, v)
 	} else {
 		for i := range b {
