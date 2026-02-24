@@ -242,9 +242,9 @@ func computeAlphasNonZeroAVX() {
 	// 16 useful values)
 	VPACKUSWB(areas[0], areas[0], areas[0])
 
-	permMask := YMM()
-	VPMOVSXBD(uint64Const(0x0703060205010400), permMask)
-	VPERMD(areas[0], permMask, areas[0])
+	areas0Hi := XMM()
+	VEXTRACTF128(Imm(1), areas[0], areas0Hi)
+	VPUNPCKLDQ(areas0Hi, areas[0].AsX(), areas[0].AsX())
 
 	// Store sixteen uint8 to memory
 	d1, _ := tail.Index(0).Index(0).Resolve()
