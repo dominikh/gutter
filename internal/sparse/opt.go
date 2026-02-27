@@ -347,8 +347,7 @@ func optimizeCommands(tile *wideTile, cmds []cmd, stackScratch []optLayer) (newC
 			pop:  len(cmds) - 1,
 		})
 		top := 0
-		for i := range cmds {
-			c := cmds[i]
+		for i, c := range cmds {
 			switch c.typ {
 			case cmdAlphaBlend, cmdBlend:
 				var args blendArgs
