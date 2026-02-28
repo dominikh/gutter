@@ -291,6 +291,12 @@ func packUint8SRGB_AVX2() {
 	VBROADCASTSS(floatConst(2.07758287e-01), c5)
 	VBROADCASTSS(floatConst(0.0031308), threshold)
 
+	// Permutation mask for cross-lane fixup in packed-to-planar transpose.
+	// Converts [r0 r2 r4 r6 | r1 r3 r5 r7] -> [r0 r1 r2 r3 | r4 r5 r6 r7].
+	// Also reused by the final 8x4 transpose.
+	permMask := YMM()
+	VPMOVSXBD(uint64Const(0x0703060205010400), permMask)
+
 	row0, row1, row2, row3 := outData, GP64(), GP64(), GP64()
 	LEAQ(Mem{Base: row0, Index: stride, Scale: 4}, row1)
 	LEAQ(Mem{Base: row1, Index: stride, Scale: 4}, row2)
@@ -325,7 +331,7 @@ func packUint8SRGB_AVX2() {
 			VMOVUPS(Mem{Base: inData, Index: inOffset, Scale: 1, Disp: batchDisp + i*32}, reg)
 		}
 
-		packedRgbaF32ToPlanaRgbaF32(channels, channels)
+		packedRgbaF32ToPlanaRgbaF32(channels, channels, permMask)
 
 		// According to
 		// https://web.archive.org/web/20250815165940/https://hacksoflife.blogspot.com/2022/06/srgb-pre-multiplied-alpha-and.html
@@ -366,20 +372,22 @@ func packUint8SRGB_AVX2() {
 
 			even1, even2, odd1, sqrtX, x2 :=
 				YMM(), YMM(), YMM(), YMM(), YMM()
+
 			VMOVAPS(x, even1)
 			VFMADD132PS(c2, c0, even1)
-
-			VMOVAPS(x, odd1)
-			VFMADD132PS(c3, c1, odd1)
 
 			VMULPS(x, x, x2)
 			VMOVAPS(x2, even2)
 			VFMADD132PS(c4, even1, even2)
 
+			VMOVAPS(x, odd1)
+			VFMADD132PS(c3, c1, odd1)
+
 			VFMADD132PS(c5, odd1, x2)
 			odd2, x2 := x2, nil
 
 			VSQRTPS(x, sqrtX)
+
 			VFMADD132PS(sqrtX, even2, odd2)
 			poly, odd2 := odd2, nil
 
@@ -433,7 +441,7 @@ func packUint8SRGB_AVX2() {
 	VMOVDQU(stackBuf.Offset(64), c45)
 	VMOVDQU(stackBuf.Offset(96), c67)
 
-	u0, u1, u2, u3 := transpose8x4(c01, c23, c45, c67)
+	u0, u1, u2, u3 := transpose8x4(c01, c23, c45, c67, permMask)
 
 	// Store to 4 output rows
 	VMOVDQU(u0, Mem{Base: row0, Index: rowOffset, Scale: 1})
@@ -485,7 +493,10 @@ func rgbaPlanarToPacked(in [4]reg.VecVirtual, out [4]reg.VecVirtual) {
 // packedRgbaF32ToPlanaRgbaF32 takes four input registers, each containing eight packed
 // float32 RGBA pixels and stores to four output registers separated R, G, B,
 // and A planes, each containing eight float32 values.
-func packedRgbaF32ToPlanaRgbaF32(in [4]reg.VecVirtual, out [4]reg.VecVirtual) {
+//
+// permMask must contain the dword permutation [0, 4, 1, 5, 2, 6, 3, 7],
+// loaded e.g. via VPMOVSXBD from the uint64 constant 0x0703060205010400.
+func packedRgbaF32ToPlanaRgbaF32(in [4]reg.VecVirtual, out [4]reg.VecVirtual, permMask reg.VecVirtual) {
 	Comment("packed to planar")
 
 	// Inputs:
@@ -506,15 +517,10 @@ func packedRgbaF32ToPlanaRgbaF32(in [4]reg.VecVirtual, out [4]reg.VecVirtual) {
 	VSHUFPS(Imm(0x44), t3, t1, out[2]) // out[2] = [b0 b2 b4 b6 | b1, b3, b5, b7]
 	VSHUFPS(Imm(0xEE), t3, t1, out[3]) // out[3] = [a0 a2 a4 a6 | a1, a3, a5, a7]
 
-	for i, src := range out {
-		dst := out[i]
-
-		swapped := YMM()
-		hi, lo := YMM(), YMM()
-		VPERM2F128(Imm(1), src, src, swapped) // swapped = [r1 r3 r5 r7 | r0 r2 r4 r6]
-		VUNPCKLPS(swapped, src, lo)           // lo      = [r0 r1 r2 r3 |  ?  ?  ?  ?]
-		VUNPCKHPS(swapped, src, hi)           // hi      = [r4 r5 r6 r7 |  ?  ?  ?  ?]
-		VPERM2F128(Imm(0x20), hi, lo, dst)    // dst     = [r0 r1 r2 r3 | r4 r5 r6 r7]
+	// Fix cross-lane ordering: [r0 r2 r4 r6 | r1 r3 r5 r7] -> [r0 r1 r2 r3 | r4 r5 r6 r7]
+	// This is a fixed dword permutation, done efficiently with a single VPERMD.
+	for i := range out {
+		VPERMD(out[i], permMask, out[i])
 	}
 }
 
@@ -541,7 +547,7 @@ func planarRgbaU32ToPackedRgbaU8(in [4]reg.VecVirtual, out reg.VecVirtual) {
 	VPOR(rg, ba, out)
 }
 
-func transpose8x4(c01, c23, c45, c67 reg.VecVirtual) (r0, r1, r2, r3 reg.VecVirtual) {
+func transpose8x4(c01, c23, c45, c67, permMask reg.VecVirtual) (r0, r1, r2, r3 reg.VecVirtual) {
 	// Each element is a [4]byte, i.e. a double word.
 	//
 	// c01 = [c0r0, c0r1, c0r2, c0r3 | c1r0, c1r1, c1r2, c1r3]
@@ -564,8 +570,6 @@ func transpose8x4(c01, c23, c45, c67 reg.VecVirtual) (r0, r1, r2, r3 reg.VecVirt
 	VPUNPCKHQDQ(t3, t1, u3) // u3 = [c0r3, c2r3, c4r3, c6r3 | c1r3, c3r3, c5r3, c7r3]
 
 	// Step 3: Fix lane ordering with vpermd
-	permMask := YMM()
-	VPMOVSXBD(uint64Const(0x0703060205010400), permMask)
 	VPERMD(u0, permMask, u0) // u0 = [c0r0, c1r0, c2r0, c3r0 | c3r0, c5r0, c6r0, c7r0]
 	VPERMD(u1, permMask, u1) // u1 = [c0r1, c1r1, c2r1, c3r1 | c3r1, c5r1, c6r1, c7r1]
 	VPERMD(u2, permMask, u2) // u2 = [c0r2, c1r2, c2r2, c3r2 | c3r2, c5r2, c6r2, c7r2]
