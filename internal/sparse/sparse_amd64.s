@@ -164,13 +164,14 @@ loop:
 	JZ           skipUnpremul0
 	VXORPS       Y8, Y8, Y8
 	VBROADCASTSS f_3f800000<>+0(SB), Y9
-	VDIVPS       Y7, Y4, Y4
+	VRCPPS       Y7, Y10
+	VMULPS       Y10, Y4, Y4
 	VMINPS       Y9, Y4, Y4
 	VMAXPS       Y8, Y4, Y4
-	VDIVPS       Y7, Y5, Y5
+	VMULPS       Y10, Y5, Y5
 	VMINPS       Y9, Y5, Y5
 	VMAXPS       Y8, Y5, Y5
-	VDIVPS       Y7, Y6, Y6
+	VMULPS       Y10, Y6, Y6
 	VMINPS       Y9, Y6, Y6
 	VMAXPS       Y8, Y6, Y6
 	VMINPS       Y9, Y7, Y7
@@ -266,13 +267,14 @@ skipUnpremul0:
 	JZ           skipUnpremul1
 	VXORPS       Y9, Y9, Y9
 	VBROADCASTSS f_3f800000<>+0(SB), Y10
-	VDIVPS       Y8, Y5, Y5
+	VRCPPS       Y8, Y11
+	VMULPS       Y11, Y5, Y5
 	VMINPS       Y10, Y5, Y5
 	VMAXPS       Y9, Y5, Y5
-	VDIVPS       Y8, Y6, Y6
+	VMULPS       Y11, Y6, Y6
 	VMINPS       Y10, Y6, Y6
 	VMAXPS       Y9, Y6, Y6
-	VDIVPS       Y8, Y7, Y7
+	VMULPS       Y11, Y7, Y7
 	VMINPS       Y10, Y7, Y7
 	VMAXPS       Y9, Y7, Y7
 	VMINPS       Y10, Y8, Y8
@@ -368,13 +370,14 @@ skipUnpremul1:
 	JZ           skipUnpremul2
 	VXORPS       Y10, Y10, Y10
 	VBROADCASTSS f_3f800000<>+0(SB), Y11
-	VDIVPS       Y9, Y6, Y6
+	VRCPPS       Y9, Y12
+	VMULPS       Y12, Y6, Y6
 	VMINPS       Y11, Y6, Y6
 	VMAXPS       Y10, Y6, Y6
-	VDIVPS       Y9, Y7, Y7
+	VMULPS       Y12, Y7, Y7
 	VMINPS       Y11, Y7, Y7
 	VMAXPS       Y10, Y7, Y7
-	VDIVPS       Y9, Y8, Y8
+	VMULPS       Y12, Y8, Y8
 	VMINPS       Y11, Y8, Y8
 	VMAXPS       Y10, Y8, Y8
 	VMINPS       Y11, Y9, Y9
@@ -470,13 +473,14 @@ skipUnpremul2:
 	JZ           skipUnpremul3
 	VXORPS       Y11, Y11, Y11
 	VBROADCASTSS f_3f800000<>+0(SB), Y12
-	VDIVPS       Y10, Y7, Y7
+	VRCPPS       Y10, Y13
+	VMULPS       Y13, Y7, Y7
 	VMINPS       Y12, Y7, Y7
 	VMAXPS       Y11, Y7, Y7
-	VDIVPS       Y10, Y8, Y8
+	VMULPS       Y13, Y8, Y8
 	VMINPS       Y12, Y8, Y8
 	VMAXPS       Y11, Y8, Y8
-	VDIVPS       Y10, Y9, Y9
+	VMULPS       Y13, Y9, Y9
 	VMINPS       Y12, Y9, Y9
 	VMAXPS       Y11, Y9, Y9
 	VMINPS       Y12, Y10, Y10

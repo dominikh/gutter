@@ -380,8 +380,15 @@ func packUint8SRGB_AVX2() {
 		zero, one := YMM(), YMM()
 		VXORPS(zero, zero, zero)
 		VBROADCASTSS(floatConst(1), one)
+		// Multiply with approximate reciprocal of alpha to undo
+		// premultiplication. This has lower precision than proper division, but
+		// we still stay within our target of 0.6 ULP. This is faster than
+		// division, and reduces port pressure on at least all generations of
+		// Zen.
+		invAlpha := YMM()
+		VRCPPS(channels[3], invAlpha)
 		for _, reg := range channels[:3] {
-			VDIVPS(channels[3], reg, reg)
+			VMULPS(invAlpha, reg, reg)
 			VMINPS(one, reg, reg)
 			VMAXPS(zero, reg, reg)
 		}
