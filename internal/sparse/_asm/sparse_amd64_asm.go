@@ -325,6 +325,10 @@ func packUint8SRGB_AVX2() {
 	permMask := YMM()
 	VPMOVSXBD(uint64Const(0x0703060205010400), permMask)
 
+	// Registers for holding packed batch results across batches, avoiding
+	// stack spills.
+	batchResults := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
+
 	row0, row1, row2, row3 := outData, GP64(), GP64(), GP64()
 	LEAQ(Mem{Base: row0, Index: stride, Scale: 4}, row1)
 	LEAQ(Mem{Base: row1, Index: stride, Scale: 4}, row2)
@@ -334,9 +338,6 @@ func packUint8SRGB_AVX2() {
 	rowOffset := GP64()
 	XORQ(inOffset, inOffset)
 	XORQ(rowOffset, rowOffset)
-
-	// Allocate stack space for 4 intermediate YMM results (128 bytes)
-	stackBuf := AllocLocal(128)
 
 	Label("loop")
 
@@ -445,23 +446,18 @@ func packUint8SRGB_AVX2() {
 		VCVTPS2DQ(channels[3], channels[3])
 
 		Comment("pack")
-		rgba := YMM()
-		planarRgbaU32ToPackedRgbaU8(channels, rgba)
-
-		// Store to stack buffer
-		VMOVDQU(rgba, stackBuf.Offset(batch*32))
+		planarRgbaU32ToPackedRgbaU8(channels, batchResults[batch])
 	}
 
 	Comment("transpose 4x8 matrix of pixels")
 
-	// Load the 4 results from stack
-	c01, c23, c45, c67 := YMM(), YMM(), YMM(), YMM()
-	VMOVDQU(stackBuf.Offset(0), c01)
-	VMOVDQU(stackBuf.Offset(32), c23)
-	VMOVDQU(stackBuf.Offset(64), c45)
-	VMOVDQU(stackBuf.Offset(96), c67)
-
-	u0, u1, u2, u3 := transpose8x4(c01, c23, c45, c67, permMask)
+	u0, u1, u2, u3 := transpose8x4(
+		batchResults[0], // c01
+		batchResults[1], // c23
+		batchResults[2], // c45
+		batchResults[3], // c67
+		permMask,
+	)
 
 	// Store to 4 output rows
 	VMOVDQU(u0, Mem{Base: row0, Index: rowOffset, Scale: 1})
