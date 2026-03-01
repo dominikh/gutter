@@ -21,6 +21,7 @@ import (
 var uint64Consts = map[uint64]Mem{}
 var floatConsts = map[float32]Mem{}
 var floatConsts4 = map[float32]Mem{}
+var floatConsts8 = map[float32]Mem{}
 
 func uint64Const(v uint64) Mem {
 	if k, ok := uint64Consts[v]; ok {
@@ -50,6 +51,18 @@ func floatConst4(f float32) Mem {
 	DATA(8, F32(f))
 	DATA(12, F32(f))
 	floatConsts4[f] = k
+	return k
+}
+
+func floatConst8(f float32) Mem {
+	if k, ok := floatConsts8[f]; ok {
+		return k
+	}
+	k := GLOBL(fmt.Sprintf("f8_%08x", math.Float32bits(f)), attr.RODATA|attr.NOPTR)
+	for i := range 8 {
+		DATA(i*4, F32(f))
+	}
+	floatConsts8[f] = k
 	return k
 }
 
@@ -281,14 +294,29 @@ func packUint8SRGB_AVX2() {
 	MOVQ(outWidth, outWidthBytes)
 	SHLQ(Imm(2), outWidthBytes)
 
-	c5, c4, c2, c0, c3, c1, threshold :=
-		YMM(), YMM(), YMM(), YMM(), YMM(), YMM(), YMM()
+	// c0 and c1 cannot be turned into memory operands because they get used
+	// together with c2-c5 in the same instructions, which only permit one
+	// memory operand. threshold is kept in a register because that benchmarked
+	// better.
+	c0, c1, threshold := YMM(), YMM(), YMM()
 	VBROADCASTSS(floatConst(-2.88143143e-02), c0)
 	VBROADCASTSS(floatConst(1.40194533e+00), c1)
-	VBROADCASTSS(floatConst(-9.12795913e-01), c2)
-	VBROADCASTSS(floatConst(1.06133172e+00), c3)
-	VBROADCASTSS(floatConst(-7.29192910e-01), c4)
-	VBROADCASTSS(floatConst(2.07758287e-01), c5)
+
+	// These coefficients of the polynomial are used as memory operands and not
+	// stored in reused registers, to free up registers for other purposes. This
+	// improves performance overall, probably because the latency of the memory
+	// loads is hidden by all the math instructions.
+	c2mem := floatConst8(-9.12795913e-01)
+	c3mem := floatConst8(1.06133172e+00)
+	c4mem := floatConst8(-7.29192910e-01)
+	c5mem := floatConst8(2.07758287e-01)
+
+	// These constants are also used as memory operands, because benchmarks
+	// determined no change in performance compared to broadcasting on every
+	// loop iteration, and we don't have the spare registers to reuse them.
+	biasMem := floatConst8(-5.35862651e-04)
+	linearScaleMem := floatConst8(12.92)
+
 	VBROADCASTSS(floatConst(0.0031308), threshold)
 
 	// Permutation mask for cross-lane fixup in packed-to-planar transpose.
@@ -361,29 +389,27 @@ func packUint8SRGB_AVX2() {
 
 		Label(fmt.Sprintf("skipUnpremul%d", batch))
 
-		// Convert RGB channels using polynomial approximation
+		// Convert RGB channels using polynomial approximation.
 		for i, reg := range channels[:3] {
 			Commentf("plane %d", i)
 
 			x := YMM()
-			bias := YMM()
-			VBROADCASTSS(floatConst(-5.35862651e-04), bias)
-			VADDPS(bias, reg, x)
+			VADDPS(biasMem, reg, x)
 
 			even1, even2, odd1, sqrtX, x2 :=
 				YMM(), YMM(), YMM(), YMM(), YMM()
 
 			VMOVAPS(x, even1)
-			VFMADD132PS(c2, c0, even1)
+			VFMADD132PS(c2mem, c0, even1)
 
 			VMULPS(x, x, x2)
 			VMOVAPS(x2, even2)
-			VFMADD132PS(c4, even1, even2)
+			VFMADD132PS(c4mem, even1, even2)
 
 			VMOVAPS(x, odd1)
-			VFMADD132PS(c3, c1, odd1)
+			VFMADD132PS(c3mem, c1, odd1)
 
-			VFMADD132PS(c5, odd1, x2)
+			VFMADD132PS(c5mem, odd1, x2)
 			odd2, x2 := x2, nil
 
 			VSQRTPS(x, sqrtX)
@@ -392,17 +418,13 @@ func packUint8SRGB_AVX2() {
 			poly, odd2 := odd2, nil
 
 			lin := YMM()
-			mult := YMM()
-			VBROADCASTSS(floatConst(12.92), mult)
-			VMULPS(mult, reg, lin)
+			VMULPS(linearScaleMem, reg, lin)
 
 			m := YMM()
 			VCMPPS(Imm(0xE), threshold, reg, m)
 
 			VPBLENDVB(m, poly, lin, reg)
-			maxByte := YMM()
-			VBROADCASTSS(floatConst(255), maxByte)
-			VMULPS(reg, maxByte, reg)
+			VMULPS(floatConst8(255), reg, reg)
 
 			// The DirectX spec requires rounding via floor(c + 0.5), which, for
 			// positive values, is round to nearest, round half up (with some
@@ -419,9 +441,7 @@ func packUint8SRGB_AVX2() {
 		}
 
 		Comment("plane 3")
-		maxByte := YMM()
-		VBROADCASTSS(floatConst(255), maxByte)
-		VMULPS(channels[3], maxByte, channels[3])
+		VMULPS(floatConst8(255), channels[3], channels[3])
 		VCVTPS2DQ(channels[3], channels[3])
 
 		Comment("pack")
