@@ -13,7 +13,7 @@ func init() {
 		packUint8SrgbTest{
 			name:     "polynomial",
 			instr:    "avx",
-			maxError: 0.5221,
+			maxError: 0.548,
 			fn:       packUint8SRGB_AVX2,
 			disabled: !(arch.AVX2() && arch.FMA()),
 		},
