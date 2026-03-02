@@ -113,7 +113,7 @@ func memsetColumnsNative(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
 	}
 }
 
-func (f *fine) materialize(l *fineLayer) {
+func (l *fineLayer) materialize() {
 	if l.complex {
 		return
 	}
@@ -190,7 +190,7 @@ func (f *fine) clear(x, width int, paint gfx.PlainColor) {
 	if x == 0 && width == wideTileWidth {
 		l.clear(paint)
 	} else {
-		f.materialize(l)
+		l.materialize()
 		buf := l.scratch[x : x+width]
 		memsetColumns(buf, paint)
 	}
@@ -223,7 +223,7 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			// If the tile isn't complex yet, it will be after we've processed this
 			// fill.
 			complex := l.complex
-			f.materialize(l)
+			l.materialize()
 
 			if color[3] == 1.0 {
 				// The fill color is opaque, so we use a fill function that doesn't care
@@ -258,13 +258,13 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 				pf.fill(buf)
 				l.complex = true
 			} else {
-				f.materialize(l)
+				l.materialize()
 				pf.fill(buf)
 			}
 		} else {
 			// OPT(dh): when the layer is simple, we don't have to read pixels
 			// from memory to blend with the gradient
-			f.materialize(l)
+			l.materialize()
 			colors := f.allocScratch(width)
 			pf.fill(colors[:width])
 			blendComplexComplex(buf, colors[:width], nil, gfx.BlendMode{}, 1)
@@ -290,7 +290,7 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 	// If nos isn't complex yet, it will be after we've processed this fill.
 	// Materialize all the pixels that this fill isn't going to overwrite.
 	nosComplex := nos.complex
-	f.materialize(nos)
+	nos.materialize()
 
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
@@ -303,7 +303,7 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 		c[3] *= opacity
 		blendSimpleSimple(dst, nos.singleColor, c, blend)
 	} else {
-		f.materialize(tos)
+		tos.materialize()
 		blendComplexComplex(dst, src, nil, blend, opacity)
 	}
 }
@@ -319,8 +319,8 @@ func (f *fine) alphaBlend(
 	nos := &f.layers[len(f.layers)-2]
 
 	// OPT implement handling of layer.complex
-	f.materialize(tos)
-	f.materialize(nos)
+	tos.materialize()
+	nos.materialize()
 
 	dst := nos.scratch[x : x+width]
 	src := tos.scratch[x : x+width]
@@ -381,7 +381,7 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 			}
 		} else {
 			bg := l.singleColor
-			f.materialize(l)
+			l.materialize()
 
 			for x := range dst {
 				col := &dst[x]
@@ -430,7 +430,7 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 			}
 		} else {
 			bg := l.singleColor
-			f.materialize(l)
+			l.materialize()
 
 			for x := range dst {
 				col := &dst[x]
