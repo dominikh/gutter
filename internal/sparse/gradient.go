@@ -587,15 +587,24 @@ func encodeStops(stops []gfx.GradientStop, space *color.Space) []gradientRange {
 	}
 
 	encodedStops := make([]encodedGradientStop, 0, len(stops)*2)
-	for i := range stops[:len(stops)-1] {
-		left := stops[i]
-		right := stops[i+1]
-		for t, c := range approximateGradient(left.Color, right.Color, space, 0.01) {
-			stop := encodedGradientStop{
-				left.Offset + (right.Offset-left.Offset)*t,
-				c,
+	if space == gfx.ColorSpace {
+		for _, stop := range stops {
+			encodedStops = append(encodedStops, encodedGradientStop{
+				stop.Offset,
+				gfx.ColorToInternal(stop.Color),
+			})
+		}
+	} else {
+		for i := range stops[:len(stops)-1] {
+			left := stops[i]
+			right := stops[i+1]
+			for t, c := range approximateGradient(left.Color, right.Color, space, 0.01) {
+				stop := encodedGradientStop{
+					left.Offset + (right.Offset-left.Offset)*t,
+					c,
+				}
+				encodedStops = append(encodedStops, stop)
 			}
-			encodedStops = append(encodedStops, stop)
 		}
 	}
 
