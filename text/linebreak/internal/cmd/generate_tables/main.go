@@ -215,6 +215,7 @@ func main() {
 	}
 	defer f.Close()
 
+	// REUSE-IgnoreStart
 	fmt.Fprintln(f, "// SPDX-FileCopyrightText: none")
 	fmt.Fprintln(f, "//")
 	fmt.Fprintln(f, "// SPDX-License-Identifier: CC0-1.0")
@@ -223,6 +224,7 @@ func main() {
 	fmt.Fprintln(f)
 	fmt.Fprintln(f, "package linebreak")
 	f.Write(seq.Code("data", "index"))
+	// REUSE-IgnoreEnd
 
 	seq.PrintStats()
 }
