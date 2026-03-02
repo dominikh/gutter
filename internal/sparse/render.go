@@ -969,6 +969,9 @@ type encodedPaint interface {
 }
 
 func encodePaint(p gfx.Paint, transform curve.Affine) encodedPaint {
+	// OPT(dh): we should cache and reuse encoded paints. If the user uses the
+	// same gradient many times, we shouldn't compute and store many LUTs.
+
 	switch p := p.(type) {
 	case gfx.Solid:
 		return encodeColor(color.Color(p), transform)

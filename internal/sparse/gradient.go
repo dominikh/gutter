@@ -648,6 +648,13 @@ func approximateGradient(
 ) iter.Seq2[float32, gfx.PlainColor] {
 	// TODO(dh): support cylindrical color spaces
 
+	if cs == gfx.ColorSpace {
+		return func(yield func(float32, gfx.PlainColor) bool) {
+			_ = yield(0, gfx.ColorToInternal(start)) &&
+				yield(1, gfx.ColorToInternal(end))
+		}
+	}
+
 	return func(yield func(float32, gfx.PlainColor) bool) {
 		interpolator := gfx.Interpolate(start, end, cs)
 		target0 := gfx.ColorToInternal(start)
