@@ -197,7 +197,7 @@ func (c Constraints) ConstrainWithAspectRatio(size curve.Size) curve.Size {
 	}
 
 	return curve.Sz(
-		mathutil.Clamp(width, c.Min.Width, c.Max.Height),
+		mathutil.Clamp(width, c.Min.Width, c.Max.Width),
 		mathutil.Clamp(height, c.Min.Height, c.Max.Height),
 	)
 }
