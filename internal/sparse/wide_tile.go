@@ -225,9 +225,9 @@ func (wt *wideTile) blend(
 	// We don't check that the blend mode and opacity match, because at command
 	// generation time, an uninterrupted run of blends is only possible while
 	// popping a layer.
-	if prevCmd.typ == cmdBlend {
-		prevArgs := wt.blendArgs[prevCmd.args]
-		if !disableWideTileOpts && x == prevArgs.x+prevArgs.width {
+	if !disableWideTileOpts && prevCmd.typ == cmdBlend {
+		prevArgs := &wt.blendArgs[prevCmd.args]
+		if x == prevArgs.x+prevArgs.width {
 			prevArgs.width += width
 			return
 		}
