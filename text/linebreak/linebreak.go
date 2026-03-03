@@ -318,7 +318,7 @@ func (ins *Instance) Process(text []rune) Result {
 			// LB4 - BK !
 			alwaysBreakAfter(i, lb4)
 			// LB6 - × [BK CR LF NL]
-			neverBreakBefore(i, lb5)
+			neverBreakBefore(i, lb6)
 
 		case CR:
 			// LB5 - CR × LF, [CR LF NL] !
@@ -431,7 +431,7 @@ func (ins *Instance) Process(text []rune) Result {
 				neverBreakAfter(i, lb29)
 			case NU:
 				// LB25 - [HY IS] × NU
-				neverBreakAfter(i, lb29)
+				neverBreakAfter(i, lb25)
 			}
 		case B2:
 			// LB17 - B2 SP* × B2
