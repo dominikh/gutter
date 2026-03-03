@@ -129,7 +129,7 @@ func NewCurvedAnimation(parent Animation[float64], curve, reverseCurve Curve) *C
 		ReverseCurve: reverseCurve,
 	}
 	obj.updateCurveDirection(parent.Status())
-	parent.AddStatusListener(obj.updateCurveDirection)
+	obj.statusListener = parent.AddStatusListener(obj.updateCurveDirection)
 	return obj
 }
 
