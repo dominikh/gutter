@@ -275,14 +275,17 @@ func scanDir(dir string, out []string) []string {
 					path = dst
 				default:
 					slog.Debug("skipping irregular file", "type", typ, "file", dst)
+					continue
 				}
 			case 0:
 			default:
 				slog.Debug("skipping irregular file", "type", typ, "file", path)
+				continue
 			}
 		case 0:
 		default:
 			slog.Debug("skipping irregular file", "type", dent.Type(), "file", filepath.Join(dir, dent.Name()))
+			continue
 		}
 
 		switch filepath.Ext(path) {
