@@ -104,7 +104,7 @@ func (*curveInQuad) Transform(t float64) float64 {
 }
 
 func (*curveOutQuad) Transform(t float64) float64 {
-	return 1 - (1 - t) - (1 - t)
+	return 1 - (1-t)*(1-t)
 }
 
 func (*curveInOutQuad) Transform(t float64) float64 {
