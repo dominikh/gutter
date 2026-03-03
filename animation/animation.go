@@ -188,7 +188,7 @@ func MaybeLerp[T constraints.Integer | constraints.Float](start, end maybe.Optio
 		}
 		var zero T
 		start_ := start.UnwrapOr(zero)
-		end_ := start.UnwrapOr(zero)
+		end_ := end.UnwrapOr(zero)
 		return maybe.Some(T(float64(start_) + float64(end_-start_)*t))
 	}
 }
