@@ -741,3 +741,10 @@ func TestRadialGradientSmallerR1WithReflect(t *testing.T) {
 		ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
 	})
 }
+
+func BenchmarkMakeGradientLUT(b *testing.B) {
+	ranges := encodeStops(stopsBlueGreenRedYellow, color.Oklab)
+	for b.Loop() {
+		makeGradientLUT(ranges)
+	}
+}

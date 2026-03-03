@@ -120,7 +120,7 @@ type TextBaseline int
 
 const (
 	TextBaselineAlphabetic TextBaseline = iota
-	TextBaselineIdeiographic
+	TextBaselineIdeographic
 )
 
 type PlaceholderDimensions struct {
