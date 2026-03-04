@@ -245,6 +245,10 @@ func Detach(obj Object) {
 	obj.Handle().renderer = nil
 	if obj, ok := obj.(Attacher); ok {
 		obj.PerformDetach()
+	} else if obj, ok := obj.(ObjectWithChildren); ok {
+		for child := range obj.Children() {
+			Detach(child)
+		}
 	}
 }
 
