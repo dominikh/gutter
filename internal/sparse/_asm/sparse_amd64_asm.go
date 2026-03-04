@@ -150,20 +150,6 @@ func memsetColumnsAVX() {
 	fillEpilogueAVX()
 }
 
-func fillPrologueSSE() (data reg.Register, offset reg.Register, color reg.VecVirtual) {
-	data, offset = fillPrologue()
-	b, _ := Param("color").Index(0).Resolve()
-	color = XMM()
-	MOVUPS(b.Addr, color)
-
-	return data, offset, color
-}
-
-func fillEpilogueSSE() {
-	Label("exit")
-	RET()
-}
-
 func processOutOfBoundsWindingSSE() {
 	Implement("processOutOfBoundsWindingSSE")
 
