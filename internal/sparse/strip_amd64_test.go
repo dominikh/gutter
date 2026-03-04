@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-//go:build !purego && goexperiment.simd
+//go:build !noasm && goexperiment.simd
 
 package sparse
 
@@ -20,7 +20,7 @@ func BenchmarkComputeAlphasNonZeroAMD64(b *testing.B) {
 		desc    string
 		enabled bool
 	}{
-		{computeAlphasNonZeroNative, "purego", true},
+		{computeAlphasNonZeroNative, "noasm", true},
 		{computeAlphasNonZeroAVX, "AVX2", arch.AVX2()},
 	}
 
@@ -68,7 +68,7 @@ func BenchmarkComputeWindingAMD64(b *testing.B) {
 		desc    string
 		enabled bool
 	}{
-		{computeWindingScalar, "purego", true},
+		{computeWindingScalar, "noasm", true},
 		{computeWindingAVX, "AVX", arch.AVX()},
 	}
 

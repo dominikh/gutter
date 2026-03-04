@@ -92,7 +92,7 @@ func init() {
 
 func main() {
 	Package("honnef.co/go/gutter/internal/sparse")
-	ConstraintExpr("!purego")
+	ConstraintExpr("!noasm")
 
 	memsetColumnsAVX()
 	processOutOfBoundsWindingSSE()

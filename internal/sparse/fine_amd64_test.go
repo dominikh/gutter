@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-//go:build !purego && goexperiment.simd
+//go:build !noasm && goexperiment.simd
 
 package sparse
 
@@ -20,7 +20,7 @@ func Benchmark_fineFillComplexAMD64(b *testing.B) {
 		desc    string
 		enabled bool
 	}{
-		{fineFillComplexScalar, "purego", true},
+		{fineFillComplexScalar, "noasm", true},
 		{fineFillComplexAVX, "AVX", arch.AVX()},
 	}
 	for _, fn := range fns {
@@ -44,7 +44,7 @@ func Benchmark_memsetColumnsAMD64(b *testing.B) {
 		desc    string
 		enabled bool
 	}{
-		{memsetColumnsNative, "purego", true},
+		{memsetColumnsNative, "noasm", true},
 		{memsetColumnsAVX, "AVX", arch.AVX()},
 	}
 	for _, fn := range fns {
