@@ -784,6 +784,7 @@ func (ctx *Renderer) PushLayerCompiled(l LayerCompiled) {
 		if !lazy {
 			for tileY := bbox.tileMin.tileY; tileY < bbox.tileMax.tileY; tileY++ {
 				for tileX := bbox.tileMin.tileX; tileX < bbox.tileMax.tileX; tileX++ {
+					ctx.ensureLayerForTile(tileX, tileY)
 					ctx.tiles[tileY][tileX].pushLayer()
 					if l.CopyBackdrop {
 						ctx.tiles[tileY][tileX].copyBackdrop()
