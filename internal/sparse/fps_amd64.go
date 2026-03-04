@@ -11,15 +11,15 @@ import (
 	"honnef.co/go/gutter/internal/arch"
 )
 
-func memsetColumns(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
+func memsetColumns(buf Pixels, c gfx.PlainColor) {
 	if arch.AVX() {
 		memsetColumnsAVX(buf, c)
 	} else {
-		memsetColumnsNative(buf, c)
+		memsetColumnsScalar(buf, c)
 	}
 }
 
-func fineFillComplex(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
+func fineFillComplex(buf Pixels, color gfx.PlainColor) {
 	if arch.AVX() {
 		fineFillComplexAVX(buf, color)
 	} else {

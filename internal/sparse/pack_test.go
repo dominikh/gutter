@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"math"
 	"testing"
-
-	"honnef.co/go/gutter/gfx"
 )
 
 var packUint8SrgbTests = []packUint8SrgbTest{
@@ -37,27 +35,28 @@ type packUint8SrgbTest struct {
 }
 
 func toSrgbF32(
-	in *[wideTileWidth][stripHeight]gfx.PlainColor,
-	out *[wideTileWidth][stripHeight]gfx.PlainColor,
+	in *WideTileBuffer,
+	out *WideTileBuffer,
 	unpremul bool,
 ) {
-	for x := range in {
-		for y, px := range &in[x] {
-			px[3] = max(px[3], 0.00001)
+	for x := range wideTileWidth {
+		for y := range stripHeight {
+			r, g, b, a := in[0][x][y], in[1][x][y], in[2][x][y], in[3][x][y]
+			a = max(a, 0.00001)
 			if unpremul {
-				px[0] /= px[3]
-				px[1] /= px[3]
-				px[2] /= px[3]
+				r /= a
+				g /= a
+				b /= a
 			}
-			for k, v := range px[:3] {
+			for k, v := range [3]float32{r, g, b} {
 				if v < 0.0031308 {
-					out[x][y][k] = float32(12.92 * v * 255)
+					out[k][x][y] = float32(12.92 * float64(v) * 255)
 				} else {
 					s := 1.055*(math.Pow(float64(v), 1.0/2.4)) - 0.055
-					out[x][y][k] = float32(s * 255)
+					out[k][x][y] = float32(s * 255)
 				}
 			}
-			out[x][y][3] = 255 * px[3]
+			out[3][x][y] = 255 * a
 		}
 	}
 }
@@ -100,8 +99,8 @@ func TestPackUint8Srgb(t *testing.T) {
 					numWronglyRounded := 0
 
 					for v := int32(0); v <= 0x3f800000; v += N {
-						for x := range in {
-							for y := range in[x] {
+						for x := range wideTileWidth {
+							for y := range stripHeight {
 								// We need wide gaps between neighboring inputs, otherwise
 								// all inputs might map to the same output and all be within
 								// the allowed tolerance, even if the implementation is
@@ -118,18 +117,20 @@ func TestPackUint8Srgb(t *testing.T) {
 								// values get unpremultiplied correctly.
 								v1 := max(min(v+int32(x*stripHeight+y), 0x3f800000), 0)
 								v2 := max(min(0x3f800000-(v+int32(x*stripHeight+y)), 0x3f800000), 0)
-								in[x][y] = gfx.PlainColor{
-									math.Float32frombits(uint32(v1)),
-									math.Float32frombits(uint32(v2)),
-									math.Float32frombits(uint32(v1)),
-									1,
-								}
+								r := math.Float32frombits(uint32(v1))
+								g := math.Float32frombits(uint32(v2))
+								b := math.Float32frombits(uint32(v1))
+								a := float32(1)
 								if unpremul {
 									// Premultiply values
-									in[x][y][0] *= in[x][y][3]
-									in[x][y][1] *= in[x][y][3]
-									in[x][y][2] *= in[x][y][3]
+									r *= a
+									g *= a
+									b *= a
 								}
+								in[0][x][y] = r
+								in[1][x][y] = g
+								in[2][x][y] = b
+								in[3][x][y] = a
 							}
 						}
 						tt.fn(
@@ -143,11 +144,11 @@ func TestPackUint8Srgb(t *testing.T) {
 						toSrgbF32(&in, &outRef, unpremul)
 						for y := range dims.height {
 							for x := range dims.width {
-								px := in[x][y]
+								px := [4]float32{in[0][x][y], in[1][x][y], in[2][x][y], in[3][x][y]}
 								// in and outRef are stored in column major order,
 								// while out is stored in row major order.
 								approx := out[y*dims.width+x]
-								ref := outRef[x][y]
+								ref := [4]float32{outRef[0][x][y], outRef[1][x][y], outRef[2][x][y], outRef[3][x][y]}
 								for k := range approx {
 									e := math.Abs(float64(float32(approx[k]) - ref[k]))
 									maxErr = max(maxErr, e)
@@ -184,22 +185,22 @@ func BenchmarkPackUint8Srgb(b *testing.B) {
 	}
 	for x := range wideTileWidth {
 		for y := range stripHeight {
+			val := float32((x*stripHeight + y) % 11)
 			in := ins[false]
-			in[x][y] = gfx.PlainColor{
-				float32((x*stripHeight+y)%11) * 0.00001,
-				float32((x*stripHeight+y)%11) * 0.1,
-				float32((x*stripHeight+y)%11) * 0.00001,
-				float32((x*stripHeight+y)%11) * 0.1,
-			}
+			in[0][x][y] = val * 0.00001
+			in[1][x][y] = val * 0.1
+			in[2][x][y] = val * 0.00001
+			in[3][x][y] = val * 0.1
 		}
 	}
-	copy(ins[true][:], ins[false][:])
+	*ins[true] = *ins[false]
 	for x := range wideTileWidth {
 		for y := range stripHeight {
 			// Premultiply values
-			ins[true][x][y][0] *= ins[true][x][y][3]
-			ins[true][x][y][1] *= ins[true][x][y][3]
-			ins[true][x][y][2] *= ins[true][x][y][3]
+			a := ins[true][3][x][y]
+			ins[true][0][x][y] *= a
+			ins[true][1][x][y] *= a
+			ins[true][2][x][y] *= a
 		}
 	}
 	out := make([][4]uint8, wideTileWidth*stripHeight)

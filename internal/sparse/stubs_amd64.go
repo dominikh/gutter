@@ -6,11 +6,6 @@
 
 package sparse
 
-import "honnef.co/go/gutter/gfx"
-
-//go:noescape
-func memsetColumnsAVX(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
-
 //go:noescape
 func processOutOfBoundsWindingSSE(
 	ymin float32,
