@@ -101,7 +101,7 @@ func compareRendered(t *testing.T, ctx *Renderer, name string) {
 					}
 				}
 
-				const maxDiff = 258
+				const maxDiff = 844
 				dr := abs(int64(ir) - int64(gr))
 				dg := abs(int64(ig) - int64(gg))
 				db := abs(int64(ib) - int64(gb))

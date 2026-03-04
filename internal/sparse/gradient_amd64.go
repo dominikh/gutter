@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+//go:build goexperiment.simd
+
 package sparse
 
 import (

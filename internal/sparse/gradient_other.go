@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-//go:build !amd64
+//go:build !amd64 || !goexperiment.simd
 
 package sparse
 
