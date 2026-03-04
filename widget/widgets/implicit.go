@@ -163,7 +163,7 @@ type animatedField[T any] struct {
 //
 // The fields parameter specifies which fields in W to animate and which lerp
 // functions to use. Values in the map should all be the return values from
-// NewAnimatedField.
+// [NewAnimatedField].
 //
 // The function provided via the build parameter gets called whenever the widget
 // needs to be rebuilt and takes the place of the [widget.State.Build] method.
