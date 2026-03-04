@@ -115,3 +115,6 @@ func TestMix(t *testing.T) {
 		})
 	}
 }
+
+// TODO(dh): add test cases for odd number of columns, to exercise the tail
+// handling of SIMD code

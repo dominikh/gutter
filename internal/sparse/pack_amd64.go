@@ -10,8 +10,6 @@ import (
 	"honnef.co/go/gutter/internal/arch"
 )
 
-var hasAVX2AndFMA3 = arch.AVX2() && arch.FMA()
-
 func packUint8SRGB(
 	in *WideTileBuffer,
 	out [][4]uint8,

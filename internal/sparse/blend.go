@@ -58,7 +58,7 @@ func mixSoftLight(dst, src float32) float32 {
 	}
 }
 
-func blendComplexComplex(
+func blendComplexComplexScalar(
 	dst Pixels,
 	tos Pixels,
 	alphas [][stripHeight]uint8,
@@ -75,6 +75,8 @@ func blendComplexComplex(
 			return
 		}
 	case gfx.ComposeDest:
+		// TODO(dh): is this actually correct, or does it depend on opacity? or
+		// on alphas?
 		return
 	case gfx.ComposeCopy:
 		if blend.Mix == gfx.MixNormal && alphas == nil && opacity == 1 {
