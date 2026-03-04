@@ -22,10 +22,10 @@ func memsetUint8PixelsAVX(b [][4]byte, v [4]byte) {
 			vf8.Store((*[8]float32)(unsafe.Add(ptr, 1*8*4)))
 			vf8.Store((*[8]float32)(unsafe.Add(ptr, 2*8*4)))
 			vf8.Store((*[8]float32)(unsafe.Add(ptr, 3*8*4)))
+			i += 32
 			if i >= len(b)-31 {
 				break
 			}
-			i += 32
 			ptr = unsafe.Add(ptr, 4*8*4)
 		}
 	}
