@@ -750,21 +750,8 @@ func (ins *Instance) Process(text []rune) Result {
 
 		// LB30b - [\p{Extended_Pictographic}&\p{Cn}] × EM
 		if class(i+1) == EM {
-			if r := text[indices[i]]; unicode.Is(extendedPictographic, text[indices[i]]) {
-				// OPT hopefully we don't get here often, because that check won't
-				// be very fast.
-				if !unicode.In(
-					r,
-					unicode.C,
-					unicode.L,
-					unicode.M,
-					unicode.N,
-					unicode.P,
-					unicode.S,
-					unicode.Z,
-				) {
-					neverBreakAfter(i, lb30b)
-				}
+			if r := text[indices[i]]; unicode.Is(extendedPictographic, r) && unicode.Is(unicode.Cn, r) {
+				neverBreakAfter(i, lb30b)
 			}
 		}
 	}
