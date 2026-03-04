@@ -243,8 +243,12 @@ func Attach(obj Object, r *Renderer) {
 
 func Detach(obj Object) {
 	obj.Handle().renderer = nil
-	if obj, ok := obj.(Attacher); ok {
-		obj.PerformDetach()
+	if a, ok := obj.(Attacher); ok {
+		a.PerformDetach()
+	} else if obj, ok := obj.(ObjectWithChildren); ok {
+		for child := range obj.Children() {
+			Detach(child)
+		}
 	}
 }
 
