@@ -765,7 +765,7 @@ func (ins *Instance) Process(text []rune) Result {
 			case neverBreak:
 				res.Breaks = append(res.Breaks, false)
 			case alwaysBreak:
-				res.MandatoryBreaks = append(res.MandatoryBreaks, j*64+i)
+				res.MandatoryBreaks = append(res.MandatoryBreaks, j*32+i)
 				res.Breaks = append(res.Breaks, true)
 			case mayBreak:
 				res.Breaks = append(res.Breaks, true)
