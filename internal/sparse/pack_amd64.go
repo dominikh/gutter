@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-//go:build !purego && goexperiment.simd
+//go:build !noasm && goexperiment.simd
 
 package sparse
 
