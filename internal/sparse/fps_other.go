@@ -12,11 +12,11 @@ var (
 	computeAlphasNonZeroFp = computeAlphasNonZeroNative
 )
 
-func memsetColumns(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
-	memsetColumnsNative(buf, c)
+func memsetColumns(buf Pixels, c gfx.PlainColor) {
+	memsetColumnsScalar(buf, c)
 }
 
-func fineFillComplex(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
+func fineFillComplex(buf Pixels, color gfx.PlainColor) {
 	fineFillComplexScalar(buf, color)
 }
 

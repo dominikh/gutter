@@ -20,7 +20,6 @@ import (
 
 var uint64Consts = map[uint64]Mem{}
 var floatConsts = map[float32]Mem{}
-var floatConsts4 = map[float32]Mem{}
 var floatConsts8 = map[float32]Mem{}
 
 func uint64Const(v uint64) Mem {
@@ -38,19 +37,6 @@ func floatConst(f float32) Mem {
 	}
 	k := ConstData(fmt.Sprintf("f_%08x", math.Float32bits(f)), F32(f))
 	floatConsts[f] = k
-	return k
-}
-
-func floatConst4(f float32) Mem {
-	if k, ok := floatConsts4[f]; ok {
-		return k
-	}
-	k := GLOBL(fmt.Sprintf("f4_%08x", math.Float32bits(f)), attr.RODATA|attr.NOPTR)
-	DATA(0, F32(f))
-	DATA(4, F32(f))
-	DATA(8, F32(f))
-	DATA(12, F32(f))
-	floatConsts4[f] = k
 	return k
 }
 
@@ -94,60 +80,11 @@ func main() {
 	Package("honnef.co/go/gutter/internal/sparse")
 	ConstraintExpr("!noasm")
 
-	memsetColumnsAVX()
 	processOutOfBoundsWindingSSE()
 	computeAlphasNonZeroAVX()
 	packUint8SRGB_AVX2()
 
 	Generate()
-}
-
-func fillPrologue() (data reg.Register, offset reg.Register) {
-	outLen := Load(Param("buf").Len(), GP64())
-	// multiply by strip height
-	SHLQ(Imm(2), outLen)
-	TESTQ(outLen, outLen)
-	JZ(LabelRef("exit"))
-
-	outData := Load(Param("buf").Base(), GP64())
-	// multiply by byte size of color
-	SHLQ(Imm(4), outLen)
-	ADDQ(outLen, outData)
-	NEGQ(outLen)
-
-	return outData, outLen
-}
-
-func fillPrologueAVX() (data reg.Register, offset reg.Register, colorx2 reg.VecVirtual) {
-	data, offset = fillPrologue()
-	b, _ := Param("color").Index(0).Resolve()
-	colorx2 = YMM()
-	VBROADCASTF128(b.Addr, colorx2)
-
-	return data, offset, colorx2
-}
-
-func fillEpilogueAVX() {
-	Label("exit")
-	VZEROUPPER()
-	RET()
-}
-
-func memsetColumnsAVX() {
-	Implement("memsetColumnsAVX")
-
-	outData, outLen, colorx2 := fillPrologueAVX()
-
-	PCALIGN(Imm(16))
-	Label("loop")
-	const unroll = 2
-	for i := range unroll {
-		VMOVUPS(colorx2, Mem{Base: outData}.Idx(outLen, 1).Offset(i*2*4*4))
-	}
-	ADDQ(Imm(unroll*2*4*4), outLen)
-	JL(LabelRef("loop"))
-
-	fillEpilogueAVX()
 }
 
 func processOutOfBoundsWindingSSE() {
@@ -305,9 +242,7 @@ func packUint8SRGB_AVX2() {
 
 	VBROADCASTSS(floatConst(0.0031308), threshold)
 
-	// Permutation mask for cross-lane fixup in packed-to-planar transpose.
-	// Converts [r0 r2 r4 r6 | r1 r3 r5 r7] -> [r0 r1 r2 r3 | r4 r5 r6 r7].
-	// Also reused by the final 8x4 transpose.
+	// Permutation mask for the final 8x4 transpose.
 	permMask := YMM()
 	VPMOVSXBD(uint64Const(0x0703060205010400), permMask)
 
@@ -320,9 +255,15 @@ func packUint8SRGB_AVX2() {
 	LEAQ(Mem{Base: row1, Index: stride, Scale: 4}, row2)
 	LEAQ(Mem{Base: row2, Index: stride, Scale: 4}, row3)
 
-	inOffset := GP64()
+	// WideTileBuffer is [4][wideTileWidth][stripHeight]float32. This is a
+	// column-major, planar pixel layout. Each plane is 256 * 4 * 4 = 4096 bytes.
+	// Each column is 4 * 4 = 16 bytes.
+	const planeSize = 256 * 4 * 4
+	const colStride = 4 * 4
+
+	colOffset := GP64()
 	rowOffset := GP64()
-	XORQ(inOffset, inOffset)
+	XORQ(colOffset, colOffset)
 	XORQ(rowOffset, rowOffset)
 
 	Label("loop")
@@ -334,19 +275,16 @@ func packUint8SRGB_AVX2() {
 	CMPQ(remaining, Imm(32))
 	JL(LabelRef("done"))
 
-	// Process 4 batches of 2 columns/8 pixels
+	// Process 4 batches of 2 columns/8 pixels each
 	for batch := range 4 {
 		Commentf("batch %d: columns %d-%d", batch, batch*2, batch*2+1)
 
-		// Input offset for this batch: inOffset + batch * 2 cols * 4 rows * 16 bytes/pixel
-		batchDisp := batch * 2 * 4 * 16
+		batchDisp := batch * 2 * colStride
 
 		channels := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
-		for i, reg := range channels {
-			VMOVUPS(Mem{Base: inData, Index: inOffset, Scale: 1, Disp: batchDisp + i*32}, reg)
+		for ch, reg := range channels {
+			VMOVUPS(Mem{Base: inData, Index: colOffset, Scale: 1, Disp: ch*planeSize + batchDisp}, reg)
 		}
-
-		packedRgbaF32ToPlanaRgbaF32(channels, channels, permMask)
 
 		// According to
 		// https://web.archive.org/web/20250815165940/https://hacksoflife.blogspot.com/2022/06/srgb-pre-multiplied-alpha-and.html
@@ -459,78 +397,14 @@ func packUint8SRGB_AVX2() {
 	VMOVDQU(u3, Mem{Base: row3, Index: rowOffset, Scale: 1})
 
 	// Advance pointers
-	ADDQ(U32(8*4*16), inOffset) // 8 cols × 4 rows × 16 bytes/pixel = 512 bytes
-	ADDQ(Imm(32), rowOffset)    // 8 pixels × 4 bytes
-	CMPQ(inOffset, U32(256*4*16))
+	ADDQ(U32(8*colStride), colOffset) // 8 columns × 16 bytes/column = 128 bytes
+	ADDQ(Imm(32), rowOffset)          // 8 pixels × 4 bytes
+	CMPQ(colOffset, U32(256*colStride))
 	JL(LabelRef("loop"))
 
 	Label("done")
 	VZEROUPPER()
 	RET()
-}
-
-func _MM_SHUFFLE(fp3, fp2, fp1, fp0 uint8) Constant {
-	return Imm(uint64((fp3 << 6) | (fp2 << 4) | (fp1 << 2) | fp0))
-}
-
-// rgbaPlanarToPacked takes four input registers, one per R, G, B, and A plane,
-// each containing eight float32 values and stores to four output registers
-// packed RGBA pixels, each containing two pixels.
-func rgbaPlanarToPacked(in [4]reg.VecVirtual, out [4]reg.VecVirtual) {
-	// XXX verify that this function actually works
-	Comment("planar to packed")
-	r, g, b, a := in[0], in[1], in[2], in[3]
-
-	rgLo, baLo, rgHi, baHi := YMM(), YMM(), YMM(), YMM()
-	VUNPCKLPS(g, r, rgLo) // rgLo = [r0 g0 r1 g1 | r4 g4 r5 g5]
-	VUNPCKHPS(g, r, rgHi) // rgHi = [r2 g2 r3 g3 | r6 g6 r7 g7]
-	VUNPCKLPS(a, b, baLo) // baLo = [b0 a0 b1 a1 | b4 a4 b5 a5]
-	VUNPCKHPS(a, b, baHi) // baHi = [b2 a2 b3 a3 | b6 a6 b7 a7]
-
-	chunky0, chunky1, chunky2, chunky3 := YMM(), YMM(), YMM(), YMM()
-	VSHUFPS(_MM_SHUFFLE(2, 0, 2, 0), baLo, rgLo, chunky0) // chunky0 = [r0 g0 b0 a0 | r1 g1 b1 a1]
-	VSHUFPS(_MM_SHUFFLE(3, 1, 3, 1), baLo, rgLo, chunky1) // chunky1 = [r4 g4 b4 a4 | r5 g5 b5 a5]
-	VSHUFPS(_MM_SHUFFLE(2, 0, 2, 0), baHi, rgHi, chunky2) // chunky2 = [r2 g2 b2 a2 | r3 g3 b3 a3]
-	VSHUFPS(_MM_SHUFFLE(3, 1, 3, 1), baHi, rgHi, chunky3) // chunky3 = [r6 g6 b6 a6 | r7 g7 b7 a7]
-
-	VPERM2F128(Imm(0x20), chunky2, chunky0, out[0])
-	VPERM2F128(Imm(0x31), chunky2, chunky0, out[1])
-	VPERM2F128(Imm(0x20), chunky3, chunky1, out[2])
-	VPERM2F128(Imm(0x31), chunky3, chunky1, out[3])
-}
-
-// packedRgbaF32ToPlanaRgbaF32 takes four input registers, each containing eight packed
-// float32 RGBA pixels and stores to four output registers separated R, G, B,
-// and A planes, each containing eight float32 values.
-//
-// permMask must contain the dword permutation [0, 4, 1, 5, 2, 6, 3, 7],
-// loaded e.g. via VPMOVSXBD from the uint64 constant 0x0703060205010400.
-func packedRgbaF32ToPlanaRgbaF32(in [4]reg.VecVirtual, out [4]reg.VecVirtual, permMask reg.VecVirtual) {
-	Comment("packed to planar")
-
-	// Inputs:
-	//
-	// in[0] = [r0 g0 b0 a0 | r1 g1 b1 a1]
-	// in[1] = [r2 g2 b2 a2 | r3 g3 b3 a3]
-	// in[2] = [r4 g4 b4 a4 | r5 g5 b5 a5]
-	// in[3] = [r6 g6 b6 a6 | r7 g7 b7 a7]
-
-	t0, t1, t2, t3 := YMM(), YMM(), YMM(), YMM()
-	VUNPCKLPS(in[1], in[0], t0) // t0 = [r0 r2 g0 g2 | r1 r3 g1 g3]
-	VUNPCKHPS(in[1], in[0], t1) // t1 = [b0 b2 a0 a2 | b1 b3 a1 a3]
-	VUNPCKLPS(in[3], in[2], t2) // t2 = [r4 r6 g4 g6 | r5 r7 g5 g7]
-	VUNPCKHPS(in[3], in[2], t3) // t3 = [b4 b6 a4 a6 | b5 b7 a5 a7]
-
-	VSHUFPS(Imm(0x44), t2, t0, out[0]) // out[0] = [r0 r2 r4 r6 | r1, r3, r5, r7]
-	VSHUFPS(Imm(0xEE), t2, t0, out[1]) // out[1] = [g0 g2 g4 g6 | g1, g3, g5, g7]
-	VSHUFPS(Imm(0x44), t3, t1, out[2]) // out[2] = [b0 b2 b4 b6 | b1, b3, b5, b7]
-	VSHUFPS(Imm(0xEE), t3, t1, out[3]) // out[3] = [a0 a2 a4 a6 | a1, a3, a5, a7]
-
-	// Fix cross-lane ordering: [r0 r2 r4 r6 | r1 r3 r5 r7] -> [r0 r1 r2 r3 | r4 r5 r6 r7]
-	// This is a fixed dword permutation, done efficiently with a single VPERMD.
-	for i := range out {
-		VPERMD(out[i], permMask, out[i])
-	}
 }
 
 // planarRgbaU32ToPackedRgbaU8 takes four input registers, one per R, G, B,

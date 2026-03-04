@@ -113,7 +113,7 @@ func (f *blurredRoundedRectFiller) reset(startX, startY uint16) {
 	f.curPos = curve.Pt(float64(startX), float64(startY)).Transform(f.rect.transform)
 }
 
-func (f *blurredRoundedRectFiller) fill(dst [][stripHeight]gfx.PlainColor) {
+func (f *blurredRoundedRectFiller) fill(dst Pixels) {
 	// Implementation is adapted from:
 	// <https://git.sr.ht/~raph/blurrr/tree/master/src/distfield.rs>
 
@@ -121,11 +121,11 @@ func (f *blurredRoundedRectFiller) fill(dst [][stripHeight]gfx.PlainColor) {
 	// variables that only depend on y.
 
 	rect := f.rect
+	width := len(dst[0])
 
-	for _x := range dst {
-		column := &dst[_x]
+	for _x := range width {
 		colPos := f.curPos
-		for _y := range column {
+		for _y := range stripHeight {
 			j := float32(colPos.Y)
 			i := float32(colPos.X)
 
@@ -151,12 +151,10 @@ func (f *blurredRoundedRectFiller) fill(dst [][stripHeight]gfx.PlainColor) {
 					(erf7(rect.recipStdDev*(rect.minEdge+d)) - erf7(rect.recipStdDev*d))
 			}
 
-			column[_y] = gfx.PlainColor{
-				f.rect.color[0] * alphaVal,
-				f.rect.color[1] * alphaVal,
-				f.rect.color[2] * alphaVal,
-				f.rect.color[3] * alphaVal,
-			}
+			dst[0][_x][_y] = f.rect.color[0] * alphaVal
+			dst[1][_x][_y] = f.rect.color[1] * alphaVal
+			dst[2][_x][_y] = f.rect.color[2] * alphaVal
+			dst[3][_x][_y] = f.rect.color[3] * alphaVal
 
 			colPos = colPos.Translate(f.rect.yAdvance)
 		}
