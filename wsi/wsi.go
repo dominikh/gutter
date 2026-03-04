@@ -715,8 +715,6 @@ func (w *WaylandWindow) NextBuffer() (*Buffer, error) {
 	if w.needNewBuffers {
 		w.needNewBuffers = false
 		for i, buf := range w.buffers {
-			// XXX this delays deleting currently busy buffers until the next time needNewBuffers is true
-
 			// XXX can we destroy a busy buffer and wayland will take care of it?
 			if !buf.busy && buf.size != sz {
 				buf.destroy()
@@ -726,11 +724,17 @@ func (w *WaylandWindow) NextBuffer() (*Buffer, error) {
 		w.buffers = slices.DeleteFunc(w.buffers, func(buf *Buffer) bool { return buf == nil })
 	}
 
-	for _, buf := range w.buffers {
+	for i, buf := range w.buffers {
 		if !buf.busy {
-			return buf, nil
+			if buf.size == sz {
+				return buf, nil
+			} else {
+				buf.destroy()
+				w.buffers[i] = nil
+			}
 		}
 	}
+	w.buffers = slices.DeleteFunc(w.buffers, func(buf *Buffer) bool { return buf == nil })
 
 	// XXX make format configurable
 	buf, err := w.sys.wl.makeBuffer(sz, wl.ShmFormatAbgr8888, sz.Width*sz.Height*1*4, sz.Width*1*4)
