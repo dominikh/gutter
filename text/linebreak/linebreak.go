@@ -9,6 +9,7 @@ package linebreak
 
 import (
 	"fmt"
+	"iter"
 	"math"
 	"unicode"
 )
@@ -132,6 +133,23 @@ type uint2s []uint64
 
 func newUint2s(n int) uint2s {
 	return make([]uint64, (2*n+63)/64)
+}
+
+func (bs uint2s) all() iter.Seq2[int, uint8] {
+	const wordSize = 64
+	const bits = 2
+	const mask = (1 << bits) - 1
+
+	return func(yield func(int, uint8) bool) {
+		for i, word := range bs {
+			for j := range wordSize / bits {
+				if !yield(i*(wordSize/bits)+j, uint8(word&mask)) {
+					return
+				}
+				word >>= bits
+			}
+		}
+	}
 }
 
 func (bs uint2s) get(idx int) uint8 {
@@ -759,20 +777,18 @@ func (ins *Instance) Process(text []rune) Result {
 	res := Result{
 		Breaks: make([]bool, 0, len(text)),
 	}
-	for j, word := range before {
-		for i := range 32 {
-			switch uint8(word >> (2 * i) & 0b11) {
-			case neverBreak:
-				res.Breaks = append(res.Breaks, false)
-			case alwaysBreak:
-				res.MandatoryBreaks = append(res.MandatoryBreaks, j*32+i)
-				res.Breaks = append(res.Breaks, true)
-			case mayBreak:
-				res.Breaks = append(res.Breaks, true)
-			case unprocessedBreak:
-				if j*32+i < len(text) {
-					panic("unreachable")
-				}
+	for i, kind := range before.all() {
+		switch kind {
+		case neverBreak:
+			res.Breaks = append(res.Breaks, false)
+		case alwaysBreak:
+			res.MandatoryBreaks = append(res.MandatoryBreaks, i)
+			res.Breaks = append(res.Breaks, true)
+		case mayBreak:
+			res.Breaks = append(res.Breaks, true)
+		case unprocessedBreak:
+			if i < len(text) {
+				panic("unreachable")
 			}
 		}
 	}
