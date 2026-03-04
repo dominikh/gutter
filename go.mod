@@ -3,7 +3,7 @@
 
 module honnef.co/go/gutter
 
-go 1.24
+go 1.25
 
 require (
 	github.com/go-json-experiment/json v0.0.0-20240815175050-ebd3a8989ca1
