@@ -16,7 +16,7 @@ import (
 
 func Benchmark_fineFillComplexAMD64(b *testing.B) {
 	fns := []struct {
-		fp      func(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
+		fp      func(buf Pixels, color gfx.PlainColor)
 		desc    string
 		enabled bool
 	}{
@@ -29,7 +29,7 @@ func Benchmark_fineFillComplexAMD64(b *testing.B) {
 				b.Skip()
 			}
 			c := gfx.PlainColor{0.5, 0.5, 0.5, 0.5}
-			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]gfx.PlainColor) {
+			benchmarkFill(b, func(b *testing.B, buf Pixels) {
 				for b.Loop() {
 					fn.fp(buf, c)
 				}
@@ -40,11 +40,11 @@ func Benchmark_fineFillComplexAMD64(b *testing.B) {
 
 func Benchmark_memsetColumnsAMD64(b *testing.B) {
 	fns := []struct {
-		fp      func(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor)
+		fp      func(buf Pixels, color gfx.PlainColor)
 		desc    string
 		enabled bool
 	}{
-		{memsetColumnsNative, "noasm", true},
+		{memsetColumnsScalar, "noasm", true},
 		{memsetColumnsAVX, "AVX", arch.AVX()},
 	}
 	for _, fn := range fns {
@@ -53,7 +53,7 @@ func Benchmark_memsetColumnsAMD64(b *testing.B) {
 				b.Skip()
 			}
 			c := gfx.PlainColor{1, 1, 1, 1}
-			benchmarkFill(b, func(b *testing.B, buf [][stripHeight]gfx.PlainColor) {
+			benchmarkFill(b, func(b *testing.B, buf Pixels) {
 				for b.Loop() {
 					fn.fp(buf, c)
 				}

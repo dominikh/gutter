@@ -134,8 +134,7 @@ func (p *PackerFloat32) PackComplex(x0, y0, x1, y1 uint16, src *WideTileBuffer) 
 	for y := range outHeight {
 		row := out[:min(len(out), int(outWidth))]
 		for x := range row {
-			px := src[x][y]
-			row[x] = px
+			row[x] = gfx.PlainColor{src[0][x][y], src[1][x][y], src[2][x][y], src[3][x][y]}
 		}
 		out = out[min(uint(len(out)), uint(p.Width)):]
 	}
@@ -200,14 +199,14 @@ func (p *PackerUint16) PackComplex(x0, y0, x1, y1 uint16, src *WideTileBuffer) {
 		for y := range outHeight {
 			row := out[:min(len(out), int(outWidth))]
 			for x := range row {
-				px := src[x][y]
+				r, g, b, a := src[0][x][y], src[1][x][y], src[2][x][y], src[3][x][y]
 				// Colors are already stored using premultiplied alpha. Since
 				// we're not applying any gamma we don't have to unpremultiply.
 				row[x] = [4]uint16{
-					uint16(clamp(px[0], 0, 1)*65535 + 0.5),
-					uint16(clamp(px[1], 0, 1)*65535 + 0.5),
-					uint16(clamp(px[2], 0, 1)*65535 + 0.5),
-					uint16(clamp(px[3], 0, 1)*65535 + 0.5),
+					uint16(clamp(r, 0, 1)*65535 + 0.5),
+					uint16(clamp(g, 0, 1)*65535 + 0.5),
+					uint16(clamp(b, 0, 1)*65535 + 0.5),
+					uint16(clamp(a, 0, 1)*65535 + 0.5),
 				}
 			}
 			out = out[min(uint(len(out)), uint(p.Width)):]
@@ -216,14 +215,14 @@ func (p *PackerUint16) PackComplex(x0, y0, x1, y1 uint16, src *WideTileBuffer) {
 		for y := range outHeight {
 			row := out[:min(len(out), int(outWidth))]
 			for x := range row {
-				px := src[x][y]
+				r, g, b, a := src[0][x][y], src[1][x][y], src[2][x][y], src[3][x][y]
 				// We fold unpremultiplying and scaling into a single factor.
-				alpha := max(px[3], 1e-10) / 65535
+				alpha := max(a, 1e-10) / 65535
 				row[x] = [4]uint16{
-					uint16(clamp(px[0], 0, 1)/alpha + 0.5),
-					uint16(clamp(px[1], 0, 1)/alpha + 0.5),
-					uint16(clamp(px[2], 0, 1)/alpha + 0.5),
-					uint16(clamp(px[3], 0, 1)*65535 + 0.5),
+					uint16(clamp(r, 0, 1)/alpha + 0.5),
+					uint16(clamp(g, 0, 1)/alpha + 0.5),
+					uint16(clamp(b, 0, 1)/alpha + 0.5),
+					uint16(clamp(a, 0, 1)*65535 + 0.5),
 				}
 			}
 			out = out[min(uint(len(out)), uint(p.Width)):]
@@ -279,13 +278,14 @@ func packUint8SRGB_Scalar(
 	fn func(px gfx.PlainColor, unpremul bool) [4]uint8,
 ) {
 	debug.Assert(outWidth <= stride)
-	debug.Assert(outWidth <= len(in))
-	debug.Assert(outHeight <= len(in[0]))
+	debug.Assert(outWidth <= len(in[0]))
+	debug.Assert(outHeight <= len(in[0][0]))
 
 	for y := range outHeight {
 		row := out[y*stride:][:outWidth]
 		for x := range outWidth {
-			row[x] = fn(in[x][y], unpremul)
+			px := gfx.PlainColor{in[0][x][y], in[1][x][y], in[2][x][y], in[3][x][y]}
+			row[x] = fn(px, unpremul)
 		}
 	}
 }
@@ -304,8 +304,8 @@ func packUint8SRGB_SIMD(
 	debug.Assert(outWidth > 0)
 	debug.Assert(outHeight > 0)
 	debug.Assert(outWidth <= stride)
-	debug.Assert(outWidth <= len(in))
-	debug.Assert(outHeight <= len(in[0]))
+	debug.Assert(outWidth <= len(in[0]))
+	debug.Assert(outHeight <= len(in[0][0]))
 
 	if outHeight == stripHeight {
 		// The AVX2 implementation operates on 32 pixels at a time.
@@ -321,7 +321,7 @@ func packUint8SRGB_SIMD(
 				row := out[y*stride:][:outWidth]
 				// Convert w to uint to help BCE.
 				for x := uint(w); x < uint(outWidth); x++ {
-					px := in[x][y]
+					px := gfx.PlainColor{in[0][x][y], in[1][x][y], in[2][x][y], in[3][x][y]}
 					row[x] = linearRgbaF32ToSrgbU8_Polynomial_Scalar_One(px, unpremul)
 				}
 			}

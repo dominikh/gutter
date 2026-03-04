@@ -548,10 +548,9 @@ func writeF32AsU16(in []gfx.PlainColor, out [][8]uint8) {
 	}
 }
 
-func benchmarkFill(b *testing.B, fn func(b *testing.B, buf [][stripHeight]gfx.PlainColor)) {
-	buf := make([][stripHeight]gfx.PlainColor, wideTileWidth)
-	// make sure memory is paged in
-	clear(buf)
+func benchmarkFill(b *testing.B, fn func(b *testing.B, buf Pixels)) {
+	var wtb WideTileBuffer
+	buf := wtb.allPixels()
 
 	// We test the full width to measure the best possible performance, and at
 	// the smallest possible width to measure the per-call overhead.
@@ -569,43 +568,20 @@ func benchmarkFill(b *testing.B, fn func(b *testing.B, buf [][stripHeight]gfx.Pl
 	}
 }
 
-func benchmarkClipFill(b *testing.B, fn func(b *testing.B, dst, src [][stripHeight]gfx.PlainColor)) {
-	dst := make([][stripHeight]gfx.PlainColor, wideTileWidth)
-	src := make([][stripHeight]gfx.PlainColor, wideTileWidth)
-	// make sure memory is paged in
-	clear(dst)
-	clear(src)
-
-	// We test the full width to measure the best possible performance, and at
-	// the smallest possible width to measure the per-call overhead.
-	fillWidths := []int{wideTileWidth, 1}
-	for _, width := range fillWidths {
-		b.Run(fmt.Sprintf("width=%d", width), func(b *testing.B) {
-			fn(b, dst, src)
-			px := float64(width * tileHeight * b.N)
-			d := float64(b.Elapsed()) / px
-			bytes := px * 4 * 4
-			r := bytes / float64(b.Elapsed().Seconds())
-			b.ReportMetric(d, "ns/px")
-			b.ReportMetric(r, "B/s")
-		})
-	}
-}
-
 func Benchmark_fineFillComplexNative(b *testing.B) {
 	c := gfx.PlainColor{0.5, 0.5, 0.5, 0.5}
-	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]gfx.PlainColor) {
+	benchmarkFill(b, func(b *testing.B, buf Pixels) {
 		for b.Loop() {
 			fineFillComplexScalar(buf, c)
 		}
 	})
 }
 
-func Benchmark_memsetColumnsNative(b *testing.B) {
+func Benchmark_memsetColumns(b *testing.B) {
 	c := gfx.PlainColor{1, 1, 1, 1}
-	benchmarkFill(b, func(b *testing.B, buf [][stripHeight]gfx.PlainColor) {
+	benchmarkFill(b, func(b *testing.B, buf Pixels) {
 		for b.Loop() {
-			memsetColumnsNative(buf, c)
+			memsetColumns(buf, c)
 		}
 	})
 }
@@ -644,7 +620,10 @@ func benchmarkFinePack(b *testing.B, complex bool) {
 			f := newFine(packer)
 			clear(pixmap)
 			if complex {
-				clear(f.layers[len(f.layers)-1].scratch[:])
+				scratch := f.layers[len(f.layers)-1].scratch
+				for ch := range 4 {
+					clear(scratch[ch][:])
+				}
 				f.layers[len(f.layers)-1].complex = true
 			}
 

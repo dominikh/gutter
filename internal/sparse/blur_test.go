@@ -24,7 +24,8 @@ func BenchmarkBlurredRoundedRectFiller(b *testing.B) {
 	b.Run("normal", func(b *testing.B) {
 		br.LowPrecision = false
 		f := encodeBlurredRoundedRectangle(br, curve.Identity).filler(0, 0)
-		dst := make([][stripHeight]gfx.PlainColor, 256)
+		var wtb WideTileBuffer
+		dst := wtb.allPixels()
 		for b.Loop() {
 			f.reset(0, 100)
 			f.fill(dst)
@@ -34,7 +35,8 @@ func BenchmarkBlurredRoundedRectFiller(b *testing.B) {
 	b.Run("low_precision", func(b *testing.B) {
 		br.LowPrecision = true
 		f := encodeBlurredRoundedRectangle(br, curve.Identity).filler(0, 0)
-		dst := make([][stripHeight]gfx.PlainColor, 256)
+		var wtb WideTileBuffer
+		dst := wtb.allPixels()
 		for b.Loop() {
 			f.reset(0, 100)
 			f.fill(dst)

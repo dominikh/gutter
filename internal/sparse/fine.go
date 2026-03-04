@@ -12,11 +12,53 @@ import (
 	"unsafe"
 
 	"honnef.co/go/gutter/gfx"
-	"honnef.co/go/safeish"
 )
 
-// [x][y]Color
-type WideTileBuffer = [wideTileWidth][stripHeight]gfx.PlainColor
+// WideTileBuffer stores pixels in planar, column-major RGBA layout:
+// [plane][column][row].
+type WideTileBuffer [4][wideTileWidth][stripHeight]float32
+
+type Pixels struct {
+	wide  *WideTileBuffer
+	start int
+	end   int
+}
+
+func (p *Pixels) width() int {
+	return p.end - p.start
+}
+
+func (p *Pixels) slice(start, end int) Pixels {
+	if start < -1 || start > p.width() || p.start+end > p.end {
+		panic("internal error: index out of bounds")
+	}
+	return Pixels{
+		wide:  p.wide,
+		start: p.start + start,
+		end:   p.start + end,
+	}
+}
+
+func (p *Pixels) plane(n int) [][stripHeight]float32 {
+	return p.wide[n][p.start:p.end]
+}
+
+func (b *WideTileBuffer) pixels(x, width int) Pixels {
+	// TODO(dh): change API to start, end
+	return Pixels{
+		wide:  b,
+		start: x,
+		end:   x + width,
+	}
+}
+
+func (b *WideTileBuffer) allPixels() Pixels {
+	return Pixels{
+		wide:  b,
+		start: 0,
+		end:   wideTileWidth,
+	}
+}
 
 type fine struct {
 	tile   *wideTile
@@ -103,13 +145,15 @@ func (f *fine) packComplex(l *fineLayer, tileX, tileY uint16) {
 	f.packer.PackComplex(x0, y0, x1, y1, l.scratch)
 }
 
-func memsetColumnsNative(buf [][stripHeight]gfx.PlainColor, c gfx.PlainColor) {
-	var col [stripHeight]gfx.PlainColor
-	for i := range col {
-		col[i] = c
-	}
-	for x := range buf {
-		buf[x] = col
+func memsetColumnsScalar(buf Pixels, c gfx.PlainColor) {
+	for ch := range 4 {
+		var col [stripHeight]float32
+		for i := range col {
+			col[i] = c[ch]
+		}
+		for x := range buf.plane(ch) {
+			buf.plane(ch)[x] = col
+		}
 	}
 }
 
@@ -118,14 +162,17 @@ func (l *fineLayer) materialize() {
 		return
 	}
 
-	memsetColumns(l.scratch[:], l.singleColor)
+	memsetColumns(l.scratch.allPixels(), l.singleColor)
 	l.complex = true
 }
 
 func (f *fine) allocScratch(width int) *WideTileBuffer {
 	if len(f.freeScratches) > 0 {
 		scratch := f.freeScratches[len(f.freeScratches)-1]
-		clear(scratch[:width])
+		clear(scratch[0][:width])
+		clear(scratch[1][:width])
+		clear(scratch[2][:width])
+		clear(scratch[3][:width])
 		f.freeScratches = f.freeScratches[:len(f.freeScratches)-1]
 		return scratch
 	} else {
@@ -161,7 +208,7 @@ func (f *fine) runCmd(cmd cmd) {
 		l := f.topLayer()
 		if parent.complex {
 			l.complex = true
-			copy(l.scratch[:], parent.scratch[:])
+			*l.scratch = *parent.scratch
 		} else {
 			l.clear(parent.singleColor)
 		}
@@ -191,15 +238,14 @@ func (f *fine) clear(x, width int, paint gfx.PlainColor) {
 		l.clear(paint)
 	} else {
 		l.materialize()
-		buf := l.scratch[x : x+width]
-		memsetColumns(buf, paint)
+		memsetColumns(l.scratch.pixels(x, width), paint)
 	}
 }
 
 // TODO(dh): change types of x and width to uint16.
 func (f *fine) fill(x, width int, paint encodedPaint) {
 	l := f.topLayer()
-	buf := l.scratch[x : x+width]
+	buf := l.scratch.pixels(x, width)
 
 	switch paint := paint.(type) {
 	case encodedColor:
@@ -266,8 +312,8 @@ func (f *fine) fill(x, width int, paint encodedPaint) {
 			// from memory to blend with the gradient
 			l.materialize()
 			colors := f.allocScratch(width)
-			pf.fill(colors[:width])
-			blendComplexComplex(buf, colors[:width], nil, gfx.BlendMode{}, 1)
+			pf.fill(colors.pixels(0, width))
+			blendComplexComplex(buf, colors.pixels(0, width), nil, gfx.BlendMode{}, 1)
 			f.freeScratch(colors)
 		}
 
@@ -292,8 +338,7 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 	nosComplex := nos.complex
 	nos.materialize()
 
-	dst := nos.scratch[x : x+width]
-	src := tos.scratch[x : x+width]
+	dst := nos.scratch.pixels(x, width)
 	if !nosComplex && !tos.complex {
 		c := tos.singleColor
 
@@ -304,6 +349,7 @@ func (f *fine) blend(x, width int, blend gfx.BlendMode, opacity float32) {
 		blendSimpleSimple(dst, nos.singleColor, c, blend)
 	} else {
 		tos.materialize()
+		src := tos.scratch.pixels(x, width)
 		blendComplexComplex(dst, src, nil, blend, opacity)
 	}
 }
@@ -322,21 +368,19 @@ func (f *fine) alphaBlend(
 	tos.materialize()
 	nos.materialize()
 
-	dst := nos.scratch[x : x+width]
-	src := tos.scratch[x : x+width]
+	dst := nos.scratch.pixels(x, width)
+	src := tos.scratch.pixels(x, width)
 	blendComplexComplex(dst, src, alphas, blend, opacity)
 }
 
-func fineFillComplexScalar(buf [][stripHeight]gfx.PlainColor, color gfx.PlainColor) {
+func fineFillComplexScalar(buf Pixels, color gfx.PlainColor) {
 	oneMinusAlpha := 1.0 - color[3]
-	for x := range buf {
-		col := &buf[x]
-		for y := range col {
-			col[y] = gfx.PlainColor{
-				color[0] + col[y][0]*oneMinusAlpha,
-				color[1] + col[y][1]*oneMinusAlpha,
-				color[2] + col[y][2]*oneMinusAlpha,
-				color[3] + col[y][3]*oneMinusAlpha,
+	for ch := range 4 {
+		c := color[ch]
+		for x := range buf.plane(ch) {
+			col := &buf.plane(ch)[x]
+			for y := range col {
+				col[y] = c + col[y]*oneMinusAlpha
 			}
 		}
 	}
@@ -355,7 +399,7 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 	}
 
 	l := f.topLayer()
-	dst := l.scratch[x : x+width]
+	dst := l.scratch.pixels(x, width)
 
 	alphaFillInnerSingleColor := func(color gfx.PlainColor) {
 		// Scale color by 1/255 because our alpha values are in [0, 255]
@@ -365,17 +409,16 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 		color[3] *= (1.0 / 255.0)
 
 		if l.complex {
-			for x := range dst {
-				col := &dst[x]
-				a := &alphas[x]
-				for y := range col {
-					maskAlpha := float32(a[y])
-					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y] = gfx.PlainColor{
-						color[0]*maskAlpha + col[y][0]*oneMinusAlpha,
-						color[1]*maskAlpha + col[y][1]*oneMinusAlpha,
-						color[2]*maskAlpha + col[y][2]*oneMinusAlpha,
-						color[3]*maskAlpha + col[y][3]*oneMinusAlpha,
+			for ch := range 4 {
+				c := color[ch]
+				ca := color[3]
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
+					a := &alphas[xi]
+					for y := range col {
+						maskAlpha := float32(a[y])
+						oneMinusAlpha := 1.0 - maskAlpha*ca
+						col[y] = c*maskAlpha + col[y]*oneMinusAlpha
 					}
 				}
 			}
@@ -383,48 +426,37 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 			bg := l.singleColor
 			l.materialize()
 
-			for x := range dst {
-				col := &dst[x]
-				a := &alphas[x]
-				for y := range col {
-					maskAlpha := float32(a[y])
-					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y] = gfx.PlainColor{
-						color[0]*maskAlpha + bg[0]*oneMinusAlpha,
-						color[1]*maskAlpha + bg[1]*oneMinusAlpha,
-						color[2]*maskAlpha + bg[2]*oneMinusAlpha,
-						color[3]*maskAlpha + bg[3]*oneMinusAlpha,
+			for ch := range 4 {
+				c := color[ch]
+				ca := color[3]
+				bgc := bg[ch]
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
+					a := &alphas[xi]
+					for y := range col {
+						maskAlpha := float32(a[y])
+						oneMinusAlpha := 1.0 - maskAlpha*ca
+						col[y] = c*maskAlpha + bgc*oneMinusAlpha
 					}
 				}
 			}
 		}
 	}
 
-	alphaFillInner := func(colors []gfx.PlainColor) {
-		colorIdx := 0
-		nextColor := func() gfx.PlainColor {
-			c := colors[colorIdx]
-			colorIdx = (colorIdx + 1) % len(colors)
-			return c
-		}
-
+	alphaFillInner := func(src Pixels) {
 		if l.complex {
-			for x := range dst {
-				col := &dst[x]
-				a := &alphas[x]
-				for y := range col {
-					color := nextColor()
-					color[0] *= (1.0 / 255.0)
-					color[1] *= (1.0 / 255.0)
-					color[2] *= (1.0 / 255.0)
-					color[3] *= (1.0 / 255.0)
-					maskAlpha := float32(a[y])
-					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y] = gfx.PlainColor{
-						color[0]*maskAlpha + col[y][0]*oneMinusAlpha,
-						color[1]*maskAlpha + col[y][1]*oneMinusAlpha,
-						color[2]*maskAlpha + col[y][2]*oneMinusAlpha,
-						color[3]*maskAlpha + col[y][3]*oneMinusAlpha,
+			for ch := range 4 {
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
+					srcCol := &src.plane(ch)[xi]
+					a := &alphas[xi]
+					srcACol := &src.plane(3)[xi]
+					for y := range col {
+						color := srcCol[y] * (1.0 / 255.0)
+						ca := srcACol[y] * (1.0 / 255.0)
+						maskAlpha := float32(a[y])
+						oneMinusAlpha := 1.0 - maskAlpha*ca
+						col[y] = color*maskAlpha + col[y]*oneMinusAlpha
 					}
 				}
 			}
@@ -432,22 +464,19 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 			bg := l.singleColor
 			l.materialize()
 
-			for x := range dst {
-				col := &dst[x]
-				a := &alphas[x]
-				for y := range col {
-					color := nextColor()
-					color[0] *= (1.0 / 255.0)
-					color[1] *= (1.0 / 255.0)
-					color[2] *= (1.0 / 255.0)
-					color[3] *= (1.0 / 255.0)
-					maskAlpha := float32(a[y])
-					oneMinusAlpha := 1.0 - maskAlpha*color[3]
-					col[y] = gfx.PlainColor{
-						color[0]*maskAlpha + bg[0]*oneMinusAlpha,
-						color[1]*maskAlpha + bg[1]*oneMinusAlpha,
-						color[2]*maskAlpha + bg[2]*oneMinusAlpha,
-						color[3]*maskAlpha + bg[3]*oneMinusAlpha,
+			for ch := range 4 {
+				bgc := bg[ch]
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
+					srcCol := &src.plane(ch)[xi]
+					a := &alphas[xi]
+					srcACol := &src.plane(3)[xi]
+					for y := range col {
+						color := srcCol[y] * (1.0 / 255.0)
+						ca := srcACol[y] * (1.0 / 255.0)
+						maskAlpha := float32(a[y])
+						oneMinusAlpha := 1.0 - maskAlpha*ca
+						col[y] = color*maskAlpha + bgc*oneMinusAlpha
 					}
 				}
 			}
@@ -463,9 +492,10 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 		startY := f.tileY * tileHeight
 		pf := paint.filler(startX, startY)
 		// OPT(dh): reuse memory
-		colors := make([][stripHeight]gfx.PlainColor, width)
-		pf.fill(colors)
-		alphaFillInner(safeish.SliceCast[[]gfx.PlainColor](colors))
+		colors := f.allocScratch(width)
+		pf.fill(colors.pixels(0, width))
+		alphaFillInner(colors.pixels(0, width))
+		f.freeScratch(colors)
 
 	default:
 		panic(fmt.Sprintf("internal error: unhandled type %T", paint))
@@ -477,6 +507,6 @@ type fillablePaint interface {
 }
 
 type paintFiller interface {
-	fill(dst [][stripHeight]gfx.PlainColor)
+	fill(dst Pixels)
 	reset(startX, startY uint16)
 }

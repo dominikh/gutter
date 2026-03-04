@@ -30,26 +30,30 @@ var blends = []gfx.Mix{
 }
 
 func BenchmarkClipFillReuseGen(b *testing.B) {
-	origDst := make([][stripHeight]gfx.PlainColor, 256)
-	origSrc := make([][stripHeight]gfx.PlainColor, 256)
-	for i := range origDst {
-		for j := range origDst[i] {
-			for k := range origDst[i][j] {
-				origDst[i][j][k] = rand.Float32()
-				origSrc[i][j][k] = rand.Float32()
+	var origDst, origSrc WideTileBuffer
+	for ch := range 4 {
+		for i := range origDst[ch] {
+			for j := range origDst[ch][i] {
+				origDst[ch][i][j] = rand.Float32()
+				origSrc[ch][i][j] = rand.Float32()
 			}
-			for k := range origDst[i][j][:3] {
-				origDst[i][j][k] *= origDst[i][j][3]
-				origSrc[i][j][k] *= origSrc[i][j][3]
+		}
+	}
+	// Premultiply RGB by A
+	for ch := range 3 {
+		for i := range origDst[ch] {
+			for j := range origDst[ch][i] {
+				origDst[ch][i][j] *= origDst[3][i][j]
+				origSrc[ch][i][j] *= origSrc[3][i][j]
 			}
 		}
 	}
 
-	dst := make([][stripHeight]gfx.PlainColor, 256)
+	var dst WideTileBuffer
 	run := func(kind string, comp gfx.Compose, blend gfx.Mix, fn func()) {
 		b.Run(fmt.Sprintf("kind=%s/comp=%s/blend=%s", kind, comp, blend), func(b *testing.B) {
 			for b.Loop() {
-				copy(dst, origDst)
+				dst = origDst
 				fn()
 			}
 			px := float64(256 * stripHeight * b.N)
@@ -61,10 +65,12 @@ func BenchmarkClipFillReuseGen(b *testing.B) {
 		})
 	}
 
+	dstPixels := dst.allPixels()
+	srcPixels := origSrc.allPixels()
 	for _, comp := range gfx.ComposeOps {
 		for _, blend := range blends {
 			run("ComplexComplex", comp, blend, func() {
-				blendComplexComplex(dst, origSrc, nil, gfx.BlendMode{Compose: comp, Mix: blend}, 1)
+				blendComplexComplex(dstPixels, srcPixels, nil, gfx.BlendMode{Compose: comp, Mix: blend}, 1)
 			})
 		}
 	}
