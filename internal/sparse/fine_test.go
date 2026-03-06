@@ -518,6 +518,24 @@ func Test50pctGrey(t *testing.T) {
 	})
 }
 
+// TestPixelsSliceBoundsCheck tests that Pixels.slice correctly rejects
+// an end value that exceeds the sub-slice's width, even if it doesn't
+// exceed p.end (the absolute end).
+func TestPixelsSliceBoundsCheck(t *testing.T) {
+	var buf WideTileBuffer
+	// Create a sub-slice: start=128, end=256, width=128
+	p := buf.pixels(128, 128)
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Pixels.slice(0, 200) should panic: end (200) exceeds width (128)")
+		}
+	}()
+	// end=200 exceeds width=128 but not p.end=256, so the current
+	// buggy check (end > p.end → 200 > 256 → false) lets it through.
+	p.slice(0, 200)
+}
+
 func writeF32AsU16(in []gfx.PlainColor, out [][8]uint8) {
 	_ = out[len(in)]
 	for i := range in {

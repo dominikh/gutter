@@ -18,9 +18,19 @@ import (
 	"github.com/mmcloughlin/avo/reg"
 )
 
+var int32Consts = map[uint32]Mem{}
 var uint64Consts = map[uint64]Mem{}
 var floatConsts = map[float32]Mem{}
 var floatConsts8 = map[float32]Mem{}
+
+func int32Const(v uint32) Mem {
+	if k, ok := int32Consts[v]; ok {
+		return k
+	}
+	k := ConstData(fmt.Sprintf("d_%08x", v), U32(v))
+	int32Consts[v] = k
+	return k
+}
 
 func uint64Const(v uint64) Mem {
 	if k, ok := uint64Consts[v]; ok {
@@ -59,7 +69,7 @@ func PCALIGN(im Op) {
 	})
 }
 
-var zeroToFour, absMask Mem
+var zeroToFour, absMask, bitIsolateMask Mem
 
 func init() {
 	zeroToFour = GLOBL("zeroToFour", RODATA|NOPTR)
@@ -74,6 +84,16 @@ func init() {
 	DATA(4, U32(1<<31))
 	DATA(8, U32(1<<31))
 	DATA(12, U32(1<<31))
+
+	bitIsolateMask = GLOBL("bitIsolateMask", RODATA|NOPTR)
+	DATA(0, U32(1<<0))
+	DATA(4, U32(1<<1))
+	DATA(8, U32(1<<2))
+	DATA(12, U32(1<<3))
+	DATA(16, U32(1<<4))
+	DATA(20, U32(1<<5))
+	DATA(24, U32(1<<6))
+	DATA(28, U32(1<<7))
 }
 
 func main() {
@@ -83,6 +103,7 @@ func main() {
 	processOutOfBoundsWindingSSE()
 	computeAlphasNonZeroAVX()
 	packUint8SRGB_AVX2()
+	gradientLUTGatherAVX2()
 
 	Generate()
 }
@@ -428,6 +449,113 @@ func planarRgbaU32ToPackedRgbaU8(in [4]reg.VecVirtual, out reg.VecVirtual) {
 	VPOR(r, gs, rg)
 	VPOR(bs, as, ba)
 	VPOR(rg, ba, out)
+}
+
+// gradientLUTGatherAVX2 generates the gradient LUT gather function.
+// It reads pre-computed t values (already extended) from a buffer,
+// converts them to LUT indices, gathers 4 color channels via VGATHERDPS,
+// and stores to 4 planar destination buffers.
+func gradientLUTGatherAVX2() {
+	Implement("gradientLUTGatherAVX2")
+
+	dst := [4]gotypes.Component{
+		Dereference(Param("dst0")),
+		Dereference(Param("dst1")),
+		Dereference(Param("dst2")),
+		Dereference(Param("dst3")),
+	}
+	lut := Dereference(Param("lut"))
+	tBuf := Dereference(Param("tBuf"))
+	width := Load(Param("width"), GP64())
+
+	lutScaleParam, _ := Param("lutScale").Resolve()
+	lutScale := YMM()
+	VBROADCASTSS(lutScaleParam.Addr, lutScale)
+
+	maxIdx := YMM()
+	VPBROADCASTD(int32Const(2047), maxIdx)
+
+	zeroInt := YMM()
+	VPXOR(zeroInt, zeroInt, zeroInt)
+
+	widthBytes := GP64()
+	MOVQ(width, widthBytes)
+	SHLQ(Imm(4), widthBytes)
+
+	threshold := GP64()
+	MOVQ(widthBytes, threshold)
+	SUBQ(Imm(31), threshold)
+
+	offset := GP64()
+	XORQ(offset, offset)
+
+	PCALIGN(Imm(32))
+	Label("gather_loop")
+	CMPQ(offset, threshold)
+	JGE(LabelRef("gather_tail"))
+
+	t := YMM()
+	VMOVUPS(tBuf.Addr().Idx(offset, 1), t)
+	VMULPS(lutScale, t, t)
+
+	indices := YMM()
+	VCVTTPS2DQ(t, indices)
+
+	VPMAXSD(zeroInt, indices, indices)
+	VPMINSD(maxIdx, indices, indices)
+
+	// OPT(dh): couldn't we set the appropriate scale in the VGATHERDPS instead?
+	VPSLLD(Imm(4), indices, indices)
+
+	for ch := range 4 {
+		gatherMask := YMM()
+		VPCMPEQD(gatherMask, gatherMask, gatherMask)
+		result := YMM()
+		VGATHERDPS(gatherMask, lut.Addr().Offset(ch*4).Idx(indices, 1), result)
+		VMOVUPS(result, dst[ch].Addr().Idx(offset, 1))
+	}
+
+	ADDQ(Imm(32), offset)
+	JMP(LabelRef("gather_loop"))
+
+	Label("gather_tail")
+	CMPQ(offset, widthBytes)
+	JGE(LabelRef("gather_done"))
+
+	tX := XMM()
+	VMOVUPS(tBuf.Addr().Idx(offset, 1), tX)
+
+	lutScaleX := XMM()
+	VBROADCASTSS(lutScaleParam.Addr, lutScaleX)
+	VMULPS(lutScaleX, tX, tX)
+
+	idxX := XMM()
+	VCVTTPS2DQ(tX, idxX)
+
+	zeroX := XMM()
+	VPXOR(zeroX, zeroX, zeroX)
+	maxIdxX := XMM()
+	VPBROADCASTD(int32Const(2047), maxIdxX)
+	VPMAXSD(zeroX, idxX, idxX)
+	VPMINSD(maxIdxX, idxX, idxX)
+
+	VPSLLD(Imm(4), idxX, idxX)
+
+	for ch := range 4 {
+		maskX := XMM()
+		VPCMPEQD(maskX, maskX, maskX)
+
+		resultX := XMM()
+		VGATHERDPS(maskX, lut.Addr().Offset(ch*4).Idx(idxX, 1), resultX)
+		// Pointless store to prevent Avo from using the same register twice in
+		// VGATHERDPS. The store gets eliminated before assembly gets generated.
+		VMOVUPS(idxX, idxX)
+		VMOVUPS(resultX, dst[ch].Addr().Idx(offset, 1))
+	}
+
+	Label("gather_done")
+	VZEROUPPER()
+	RET()
 }
 
 func transpose8x4(c01, c23, c45, c67, permMask reg.VecVirtual) (r0, r1, r2, r3 reg.VecVirtual) {

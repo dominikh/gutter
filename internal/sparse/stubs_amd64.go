@@ -31,6 +31,18 @@ func packUint8SRGB_AVX2_Impl(
 	unpremul bool,
 )
 
+//go:noescape
+func gradientLUTGatherAVX2(
+	dst0 *[stripHeight]float32,
+	dst1 *[stripHeight]float32,
+	dst2 *[stripHeight]float32,
+	dst3 *[stripHeight]float32,
+	lut *[4]float32,
+	lutScale float32,
+	tBuf *[stripHeight]float32,
+	width int,
+)
+
 func packUint8SRGB_AVX2(
 	in *WideTileBuffer,
 	out [][4]uint8,

@@ -6,6 +6,7 @@
 package sparse
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -742,9 +743,154 @@ func TestRadialGradientSmallerR1WithReflect(t *testing.T) {
 	})
 }
 
+// TestRunGradientSIMDOddWidthMask tests that rendering a strip gradient at a
+// width of 255 doesn't panic.
+func TestRunGradientSIMDOddWidthMask(t *testing.T) {
+	ctx := NewRenderer(255, 8)
+
+	rect := curve.NewRectFromPoints(curve.Pt(0, 0), curve.Pt(255, 8))
+	gradient := &gfx.RadialGradient{
+		// This combination of start and end coordinates + the radii creates a
+		// mask that isn't all ones or that has trailing zero columns, which is
+		// required to hit the bug.
+		StartCenter: curve.Pt(0, 4),
+		EndCenter:   curve.Pt(10, 4),
+		// Need identical radii to get a strip gradient.
+		StartRadius: 1,
+		EndRadius:   1,
+		Stops:       stopsGreenBlue,
+		Extend:      gfx.GradientExtendPad,
+		ColorSpace:  color.SRGB,
+	}
+	ctx.Fill(rect, curve.Identity, gfx.NonZero, gradient)
+
+	ctx.Render(DiscardPacker{})
+}
+
 func BenchmarkMakeGradientLUT(b *testing.B) {
 	ranges := encodeStops(stopsBlueGreenRedYellow, color.Oklab)
 	for b.Loop() {
 		makeGradientLUT(ranges)
+	}
+}
+
+func BenchmarkGradientFill(b *testing.B) {
+	makeStops := func(n int) []gfx.GradientStop {
+		n = max(n, 2)
+		stops := make([]gfx.GradientStop, n)
+		for i := range n {
+			offset := float32(i) / float32(n-1)
+			stops[i] = gfx.GradientStop{
+				Offset: offset,
+				Color:  color.Make(color.LinearSRGB, float64(offset), 0, 0, 1),
+			}
+		}
+		return stops
+	}
+
+	tests := []struct {
+		name string
+		make func(numStops int) *encodedGradient
+	}{
+		{
+			"linear",
+			func(numStops int) *encodedGradient {
+				paint := encodeLinearGradient(&gfx.LinearGradient{
+					Start:  curve.Pt(0, 0),
+					End:    curve.Pt(256, 0),
+					Stops:  makeStops(numStops),
+					Extend: gfx.GradientExtendPad,
+				}, curve.Identity)
+				return paint.(*encodedGradient)
+			},
+		},
+		{
+			"radial",
+			func(numStops int) *encodedGradient {
+				paint := encodeRadialGradient(&gfx.RadialGradient{
+					StartCenter: curve.Pt(128, 2),
+					StartRadius: 5,
+					EndCenter:   curve.Pt(128, 2),
+					EndRadius:   128,
+					Stops:       makeStops(numStops),
+					Extend:      gfx.GradientExtendPad,
+				}, curve.Identity)
+				return paint.(*encodedGradient)
+			},
+		},
+		{
+			"focal-nomasked",
+			func(numStops int) *encodedGradient {
+				paint := encodeRadialGradient(&gfx.RadialGradient{
+					StartCenter: curve.Pt(0, 2),
+					StartRadius: 5,
+					EndCenter:   curve.Pt(128, 2),
+					EndRadius:   128,
+					Stops:       makeStops(numStops),
+					Extend:      gfx.GradientExtendPad,
+				}, curve.Identity)
+				return paint.(*encodedGradient)
+			},
+		},
+		{
+			"focal-masked",
+			func(numStops int) *encodedGradient {
+				paint := encodeRadialGradient(&gfx.RadialGradient{
+					StartCenter: curve.Pt(0, 2),
+					StartRadius: 128,
+					EndCenter:   curve.Pt(128, 2),
+					EndRadius:   50,
+					Stops:       makeStops(numStops),
+					Extend:      gfx.GradientExtendPad,
+				}, curve.Identity)
+				return paint.(*encodedGradient)
+			},
+		},
+		{
+			"strip",
+			func(numStops int) *encodedGradient {
+				paint := encodeRadialGradient(&gfx.RadialGradient{
+					StartCenter: curve.Pt(0, 2),
+					StartRadius: 128,
+					EndCenter:   curve.Pt(128, 2),
+					EndRadius:   128,
+					Stops:       makeStops(numStops),
+					Extend:      gfx.GradientExtendPad,
+				}, curve.Identity)
+				return paint.(*encodedGradient)
+			},
+		},
+		{
+			"sweep",
+			func(numStops int) *encodedGradient {
+				paint := encodeSweepGradient(&gfx.SweepGradient{
+					Center:     curve.Pt(128, 2),
+					StartAngle: 0,
+					EndAngle:   2 * math.Pi,
+					Stops:      makeStops(numStops),
+					Extend:     gfx.GradientExtendPad,
+				}, curve.Identity)
+				return paint.(*encodedGradient)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		for _, n := range []int{2, maxPermuteGradientRanges + 1, maxPermuteGradientRanges + 2, 32} {
+			b.Run(fmt.Sprintf("kind=%s/stops=%d", tt.name, n), func(b *testing.B) {
+				grad := tt.make(n)
+				filler := grad.filler(0, 0).(*gradientFiller)
+				var buf WideTileBuffer
+				dst := buf.allPixels()
+				for b.Loop() {
+					filler.reset(0, 0)
+					filler.fill(dst)
+				}
+				b.ReportMetric(
+					float64(b.Elapsed())/float64(wideTileWidth*stripHeight*b.N),
+					"ns/px",
+				)
+			})
+		}
 	}
 }
