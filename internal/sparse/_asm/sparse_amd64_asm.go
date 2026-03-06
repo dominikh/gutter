@@ -588,26 +588,26 @@ func gradientCascadeMergeAVX2Impl() {
 
 	// simdGradientRanges struct field offsets (amd64):
 	//   n      int              @ 0   (8 bytes)
-	//   x1     [16]float32      @ 8   (64 bytes)
-	//   scaleR [16]float32      @ 72
-	//   scaleG [16]float32      @ 136
-	//   scaleB [16]float32      @ 200
-	//   scaleA [16]float32      @ 264
-	//   biasR  [16]float32      @ 328
-	//   biasG  [16]float32      @ 392
-	//   biasB  [16]float32      @ 456
-	//   biasA  [16]float32      @ 520
+	//   x1     [4]float32      @ 8   (64 bytes)
+	//   scaleR [4]float32      @ 24
+	//   scaleG [4]float32      @ 40
+	//   scaleB [4]float32      @ 56
+	//   scaleA [4]float32      @ 72
+	//   biasR  [4]float32      @ 88
+	//   biasG  [4]float32      @ 104
+	//   biasB  [4]float32      @ 120
+	//   biasA  [4]float32      @ 136
 	const (
 		offN      = 0
 		offX1     = 8
-		offScaleR = 72
-		offScaleG = 136
-		offScaleB = 200
-		offScaleA = 264
-		offBiasR  = 328
-		offBiasG  = 392
-		offBiasB  = 456
-		offBiasA  = 520
+		offScaleR = 24
+		offScaleG = 40
+		offScaleB = 56
+		offScaleA = 72
+		offBiasR  = 88
+		offBiasG  = 104
+		offBiasB  = 120
+		offBiasA  = 136
 	)
 	scaleOff := [4]int{offScaleR, offScaleG, offScaleB, offScaleA}
 	biasOff := [4]int{offBiasR, offBiasG, offBiasB, offBiasA}

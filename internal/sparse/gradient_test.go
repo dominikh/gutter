@@ -848,6 +848,10 @@ func BenchmarkGradientFill(b *testing.B) {
 					filler.reset(0, 0)
 					filler.fill(dst)
 				}
+				b.ReportMetric(
+					float64(b.Elapsed())/float64(wideTileWidth*stripHeight*b.N),
+					"ns/px",
+				)
 			})
 		}
 	}

@@ -656,7 +656,7 @@ gather_done:
 DATA d_000007ff<>+0(SB)/4, $0x000007ff
 GLOBL d_000007ff<>(SB), RODATA|NOPTR, $4
 
-// func gradientCascadeMergeAVX2(dst0 *[4]float32, dst1 *[4]float32, dst2 *[4]float32, dst3 *[4]float32, tBuf *[4]float32, sr uintptr, width int)
+// func gradientCascadeMergeAVX2(dst0 *[4]float32, dst1 *[4]float32, dst2 *[4]float32, dst3 *[4]float32, tBuf *[4]float32, sr *simdGradientRanges, width int)
 // Requires: AVX, AVX2, FMA3
 TEXT ·gradientCascadeMergeAVX2(SB), $0-56
 	MOVQ    dst0+0(FP), AX
@@ -672,14 +672,14 @@ TEXT ·gradientCascadeMergeAVX2(SB), $0-56
 	MOVQ    R8, R10
 	SUBQ    $0x10, R10
 	XORQ    R11, R11
-	VMOVUPS 72(DI), Y0
-	VMOVUPS 328(DI), Y4
-	VMOVUPS 136(DI), Y1
-	VMOVUPS 392(DI), Y5
-	VMOVUPS 200(DI), Y2
-	VMOVUPS 456(DI), Y6
-	VMOVUPS 264(DI), Y3
-	VMOVUPS 520(DI), Y7
+	VMOVUPS 24(DI), Y0
+	VMOVUPS 88(DI), Y4
+	VMOVUPS 40(DI), Y1
+	VMOVUPS 104(DI), Y5
+	VMOVUPS 56(DI), Y2
+	VMOVUPS 120(DI), Y6
+	VMOVUPS 72(DI), Y3
+	VMOVUPS 136(DI), Y7
 	PCALIGN $0x20
 
 cascade_loop:

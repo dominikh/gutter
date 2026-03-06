@@ -101,19 +101,24 @@ func encodeGradient(
 
 	xAdvance, yAdvance := xyAdvances(transform)
 
+	var sr simdGradientRanges
+	if len(ranges) <= maxSIMDRanges {
+		sr = initSIMDRanges(ranges)
+	}
 	encoded := &encodedGradient{
-		kind,
-		transform,
-		xAdvance,
-		yAdvance,
-		ranges,
-		extend,
+		kind:       kind,
+		transform:  transform,
+		xAdvance:   xAdvance,
+		yAdvance:   yAdvance,
+		ranges:     ranges,
+		simdRanges: sr,
+		extend:     extend,
 		// Even if the gradient has no stops with transparency, we might have to force
 		// alpha-compositing in case the radial gradient is undefined in certain positions,
 		// in which case the resulting color will be transparent and thus the gradient overall
 		// must be treated as non-opaque.
-		hasOpacities || kind.hasUndefined(),
-		makeGradientLUT(ranges),
+		hasOpacities: hasOpacities || kind.hasUndefined(),
+		lut:          makeGradientLUT(ranges),
 	}
 
 	return encoded
@@ -470,6 +475,42 @@ func (g encodedFocalGradient) posInner(pos curve.Point) (float32, bool) {
 	return t, true
 }
 
+const maxSIMDRanges = 4
+
+// simdGradientRanges is a SoA (Structure of Arrays) representation of
+// gradient ranges, optimized for VPERMPS-based lookup. Instead of
+// iterating all ranges with cascade merge, we find the range index via
+// threshold scan, then use VPERMPS to gather the right scale/bias per pixel.
+type simdGradientRanges struct {
+	n      int
+	x1     [maxSIMDRanges]float32
+	scaleR [maxSIMDRanges]float32
+	scaleG [maxSIMDRanges]float32
+	scaleB [maxSIMDRanges]float32
+	scaleA [maxSIMDRanges]float32
+	biasR  [maxSIMDRanges]float32
+	biasG  [maxSIMDRanges]float32
+	biasB  [maxSIMDRanges]float32
+	biasA  [maxSIMDRanges]float32
+}
+
+func initSIMDRanges(ranges []gradientRange) simdGradientRanges {
+	var sr simdGradientRanges
+	sr.n = len(ranges)
+	for i, rng := range ranges {
+		sr.x1[i] = rng.x1
+		sr.scaleR[i] = rng.scale[0]
+		sr.scaleG[i] = rng.scale[1]
+		sr.scaleB[i] = rng.scale[2]
+		sr.scaleA[i] = rng.scale[3]
+		sr.biasR[i] = rng.bias[0]
+		sr.biasG[i] = rng.bias[1]
+		sr.biasB[i] = rng.bias[2]
+		sr.biasA[i] = rng.bias[3]
+	}
+	return sr
+}
+
 type encodedGradient struct {
 	kind gradientKind
 	// A transform that needs to be applied to the position of the first
@@ -482,7 +523,8 @@ type encodedGradient struct {
 	// step in the y direction in the output image.
 	yAdvance curve.Vec2
 	// The color ranges of the gradient.
-	ranges []gradientRange
+	ranges     []gradientRange
+	simdRanges simdGradientRanges
 	// The extend of the gradient.
 	extend gfx.GradientExtend
 	// Whether the gradient requires `source_over` compositing.

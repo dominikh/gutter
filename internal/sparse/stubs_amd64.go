@@ -50,7 +50,7 @@ func gradientCascadeMergeAVX2(
 	dst2 *[stripHeight]float32,
 	dst3 *[stripHeight]float32,
 	tBuf *[stripHeight]float32,
-	sr uintptr,
+	sr *simdGradientRanges,
 	width int,
 )
 
