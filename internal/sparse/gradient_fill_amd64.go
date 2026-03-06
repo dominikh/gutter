@@ -10,6 +10,7 @@ import (
 	"math"
 	. "simd/archsimd"
 
+	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/internal/arch"
 )
@@ -20,20 +21,29 @@ func (gf *gradientFiller) fillSIMD(dst Pixels) bool {
 	if !arch.AVX2() || !arch.FMA() {
 		return false
 	}
-	if len(gf.gradient.ranges) > maxSIMDRanges {
-		return false
-	}
 
 	switch kind := gf.gradient.kind.(type) {
 	case encodedLinearGradient:
 		gf.fillLinearSIMD(dst, kind)
 	case encodedRadialGradient:
+		if len(gf.gradient.ranges) > maxSIMDRanges {
+			return false
+		}
 		gf.fillRadialSIMD(dst, kind)
 	case encodedStripGradient:
+		if len(gf.gradient.ranges) > maxSIMDRanges {
+			return false
+		}
 		gf.fillStripSIMD(dst, kind)
 	case encodedFocalGradient:
+		if len(gf.gradient.ranges) > maxSIMDRanges {
+			return false
+		}
 		gf.fillFocalSIMD(dst, kind)
 	case encodedSweepGradient:
+		if len(gf.gradient.ranges) > maxSIMDRanges {
+			return false
+		}
 		gf.fillSweepSIMD(dst, kind)
 	default:
 		return false
@@ -53,8 +63,11 @@ func applyExtendSIMD(
 	case gfx.GradientExtendPad:
 		return t.Max(zero).Min(one)
 	case gfx.GradientExtendRepeat:
-		// t - floor(t)
-		return t.Sub(t.Floor())
+		// t - floor(t), with correction for the edge case where the
+		// subtraction produces exactly 1.0 (must map to 0.0 to match
+		// the scalar path's math.Modf behavior).
+		result := t.Sub(t.Floor())
+		return result.Sub(result.Floor())
 	case gfx.GradientExtendReflect:
 		// min(max(abs((t-1) - 2*floor((t-1)*0.5) - 1), 0), 1)
 		half := BroadcastFloat32x4(0.5)
@@ -99,9 +112,6 @@ func cascadeMerge(
 			MulAdd(t, BroadcastFloat32x4(rng.bias[2]))
 		ca := BroadcastFloat32x4(rng.scale[3]).
 			MulAdd(t, BroadcastFloat32x4(rng.bias[3]))
-		// Merge(y, mask) = mask ? x : y
-		// cr.Merge(r, mask) = mask ? cr : r
-		// When t >= x1[i-1] (mask true), use new color (cr).
 		r = cr.Merge(r, mask)
 		g = cg.Merge(g, mask)
 		b = cb.Merge(b, mask)
@@ -130,30 +140,48 @@ func initPosVectors(
 	return posX, posY
 }
 
+// columnPosVectors builds position vectors for a column by computing each
+// row's position in float64 (matching scalar precision) and converting to
+// float32 for SIMD use.
+func columnPosVectors(pos curve.Point, yAdv curve.Vec2) (posX, posY Float32x4) {
+	var arrX, arrY [4]float32
+	p := pos
+	for i := range 4 {
+		arrX[i] = float32(p.X)
+		arrY[i] = float32(p.Y)
+		p = p.Translate(yAdv)
+	}
+	return LoadFloat32x4(&arrX), LoadFloat32x4(&arrY)
+}
+
+// fillLinearSIMD uses the Avo-generated LUT gather for linear gradients.
+// Position and extend are computed in Go, then VGATHERDPS indexes the LUT.
 func (gf *gradientFiller) fillLinearSIMD(
 	dst Pixels,
 	_ encodedLinearGradient,
 ) {
-	startX := float32(gf.curPos.X)
-	yAdvX := float32(gf.gradient.yAdvance.X)
-	xAdvX := float32(gf.gradient.xAdvance.X)
-
-	var posXArr [4]float32
-	posXArr[0] = startX
-	posXArr[1] = startX + yAdvX
-	posXArr[2] = startX + 2*yAdvX
-	posXArr[3] = startX + 3*yAdvX
-	posX := LoadFloat32x4(&posXArr)
-
-	xAdvXVec := BroadcastFloat32x4(xAdvX)
-
 	width := len(dst[0])
+	var tBuf [wideTileWidth][stripHeight]float32
+
+	curPos := gf.curPos
 	for x := range width {
+		posX, _ := columnPosVectors(curPos, gf.gradient.yAdvance)
 		t := applyExtendSIMD(posX, gf.gradient.extend)
-		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)
-		storeSIMD(dst, x, r, g, b, a)
-		posX = posX.Add(xAdvXVec)
+		t.Store(&tBuf[x])
+		curPos = curPos.Translate(gf.gradient.xAdvance)
 	}
+
+	lut := &gf.gradient.lut
+	gradientLUTGatherAVX2(
+		&dst[0][0],
+		&dst[1][0],
+		&dst[2][0],
+		&dst[3][0],
+		(*[4]float32)(&lut.lut[0]),
+		lut.scale,
+		&tBuf[0],
+		width,
+	)
 }
 
 func (gf *gradientFiller) fillRadialSIMD(
@@ -176,9 +204,7 @@ func (gf *gradientFiller) fillRadialSIMD(
 
 	width := len(dst[0])
 	for x := range width {
-		// dist = sqrt(posX^2 + posY^2)
 		dist := posX.Mul(posX).Add(posY.Mul(posY)).Sqrt()
-		// t = scale * dist + bias
 		t := scaleVec.MulAdd(dist, biasVec)
 		t = applyExtendSIMD(t, gf.gradient.extend)
 		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)
@@ -208,15 +234,11 @@ func (gf *gradientFiller) fillStripSIMD(
 
 	width := len(dst[0])
 	for x := range width {
-		// inner = r0sq - posY^2
 		inner := r0sq.Sub(posY.Mul(posY))
-		// definedMask is true where inner >= 0
 		definedMask := inner.GreaterEqual(zero)
-		// t = posX + sqrt(max(inner, 0))
 		t := posX.Add(inner.Max(zero).Sqrt())
 		t = applyExtendSIMD(t, gf.gradient.extend)
 		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)
-		// Zero out undefined pixels
 		r = r.Masked(definedMask)
 		g = g.Masked(definedMask)
 		b = b.Masked(definedMask)
@@ -257,48 +279,34 @@ func (gf *gradientFiller) fillFocalSIMD(
 	for x := range width {
 		var t Float32x4
 		if focalOnCircle {
-			// xy_to_2pt_conical_focal_on_circle: t = posX + posY*posY/posX
 			t = posX.Add(posY.Mul(posY).Div(posX))
 		} else if wellBehaved {
-			// xy_to_2pt_conical_well_behaved:
-			// t = sqrt(posX^2 + posY^2) - posX*fp0
 			t = posX.Mul(posX).
 				Add(posY.Mul(posY)).
 				Sqrt().
 				Sub(posX.Mul(fp0Vec))
 		} else if swapped || negFocalX {
-			// xy_to_2pt_conical_smaller:
-			// t = -sqrt(posX^2 - posY^2) - posX*fp0
 			inner := posX.Mul(posX).Sub(posY.Mul(posY)).Max(zero)
 			t = zero.Sub(inner.Sqrt()).Sub(posX.Mul(fp0Vec))
 		} else {
-			// xy_to_2pt_conical_greater:
-			// t = sqrt(posX^2 - posY^2) - posX*fp0
 			inner := posX.Mul(posX).Sub(posY.Mul(posY)).Max(zero)
 			t = inner.Sqrt().Sub(posX.Mul(fp0Vec))
 		}
 
 		var definedMask Mask32x4
 		if !wellBehaved {
-			// mask_2pt_conical_degenerates: defined where t > 0 && !isNaN(t)
 			tGreaterZero := t.Greater(zero)
-			// NaN != NaN, so t.Equal(t) is true for non-NaN values
 			tNotNaN := t.Equal(t)
 			definedMask = tGreaterZero.And(tNotNaN)
 		}
 
 		if negFocalX {
-			// negate_x
 			t = zero.Sub(t)
 		}
-
 		if !nativelyFocal {
-			// alter_2pt_conical_compensate_focal
 			t = t.Add(fp1Vec)
 		}
-
 		if swapped {
-			// alter_2pt_conical_unswap
 			t = one.Sub(t)
 		}
 
@@ -329,39 +337,28 @@ func atan2SIMD(y, x Float32x4) Float32x4 {
 	piOver2 := BroadcastFloat32x4(math.Pi / 2)
 	pi := BroadcastFloat32x4(math.Pi)
 
-	// Determine if we need to swap to keep ratio in [0, 1]
 	swapMask := absY.Greater(absX)
 	minV := absX.Min(absY)
 	maxV := absX.Max(absY)
 
-	// r = min/max, in [0, 1]
 	r := minV.Div(maxV)
 	r2 := r.Mul(r)
 
-	// 7th-order minimax polynomial for atan(r)/r on [0, 1]:
-	// atan(r) ≈ r * (c0 + r²*(c1 + r²*(c2 + r²*c3)))
 	c0 := BroadcastFloat32x4(0.99997726)
 	c1 := BroadcastFloat32x4(-0.33262347)
 	c2 := BroadcastFloat32x4(0.19354346)
 	c3 := BroadcastFloat32x4(-0.11643287)
 
-	// Horner evaluation
-	p := c3.MulAdd(r2, c2) // c3*r2 + c2
-	p = p.MulAdd(r2, c1)   // p*r2 + c1
-	p = p.MulAdd(r2, c0)   // p*r2 + c0
-	result := r.Mul(p)     // r * polynomial
+	p := c3.MulAdd(r2, c2)
+	p = p.MulAdd(r2, c1)
+	p = p.MulAdd(r2, c0)
+	result := r.Mul(p)
 
-	// If swapped (absY > absX): result = pi/2 - result
-	// swapMask true => use swapped form (receiver)
-	// piOver2.Sub(result).Merge(result, swapMask)
-	// = swapMask ? (pi/2 - result) : result
 	result = piOver2.Sub(result).Merge(result, swapMask)
 
-	// If x < 0: result = pi - result
 	xNeg := x.Less(zero)
 	result = pi.Sub(result).Merge(result, xNeg)
 
-	// Apply sign of y: copy sign bit from y to result
 	ySignBit := y.AsInt32x4().
 		And(BroadcastInt32x4(math.MinInt32))
 	result = result.AsInt32x4().Xor(ySignBit).AsFloat32x4()
@@ -391,17 +388,12 @@ func (gf *gradientFiller) fillSweepSIMD(
 
 	width := len(dst[0])
 	for x := range width {
-		// angle = atan2(-posY, posX)
 		negPosY := zero.Sub(posY)
 		angle := atan2SIMD(negPosY, posX)
 
-		// adj = angle if angle >= 0, else angle + 2*pi
 		nonNeg := angle.GreaterEqual(zero)
-		// angle.Merge(angle.Add(twoPi), nonNeg)
-		// = nonNeg ? angle : angle+2pi
 		adj := angle.Merge(angle.Add(twoPi), nonNeg)
 
-		// t = (adj - startAngle) * invAngleDelta
 		t := adj.Sub(startAngleVec).Mul(invAngleDeltaVec)
 		t = applyExtendSIMD(t, gf.gradient.extend)
 		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)

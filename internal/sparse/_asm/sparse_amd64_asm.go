@@ -83,6 +83,7 @@ func main() {
 	processOutOfBoundsWindingSSE()
 	computeAlphasNonZeroAVX()
 	packUint8SRGB_AVX2()
+	gradientLUTGatherAVX2Impl()
 
 	Generate()
 }
@@ -428,6 +429,143 @@ func planarRgbaU32ToPackedRgbaU8(in [4]reg.VecVirtual, out reg.VecVirtual) {
 	VPOR(r, gs, rg)
 	VPOR(bs, as, ba)
 	VPOR(rg, ba, out)
+}
+
+var int32Consts = map[uint32]Mem{}
+
+func int32Const(v uint32) Mem {
+	if k, ok := int32Consts[v]; ok {
+		return k
+	}
+	k := ConstData(fmt.Sprintf("d_%08x", v), U32(v))
+	int32Consts[v] = k
+	return k
+}
+
+// gradientLUTGatherAVX2Impl generates the gradient LUT gather function.
+// It reads pre-computed t values (already extended) from a buffer,
+// converts them to LUT indices, gathers 4 color channels via VGATHERDPS,
+// and stores to 4 planar destination buffers.
+func gradientLUTGatherAVX2Impl() {
+	Implement("gradientLUTGatherAVX2")
+
+	dst := [4]reg.Register{
+		Load(Param("dst0"), GP64()),
+		Load(Param("dst1"), GP64()),
+		Load(Param("dst2"), GP64()),
+		Load(Param("dst3"), GP64()),
+	}
+	lutBase := Load(Param("lut"), GP64())
+	tBufBase := Load(Param("tBuf"), GP64())
+	width := Load(Param("width"), GP64())
+
+	// Broadcast lutScale (2047.0) to YMM
+	lutScaleParam, _ := Param("lutScale").Resolve()
+	lutScale := YMM()
+	VBROADCASTSS(lutScaleParam.Addr, lutScale)
+
+	// Broadcast max LUT index (2047) as int32
+	maxIdx := YMM()
+	VPBROADCASTD(int32Const(2047), maxIdx)
+
+	// Zero register for VPMAXSD clamping
+	zeroInt := YMM()
+	VPXOR(zeroInt, zeroInt, zeroInt)
+
+	// Compute loop bounds: widthBytes = width * 16 (each column = [4]float32)
+	widthBytes := GP64()
+	MOVQ(width, widthBytes)
+	SHLQ(Imm(4), widthBytes)
+
+	// Threshold for 2-column (YMM) processing: need at least 32 bytes
+	threshold := GP64()
+	MOVQ(widthBytes, threshold)
+	SUBQ(Imm(16), threshold)
+
+	offset := GP64()
+	XORQ(offset, offset)
+
+	PCALIGN(Imm(32))
+	Label("gather_loop")
+	CMPQ(offset, threshold)
+	JG(LabelRef("gather_tail"))
+
+	// Load 8 t values (2 columns × 4 rows)
+	t := YMM()
+	VMOVUPS(Mem{Base: tBufBase, Index: offset, Scale: 1}, t)
+
+	// Scale to LUT index range: t * lutScale
+	VMULPS(lutScale, t, t)
+
+	// Convert to int32 indices (truncate toward zero)
+	indices := YMM()
+	VCVTTPS2DQ(t, indices)
+
+	// Clamp to [0, 2047]
+	VPMAXSD(zeroInt, indices, indices)
+	VPMINSD(maxIdx, indices, indices)
+
+	// Convert to byte offsets: indices * 16 (each LUT entry = [4]float32 = 16 bytes)
+	VPSLLD(Imm(4), indices, indices)
+
+	// Gather 4 channels from LUT and store to planar buffers.
+	// In Go plan9 asm, VGATHERDPS arg1=mask, arg2=mem, arg3=dst.
+	for ch := range 4 {
+		mask := YMM()
+		VPCMPEQD(mask, mask, mask) // all-ones mask
+
+		result := YMM()
+		VGATHERDPS(mask, Mem{Base: lutBase, Disp: ch * 4, Index: indices, Scale: 1}, result)
+
+		VMOVUPS(result, Mem{Base: dst[ch], Index: offset, Scale: 1})
+	}
+
+	ADDQ(Imm(32), offset) // advance 2 columns = 32 bytes
+	JMP(LabelRef("gather_loop"))
+
+	Label("gather_tail")
+	// Handle remaining column (if width is odd)
+	CMPQ(offset, widthBytes)
+	JGE(LabelRef("gather_done"))
+
+	// Load 4 t values (1 column)
+	tX := XMM()
+	VMOVUPS(Mem{Base: tBufBase, Index: offset, Scale: 1}, tX)
+
+	// Scale
+	lutScaleX := XMM()
+	VBROADCASTSS(lutScaleParam.Addr, lutScaleX)
+	VMULPS(lutScaleX, tX, tX)
+
+	// Convert to int32
+	idxX := XMM()
+	VCVTTPS2DQ(tX, idxX)
+
+	// Clamp
+	zeroX := XMM()
+	VPXOR(zeroX, zeroX, zeroX)
+	maxIdxX := XMM()
+	VPBROADCASTD(int32Const(2047), maxIdxX)
+	VPMAXSD(zeroX, idxX, idxX)
+	VPMINSD(maxIdxX, idxX, idxX)
+
+	// Byte offsets
+	VPSLLD(Imm(4), idxX, idxX)
+
+	// Gather 4 channels (XMM = 4 elements)
+	for ch := range 4 {
+		maskX := XMM()
+		VPCMPEQD(maskX, maskX, maskX)
+
+		resultX := XMM()
+		VGATHERDPS(maskX, Mem{Base: lutBase, Disp: ch * 4, Index: idxX, Scale: 1}, resultX)
+
+		VMOVUPS(resultX, Mem{Base: dst[ch], Index: offset, Scale: 1})
+	}
+
+	Label("gather_done")
+	VZEROUPPER()
+	RET()
 }
 
 func transpose8x4(c01, c23, c45, c67, permMask reg.VecVirtual) (r0, r1, r2, r3 reg.VecVirtual) {
