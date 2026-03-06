@@ -9,6 +9,7 @@ package sparse
 import (
 	"math"
 	. "simd/archsimd"
+	"unsafe"
 
 	"honnef.co/go/curve"
 	"honnef.co/go/gutter/gfx"
@@ -85,39 +86,98 @@ func applyExtendSIMD(
 	panic("unreachable")
 }
 
-// cascadeMerge evaluates the gradient color for a vector of t values
-// by merging all ranges using conditional selection.
-func cascadeMerge(
-	t Float32x4,
-	ranges []gradientRange,
-) (r, g, b, a Float32x4) {
-	rng := &ranges[0]
-	r = BroadcastFloat32x4(rng.scale[0]).
-		MulAdd(t, BroadcastFloat32x4(rng.bias[0]))
-	g = BroadcastFloat32x4(rng.scale[1]).
-		MulAdd(t, BroadcastFloat32x4(rng.bias[1]))
-	b = BroadcastFloat32x4(rng.scale[2]).
-		MulAdd(t, BroadcastFloat32x4(rng.bias[2]))
-	a = BroadcastFloat32x4(rng.scale[3]).
-		MulAdd(t, BroadcastFloat32x4(rng.bias[3]))
+// simdGradientRanges is a SoA (Structure of Arrays) representation of
+// gradient ranges, optimized for VPERMPS-based lookup. Instead of
+// iterating all ranges with cascade merge, we find the range index via
+// threshold scan, then use VPERMPS to gather the right scale/bias per pixel.
+type simdGradientRanges struct {
+	n      int
+	x1     [maxSIMDRanges]float32
+	scaleR [maxSIMDRanges]float32
+	scaleG [maxSIMDRanges]float32
+	scaleB [maxSIMDRanges]float32
+	scaleA [maxSIMDRanges]float32
+	biasR  [maxSIMDRanges]float32
+	biasG  [maxSIMDRanges]float32
+	biasB  [maxSIMDRanges]float32
+	biasA  [maxSIMDRanges]float32
+}
 
-	for i := 1; i < len(ranges); i++ {
-		rng = &ranges[i]
-		mask := t.GreaterEqual(BroadcastFloat32x4(ranges[i-1].x1))
-		cr := BroadcastFloat32x4(rng.scale[0]).
-			MulAdd(t, BroadcastFloat32x4(rng.bias[0]))
-		cg := BroadcastFloat32x4(rng.scale[1]).
-			MulAdd(t, BroadcastFloat32x4(rng.bias[1]))
-		cb := BroadcastFloat32x4(rng.scale[2]).
-			MulAdd(t, BroadcastFloat32x4(rng.bias[2]))
-		ca := BroadcastFloat32x4(rng.scale[3]).
-			MulAdd(t, BroadcastFloat32x4(rng.bias[3]))
-		r = cr.Merge(r, mask)
-		g = cg.Merge(g, mask)
-		b = cb.Merge(b, mask)
-		a = ca.Merge(a, mask)
+func initSIMDRanges(sr *simdGradientRanges, ranges []gradientRange) {
+	sr.n = len(ranges)
+	for i, rng := range ranges {
+		sr.x1[i] = rng.x1
+		sr.scaleR[i] = rng.scale[0]
+		sr.scaleG[i] = rng.scale[1]
+		sr.scaleB[i] = rng.scale[2]
+		sr.scaleA[i] = rng.scale[3]
+		sr.biasR[i] = rng.bias[0]
+		sr.biasG[i] = rng.bias[1]
+		sr.biasB[i] = rng.bias[2]
+		sr.biasA[i] = rng.bias[3]
 	}
-	return r, g, b, a
+}
+
+// cascadeMergeAll dispatches to the Avo VPERMPS implementation for n <= 8,
+// falling back to the Go cascade merge for larger n.
+func cascadeMergeAll(
+	dst Pixels,
+	tBuf *[wideTileWidth]Float32x4,
+	sr *simdGradientRanges,
+	width int,
+) {
+	if sr.n <= 8 {
+		gradientCascadeMergeAVX2(
+			&dst[0][0],
+			&dst[1][0],
+			&dst[2][0],
+			&dst[3][0],
+			(*[stripHeight]float32)(unsafe.Pointer(&tBuf[0])),
+			uintptr(unsafe.Pointer(sr)),
+			width,
+		)
+	} else {
+		cascadeMergeChannel(dst[0], tBuf, &sr.scaleR, &sr.biasR, &sr.x1, width, sr.n)
+		cascadeMergeChannel(dst[1], tBuf, &sr.scaleG, &sr.biasG, &sr.x1, width, sr.n)
+		cascadeMergeChannel(dst[2], tBuf, &sr.scaleB, &sr.biasB, &sr.x1, width, sr.n)
+		cascadeMergeChannel(dst[3], tBuf, &sr.scaleA, &sr.biasA, &sr.x1, width, sr.n)
+	}
+}
+
+// cascadeMergeChannel performs cascade merge for a single color channel,
+// writing results directly to dst. Processing one channel at a time
+// keeps register pressure low (avoids the Go compiler's legacy SSE
+// spill issue with 8+ live YMM registers).
+func cascadeMergeChannel(
+	dst [][stripHeight]float32,
+	tBuf *[wideTileWidth]Float32x4,
+	scale *[maxSIMDRanges]float32,
+	bias *[maxSIMDRanges]float32,
+	x1 *[maxSIMDRanges]float32,
+	width int,
+	n int,
+) {
+	// Pre-broadcast all range constants to avoid repeated broadcasts
+	// in the inner loop (saves n*3 broadcasts per column).
+	var scaleVec, biasVec, threshVec [maxSIMDRanges]Float32x4
+	for i := range n {
+		scaleVec[i] = BroadcastFloat32x4(scale[i])
+		biasVec[i] = BroadcastFloat32x4(bias[i])
+	}
+	for i := range n - 1 {
+		threshVec[i] = BroadcastFloat32x4(x1[i])
+	}
+
+	for x := range width {
+		t := tBuf[x]
+		result := scaleVec[0].MulAdd(t, biasVec[0])
+		for i := 1; i < n; i++ {
+			candidate := scaleVec[i].MulAdd(t, biasVec[i])
+			mask := t.GreaterEqual(threshVec[i-1])
+			result = candidate.Merge(result, mask)
+		}
+		result.Store((*[4]float32)(&dst[x]))
+	}
 }
 
 // storeSIMD writes a column of 4 pixels (one SIMD vector per channel)
@@ -202,16 +262,23 @@ func (gf *gradientFiller) fillRadialSIMD(
 	biasVec := BroadcastFloat32x4(kind.bias)
 	scaleVec := BroadcastFloat32x4(kind.scale)
 
+	var sr simdGradientRanges
+	initSIMDRanges(&sr, gf.gradient.ranges)
 	width := len(dst[0])
+
+	// Pass 1: compute t values.
+	var tBuf [wideTileWidth]Float32x4
 	for x := range width {
 		dist := posX.Mul(posX).Add(posY.Mul(posY)).Sqrt()
 		t := scaleVec.MulAdd(dist, biasVec)
 		t = applyExtendSIMD(t, gf.gradient.extend)
-		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)
-		storeSIMD(dst, x, r, g, b, a)
+		tBuf[x] = t
 		posX = posX.Add(xAdvXVec)
 		posY = posY.Add(xAdvYVec)
 	}
+
+	// Pass 2: cascade merge (Avo VPERMPS for n<=8, Go fallback otherwise).
+	cascadeMergeAll(dst, &tBuf, &sr, width)
 }
 
 func (gf *gradientFiller) fillStripSIMD(
@@ -232,20 +299,33 @@ func (gf *gradientFiller) fillStripSIMD(
 	r0sq := BroadcastFloat32x4(kind.r0ScaledSquared)
 	zero := BroadcastFloat32x4(0)
 
+	var sr simdGradientRanges
+	initSIMDRanges(&sr, gf.gradient.ranges)
 	width := len(dst[0])
+
+	// Pass 1: compute t values and defined masks.
+	var tBuf [wideTileWidth]Float32x4
+	var maskBuf [wideTileWidth]Mask32x4
 	for x := range width {
 		inner := r0sq.Sub(posY.Mul(posY))
-		definedMask := inner.GreaterEqual(zero)
+		maskBuf[x] = inner.GreaterEqual(zero)
 		t := posX.Add(inner.Max(zero).Sqrt())
 		t = applyExtendSIMD(t, gf.gradient.extend)
-		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)
-		r = r.Masked(definedMask)
-		g = g.Masked(definedMask)
-		b = b.Masked(definedMask)
-		a = a.Masked(definedMask)
-		storeSIMD(dst, x, r, g, b, a)
+		tBuf[x] = t
 		posX = posX.Add(xAdvXVec)
 		posY = posY.Add(xAdvYVec)
+	}
+
+	// Pass 2: cascade merge (Avo VPERMPS for n<=8, Go fallback otherwise).
+	cascadeMergeAll(dst, &tBuf, &sr, width)
+
+	// Apply defined mask.
+	for x := range width {
+		m := maskBuf[x]
+		LoadFloat32x4(&dst[0][x]).Masked(m).Store(&dst[0][x])
+		LoadFloat32x4(&dst[1][x]).Masked(m).Store(&dst[1][x])
+		LoadFloat32x4(&dst[2][x]).Masked(m).Store(&dst[2][x])
+		LoadFloat32x4(&dst[3][x]).Masked(m).Store(&dst[3][x])
 	}
 }
 
@@ -275,7 +355,13 @@ func (gf *gradientFiller) fillFocalSIMD(
 	negFocalX := 1.0-kind.focalData.fFocalX < 0.0
 	nativelyFocal := kind.focalData.nativelyFocal()
 
+	var sr simdGradientRanges
+	initSIMDRanges(&sr, gf.gradient.ranges)
 	width := len(dst[0])
+
+	// Pass 1: compute t values and defined masks.
+	var tBuf [wideTileWidth]Float32x4
+	var maskBuf [wideTileWidth]Mask32x4
 	for x := range width {
 		var t Float32x4
 		if focalOnCircle {
@@ -293,11 +379,10 @@ func (gf *gradientFiller) fillFocalSIMD(
 			t = inner.Sqrt().Sub(posX.Mul(fp0Vec))
 		}
 
-		var definedMask Mask32x4
 		if !wellBehaved {
 			tGreaterZero := t.Greater(zero)
 			tNotNaN := t.Equal(t)
-			definedMask = tGreaterZero.And(tNotNaN)
+			maskBuf[x] = tGreaterZero.And(tNotNaN)
 		}
 
 		if negFocalX {
@@ -311,18 +396,23 @@ func (gf *gradientFiller) fillFocalSIMD(
 		}
 
 		t = applyExtendSIMD(t, gf.gradient.extend)
-		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)
-
-		if !wellBehaved {
-			r = r.Masked(definedMask)
-			g = g.Masked(definedMask)
-			b = b.Masked(definedMask)
-			a = a.Masked(definedMask)
-		}
-
-		storeSIMD(dst, x, r, g, b, a)
+		tBuf[x] = t
 		posX = posX.Add(xAdvXVec)
 		posY = posY.Add(xAdvYVec)
+	}
+
+	// Pass 2: cascade merge (Avo VPERMPS for n<=8, Go fallback otherwise).
+	cascadeMergeAll(dst, &tBuf, &sr, width)
+
+	// Apply defined mask if needed.
+	if !wellBehaved {
+		for x := range width {
+			m := maskBuf[x]
+			LoadFloat32x4(&dst[0][x]).Masked(m).Store(&dst[0][x])
+			LoadFloat32x4(&dst[1][x]).Masked(m).Store(&dst[1][x])
+			LoadFloat32x4(&dst[2][x]).Masked(m).Store(&dst[2][x])
+			LoadFloat32x4(&dst[3][x]).Masked(m).Store(&dst[3][x])
+		}
 	}
 }
 
@@ -386,7 +476,12 @@ func (gf *gradientFiller) fillSweepSIMD(
 	startAngleVec := BroadcastFloat32x4(kind.startAngle)
 	invAngleDeltaVec := BroadcastFloat32x4(kind.invAngleDelta)
 
+	var sr simdGradientRanges
+	initSIMDRanges(&sr, gf.gradient.ranges)
 	width := len(dst[0])
+
+	// Pass 1: compute t values.
+	var tBuf [wideTileWidth]Float32x4
 	for x := range width {
 		negPosY := zero.Sub(posY)
 		angle := atan2SIMD(negPosY, posX)
@@ -396,9 +491,11 @@ func (gf *gradientFiller) fillSweepSIMD(
 
 		t := adj.Sub(startAngleVec).Mul(invAngleDeltaVec)
 		t = applyExtendSIMD(t, gf.gradient.extend)
-		r, g, b, a := cascadeMerge(t, gf.gradient.ranges)
-		storeSIMD(dst, x, r, g, b, a)
+		tBuf[x] = t
 		posX = posX.Add(xAdvXVec)
 		posY = posY.Add(xAdvYVec)
 	}
+
+	// Pass 2: cascade merge (Avo VPERMPS for n<=8, Go fallback otherwise).
+	cascadeMergeAll(dst, &tBuf, &sr, width)
 }

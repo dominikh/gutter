@@ -84,6 +84,7 @@ func main() {
 	computeAlphasNonZeroAVX()
 	packUint8SRGB_AVX2()
 	gradientLUTGatherAVX2Impl()
+	gradientCascadeMergeAVX2Impl()
 
 	Generate()
 }
@@ -564,6 +565,182 @@ func gradientLUTGatherAVX2Impl() {
 	}
 
 	Label("gather_done")
+	VZEROUPPER()
+	RET()
+}
+
+// gradientCascadeMergeAVX2Impl generates the VPERMPS-based gradient cascade
+// merge function. It processes pre-computed t values in a two-pass fashion:
+// threshold scan to find range indices, then VPERMPS lookup for scale/bias
+// per channel. Handles n <= 8 ranges only (caller must check).
+func gradientCascadeMergeAVX2Impl() {
+	Implement("gradientCascadeMergeAVX2")
+
+	dst := [4]reg.Register{
+		Load(Param("dst0"), GP64()),
+		Load(Param("dst1"), GP64()),
+		Load(Param("dst2"), GP64()),
+		Load(Param("dst3"), GP64()),
+	}
+	tBufBase := Load(Param("tBuf"), GP64())
+	srBase := Load(Param("sr"), GP64())
+	width := Load(Param("width"), GP64())
+
+	// simdGradientRanges struct field offsets (amd64):
+	//   n      int              @ 0   (8 bytes)
+	//   x1     [16]float32      @ 8   (64 bytes)
+	//   scaleR [16]float32      @ 72
+	//   scaleG [16]float32      @ 136
+	//   scaleB [16]float32      @ 200
+	//   scaleA [16]float32      @ 264
+	//   biasR  [16]float32      @ 328
+	//   biasG  [16]float32      @ 392
+	//   biasB  [16]float32      @ 456
+	//   biasA  [16]float32      @ 520
+	const (
+		offN      = 0
+		offX1     = 8
+		offScaleR = 72
+		offScaleG = 136
+		offScaleB = 200
+		offScaleA = 264
+		offBiasR  = 328
+		offBiasG  = 392
+		offBiasB  = 456
+		offBiasA  = 520
+	)
+	scaleOff := [4]int{offScaleR, offScaleG, offScaleB, offScaleA}
+	biasOff := [4]int{offBiasR, offBiasG, offBiasB, offBiasA}
+
+	// Load n-1 (number of threshold scan iterations)
+	nMinus1 := GP64()
+	MOVQ(Mem{Base: srBase, Disp: offN}, nMinus1)
+	DECQ(nMinus1)
+
+	// Compute loop bounds: widthBytes = width * 16
+	widthBytes := GP64()
+	MOVQ(width, widthBytes)
+	SHLQ(Imm(4), widthBytes)
+
+	// YMM threshold: process 2 columns (32 bytes) at a time.
+	// We can always safely process 2 columns even if width is odd,
+	// because the buffers are wideTileWidth (256) elements.
+	ymmThreshold := GP64()
+	MOVQ(widthBytes, ymmThreshold)
+	SUBQ(Imm(16), ymmThreshold)
+
+	oneConst := floatConst(1.0)
+
+	offset := GP64()
+	XORQ(offset, offset)
+
+	// Pre-load the 8 scale/bias values for each channel into YMM registers.
+	// With 4 channels × 2 (scale+bias) = 8 YMM registers, plus idx, t, one,
+	// scratch = 12 total. Well within the 16 YMM budget.
+	scaleRegs := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
+	biasRegs := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
+	for ch := range 4 {
+		VMOVUPS(Mem{Base: srBase, Disp: scaleOff[ch]}, scaleRegs[ch])
+		VMOVUPS(Mem{Base: srBase, Disp: biasOff[ch]}, biasRegs[ch])
+	}
+
+	PCALIGN(Imm(32))
+	Label("cascade_loop")
+	CMPQ(offset, ymmThreshold)
+	JG(LabelRef("cascade_tail"))
+
+	// Load 8 t values (2 columns)
+	t := YMM()
+	VMOVUPS(Mem{Base: tBufBase, Index: offset, Scale: 1}, t)
+
+	// Threshold scan: count how many x1 thresholds each t value exceeds.
+	one := YMM()
+	VBROADCASTSS(oneConst, one)
+	idx := YMM()
+	VXORPS(idx, idx, idx)
+
+	threshIdx := GP64()
+	XORQ(threshIdx, threshIdx)
+
+	Label("thresh_loop")
+	CMPQ(threshIdx, nMinus1)
+	JGE(LabelRef("thresh_done"))
+
+	thresh := YMM()
+	VBROADCASTSS(Mem{Base: srBase, Disp: offX1, Index: threshIdx, Scale: 4}, thresh)
+	cmpResult := YMM()
+	VCMPPS(Imm(0x0D), thresh, t, cmpResult) // cmpResult = (t >= thresh)
+	masked := YMM()
+	VANDPS(cmpResult, one, masked) // 1.0 where true
+	VADDPS(masked, idx, idx)
+
+	INCQ(threshIdx)
+	JMP(LabelRef("thresh_loop"))
+
+	Label("thresh_done")
+	// Convert float indices to int32 for VPERMPS
+	VCVTTPS2DQ(idx, idx)
+
+	// VPERMPS lookup for all 4 channels: scale[idx] * t + bias[idx]
+	for ch := range 4 {
+		s := YMM()
+		VPERMPS(scaleRegs[ch], idx, s)
+		b := YMM()
+		VPERMPS(biasRegs[ch], idx, b)
+		VFMADD132PS(t, b, s) // s = s * t + b
+		VMOVUPS(s, Mem{Base: dst[ch], Index: offset, Scale: 1})
+	}
+
+	ADDQ(Imm(32), offset)
+	JMP(LabelRef("cascade_loop"))
+
+	// Tail: 1 remaining column (4 t values in low XMM, zero-extended to YMM)
+	Label("cascade_tail")
+	CMPQ(offset, widthBytes)
+	JGE(LabelRef("cascade_done"))
+
+	tTail := YMM()
+	// Load 4 floats into XMM (zero-extends to YMM automatically)
+	VMOVUPS(Mem{Base: tBufBase, Index: offset, Scale: 1}, tTail.AsX())
+
+	// Threshold scan (same logic, using YMM with zeros in high half)
+	oneTail := YMM()
+	VBROADCASTSS(oneConst, oneTail)
+	idxTail := YMM()
+	VXORPS(idxTail, idxTail, idxTail)
+
+	threshIdxTail := GP64()
+	XORQ(threshIdxTail, threshIdxTail)
+
+	Label("thresh_loop_tail")
+	CMPQ(threshIdxTail, nMinus1)
+	JGE(LabelRef("thresh_done_tail"))
+
+	threshTail := YMM()
+	VBROADCASTSS(Mem{Base: srBase, Disp: offX1, Index: threshIdxTail, Scale: 4}, threshTail)
+	cmpTail := YMM()
+	VCMPPS(Imm(0x0D), threshTail, tTail, cmpTail)
+	maskedTail := YMM()
+	VANDPS(cmpTail, oneTail, maskedTail)
+	VADDPS(maskedTail, idxTail, idxTail)
+
+	INCQ(threshIdxTail)
+	JMP(LabelRef("thresh_loop_tail"))
+
+	Label("thresh_done_tail")
+	VCVTTPS2DQ(idxTail, idxTail)
+
+	for ch := range 4 {
+		s := YMM()
+		VPERMPS(scaleRegs[ch], idxTail, s)
+		b := YMM()
+		VPERMPS(biasRegs[ch], idxTail, b)
+		VFMADD132PS(tTail, b, s)
+		// Store only the low XMM (4 values = 1 column)
+		VMOVUPS(s.AsX(), Mem{Base: dst[ch], Index: offset, Scale: 1})
+	}
+
+	Label("cascade_done")
 	VZEROUPPER()
 	RET()
 }
