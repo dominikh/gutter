@@ -825,6 +825,10 @@ func (gf *gradientFiller) reset(startX, startY uint16) {
 }
 
 func (gf *gradientFiller) fill(dst Pixels) {
+	if gf.fillSIMD(dst) {
+		return
+	}
+
 	oldPos := gf.curPos
 
 	width := len(dst[0])
