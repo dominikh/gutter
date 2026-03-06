@@ -101,19 +101,35 @@ func encodeGradient(
 
 	xAdvance, yAdvance := xyAdvances(transform)
 
+	var sr simdGradientRanges
+	if len(ranges) <= maxShuffleGradientRanges {
+		sr.n = len(ranges)
+		for i, rng := range ranges {
+			sr.x1[i] = rng.x1
+			sr.scaleR[i] = rng.scale[0]
+			sr.scaleG[i] = rng.scale[1]
+			sr.scaleB[i] = rng.scale[2]
+			sr.scaleA[i] = rng.scale[3]
+			sr.biasR[i] = rng.bias[0]
+			sr.biasG[i] = rng.bias[1]
+			sr.biasB[i] = rng.bias[2]
+			sr.biasA[i] = rng.bias[3]
+		}
+	}
 	encoded := &encodedGradient{
-		kind,
-		transform,
-		xAdvance,
-		yAdvance,
-		ranges,
-		extend,
+		kind:       kind,
+		transform:  transform,
+		xAdvance:   xAdvance,
+		yAdvance:   yAdvance,
+		ranges:     ranges,
+		simdRanges: sr,
+		extend:     extend,
 		// Even if the gradient has no stops with transparency, we might have to force
 		// alpha-compositing in case the radial gradient is undefined in certain positions,
 		// in which case the resulting color will be transparent and thus the gradient overall
 		// must be treated as non-opaque.
-		hasOpacities || kind.hasUndefined(),
-		makeGradientLUT(ranges),
+		hasOpacities: hasOpacities || kind.hasUndefined(),
+		lut:          makeGradientLUT(ranges),
 	}
 
 	return encoded
@@ -327,8 +343,7 @@ func (r encodedRadialGradient) hasUndefined() bool {
 
 // isDefined implements GradientKind.
 func (r encodedRadialGradient) isDefined(pos curve.Point) bool {
-	_, ok := r.posInner(pos)
-	return ok
+	return true
 }
 
 func (r encodedRadialGradient) posInner(pos curve.Point) (float32, bool) {
@@ -470,6 +485,24 @@ func (g encodedFocalGradient) posInner(pos curve.Point) (float32, bool) {
 	return t, true
 }
 
+// maxShuffleGradientRanges is the number of gradient ranges that can be handled
+// by runGradientShuffleAVX2. Gradients with more ranges than this have to use
+// gradientLUTGatherAVX2 instead.
+const maxShuffleGradientRanges = 8
+
+type simdGradientRanges struct {
+	n      int
+	x1     [maxShuffleGradientRanges]float32
+	scaleR [maxShuffleGradientRanges]float32
+	scaleG [maxShuffleGradientRanges]float32
+	scaleB [maxShuffleGradientRanges]float32
+	scaleA [maxShuffleGradientRanges]float32
+	biasR  [maxShuffleGradientRanges]float32
+	biasG  [maxShuffleGradientRanges]float32
+	biasB  [maxShuffleGradientRanges]float32
+	biasA  [maxShuffleGradientRanges]float32
+}
+
 type encodedGradient struct {
 	kind gradientKind
 	// A transform that needs to be applied to the position of the first
@@ -482,7 +515,8 @@ type encodedGradient struct {
 	// step in the y direction in the output image.
 	yAdvance curve.Vec2
 	// The color ranges of the gradient.
-	ranges []gradientRange
+	ranges     []gradientRange
+	simdRanges simdGradientRanges
 	// The extend of the gradient.
 	extend gfx.GradientExtend
 	// Whether the gradient requires `source_over` compositing.
@@ -824,7 +858,7 @@ func (gf *gradientFiller) reset(startX, startY uint16) {
 	gf.curPos = curve.Pt(float64(startX), float64(startY)).Transform(gf.gradient.transform)
 }
 
-func (gf *gradientFiller) fill(dst Pixels) {
+func (gf *gradientFiller) fillScalar(dst Pixels) {
 	oldPos := gf.curPos
 
 	width := dst.width()
