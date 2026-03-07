@@ -270,7 +270,7 @@ func (gf *gradientFiller) fillFocalSIMD(
 }
 
 // atan2SIMD computes atan2(y, x) for Float32x4 vectors using a
-// 7th-order minimax polynomial approximation with |error| < 2e-5.
+// 5th-order polynomial approximation with |error| < 1e-5.
 func atan2SIMD(y, x Float32x4) Float32x4 {
 	signBitMask := BroadcastInt32x4(0x7FFFFFFF)
 	absX := x.AsInt32x4().And(signBitMask).AsFloat32x4()
@@ -291,11 +291,16 @@ func atan2SIMD(y, x Float32x4) Float32x4 {
 	c1 := BroadcastFloat32x4(-0.33262347)
 	c2 := BroadcastFloat32x4(0.19354346)
 	c3 := BroadcastFloat32x4(-0.11643287)
+	c4 := BroadcastFloat32x4(0.05265332)
+	c5 := BroadcastFloat32x4(-0.01172120)
 
-	p := c3.MulAdd(r2, c2)
+	p := c5
+	p = p.MulAdd(r2, c4)
+	p = p.MulAdd(r2, c3)
+	p = p.MulAdd(r2, c2)
 	p = p.MulAdd(r2, c1)
 	p = p.MulAdd(r2, c0)
-	result := r.Mul(p)
+	result := p.Mul(r)
 
 	result = piOver2.Sub(result).Merge(result, swapMask)
 
@@ -334,8 +339,7 @@ func (gf *gradientFiller) fillSweepSIMD(
 	// Pass 1: compute t values.
 	var tBuf [wideTileWidth][stripHeight]float32
 	for x := range width {
-		negPosY := zero.Sub(posY)
-		angle := atan2SIMD(negPosY, posX)
+		angle := atan2SIMD(zero.Sub(posY), posX)
 
 		nonNeg := angle.GreaterEqual(zero)
 		adj := angle.Merge(angle.Add(twoPi), nonNeg)
