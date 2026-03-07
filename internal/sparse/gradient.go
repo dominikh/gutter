@@ -102,7 +102,7 @@ func encodeGradient(
 	xAdvance, yAdvance := xyAdvances(transform)
 
 	var sr simdGradientRanges
-	if len(ranges) <= maxSIMDRanges {
+	if len(ranges) <= maxCascadeMergeRanges {
 		sr = initSIMDRanges(ranges)
 	}
 	encoded := &encodedGradient{
@@ -474,7 +474,7 @@ func (g encodedFocalGradient) posInner(pos curve.Point) (float32, bool) {
 	return t, true
 }
 
-const maxSIMDRanges = 4
+const maxCascadeMergeRanges = 4
 
 // simdGradientRanges is a SoA (Structure of Arrays) representation of
 // gradient ranges, optimized for VPERMPS-based lookup. Instead of
@@ -482,15 +482,15 @@ const maxSIMDRanges = 4
 // threshold scan, then use VPERMPS to gather the right scale/bias per pixel.
 type simdGradientRanges struct {
 	n      int
-	x1     [maxSIMDRanges]float32
-	scaleR [maxSIMDRanges]float32
-	scaleG [maxSIMDRanges]float32
-	scaleB [maxSIMDRanges]float32
-	scaleA [maxSIMDRanges]float32
-	biasR  [maxSIMDRanges]float32
-	biasG  [maxSIMDRanges]float32
-	biasB  [maxSIMDRanges]float32
-	biasA  [maxSIMDRanges]float32
+	x1     [maxCascadeMergeRanges]float32
+	scaleR [maxCascadeMergeRanges]float32
+	scaleG [maxCascadeMergeRanges]float32
+	scaleB [maxCascadeMergeRanges]float32
+	scaleA [maxCascadeMergeRanges]float32
+	biasR  [maxCascadeMergeRanges]float32
+	biasG  [maxCascadeMergeRanges]float32
+	biasB  [maxCascadeMergeRanges]float32
+	biasA  [maxCascadeMergeRanges]float32
 }
 
 func initSIMDRanges(ranges []gradientRange) simdGradientRanges {

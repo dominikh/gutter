@@ -356,7 +356,7 @@ func (gf *gradientFiller) fillSweepSIMD(
 
 func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][stripHeight]float32, masks *[wideTileWidth][stripHeight]int32) {
 	width := len(dst[0])
-	if len(g.ranges) <= 4 {
+	if len(g.ranges) <= maxCascadeMergeRanges {
 		if masks != nil {
 			gradientCascadeMergeMaskedAVX2(
 				&dst[0][0],
