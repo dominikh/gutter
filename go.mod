@@ -32,3 +32,5 @@ tool (
 	github.com/mmcloughlin/avo
 	golang.org/x/tools/cmd/stringer
 )
+
+replace github.com/mmcloughlin/avo => /home/dominikh/prj/avo
