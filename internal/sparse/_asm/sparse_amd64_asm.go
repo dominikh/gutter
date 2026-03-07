@@ -459,6 +459,7 @@ func gradientLUTGatherAVX2Impl() {
 	lutBase := Load(Param("lut"), GP64())
 	tBufBase := Load(Param("tBuf"), GP64())
 	width := Load(Param("width"), GP64())
+	maskBase := Load(Param("masks"), GP64())
 
 	// Broadcast lutScale (2047.0) to YMM
 	lutScaleParam, _ := Param("lutScale").Resolve()
@@ -507,18 +508,21 @@ func gradientLUTGatherAVX2Impl() {
 	VPMINSD(maxIdx, indices, indices)
 
 	// Convert to byte offsets: indices * 16 (each LUT entry = [4]float32 = 16 bytes)
+	// OPT(dh): couldn't we set the appropriate scale in the VGATHERDPS instead?
 	VPSLLD(Imm(4), indices, indices)
 
 	// Gather 4 channels from LUT and store to planar buffers.
 	// In Go plan9 asm, VGATHERDPS arg1=mask, arg2=mem, arg3=dst.
+	storeMask := YMM()
+	VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
 	for ch := range 4 {
-		mask := YMM()
-		VPCMPEQD(mask, mask, mask) // all-ones mask
+		gatherMask := YMM()
+		VPCMPEQD(gatherMask, gatherMask, gatherMask) // all-ones mask
 
 		result := YMM()
-		VGATHERDPS(mask, Mem{Base: lutBase, Disp: ch * 4, Index: indices, Scale: 1}, result)
+		VGATHERDPS(gatherMask, Mem{Base: lutBase, Disp: ch * 4, Index: indices, Scale: 1}, result)
 
-		VMOVUPS(result, Mem{Base: dst[ch], Index: offset, Scale: 1})
+		VMASKMOVPS(result, storeMask, Mem{Base: dst[ch], Index: offset, Scale: 1})
 	}
 
 	ADDQ(Imm(32), offset) // advance 2 columns = 32 bytes
@@ -554,6 +558,8 @@ func gradientLUTGatherAVX2Impl() {
 	VPSLLD(Imm(4), idxX, idxX)
 
 	// Gather 4 channels (XMM = 4 elements)
+	storeMask = XMM()
+	VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
 	for ch := range 4 {
 		maskX := XMM()
 		VPCMPEQD(maskX, maskX, maskX)
@@ -561,7 +567,7 @@ func gradientLUTGatherAVX2Impl() {
 		resultX := XMM()
 		VGATHERDPS(maskX, Mem{Base: lutBase, Disp: ch * 4, Index: idxX, Scale: 1}, resultX)
 
-		VMOVUPS(resultX, Mem{Base: dst[ch], Index: offset, Scale: 1})
+		VMASKMOVPS(resultX, storeMask, Mem{Base: dst[ch], Index: offset, Scale: 1})
 	}
 
 	Label("gather_done")
@@ -585,6 +591,7 @@ func gradientCascadeMergeAVX2Impl() {
 	tBufBase := Load(Param("tBuf"), GP64())
 	srBase := Load(Param("sr"), GP64())
 	width := Load(Param("width"), GP64())
+	maskBase := Load(Param("masks"), GP64())
 
 	// simdGradientRanges struct field offsets (amd64):
 	//   n      int              @ 0   (8 bytes)
@@ -682,13 +689,15 @@ func gradientCascadeMergeAVX2Impl() {
 	VCVTTPS2DQ(idx, idx)
 
 	// VPERMPS lookup for all 4 channels: scale[idx] * t + bias[idx]
+	storeMask := YMM()
+	VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
 	for ch := range 4 {
 		s := YMM()
 		VPERMPS(scaleRegs[ch], idx, s)
 		b := YMM()
 		VPERMPS(biasRegs[ch], idx, b)
 		VFMADD132PS(t, b, s) // s = s * t + b
-		VMOVUPS(s, Mem{Base: dst[ch], Index: offset, Scale: 1})
+		VMASKMOVPS(s, storeMask, Mem{Base: dst[ch], Index: offset, Scale: 1})
 	}
 
 	ADDQ(Imm(32), offset)
@@ -730,6 +739,8 @@ func gradientCascadeMergeAVX2Impl() {
 	Label("thresh_done_tail")
 	VCVTTPS2DQ(idxTail, idxTail)
 
+	storeMask = XMM()
+	VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
 	for ch := range 4 {
 		s := YMM()
 		VPERMPS(scaleRegs[ch], idxTail, s)
@@ -737,7 +748,7 @@ func gradientCascadeMergeAVX2Impl() {
 		VPERMPS(biasRegs[ch], idxTail, b)
 		VFMADD132PS(tTail, b, s)
 		// Store only the low XMM (4 values = 1 column)
-		VMOVUPS(s.AsX(), Mem{Base: dst[ch], Index: offset, Scale: 1})
+		VMASKMOVPS(s.AsX(), storeMask, Mem{Base: dst[ch], Index: offset, Scale: 1})
 	}
 
 	Label("cascade_done")

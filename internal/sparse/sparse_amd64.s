@@ -581,53 +581,55 @@ DATA f8_437f0000<>+24(SB)/4, $(255.0)
 DATA f8_437f0000<>+28(SB)/4, $(255.0)
 GLOBL f8_437f0000<>(SB), RODATA|NOPTR, $32
 
-// func gradientLUTGatherAVX2(dst0 *[4]float32, dst1 *[4]float32, dst2 *[4]float32, dst3 *[4]float32, lut *[4]float32, lutScale float32, tBuf *[4]float32, width int)
+// func gradientLUTGatherAVX2(dst0 *[4]float32, dst1 *[4]float32, dst2 *[4]float32, dst3 *[4]float32, lut *[4]float32, lutScale float32, tBuf *[4]float32, masks *[4]int32, width int)
 // Requires: AVX, AVX2
-TEXT ·gradientLUTGatherAVX2(SB), $0-64
+TEXT ·gradientLUTGatherAVX2(SB), $0-72
 	MOVQ         dst0+0(FP), AX
 	MOVQ         dst1+8(FP), CX
 	MOVQ         dst2+16(FP), DX
 	MOVQ         dst3+24(FP), BX
 	MOVQ         lut+32(FP), SI
 	MOVQ         tBuf+48(FP), DI
-	MOVQ         width+56(FP), R8
+	MOVQ         width+64(FP), R8
+	MOVQ         masks+56(FP), R9
 	VBROADCASTSS lutScale+40(FP), Y0
 	VPBROADCASTD d_000007ff<>+0(SB), Y1
 	VPXOR        Y2, Y2, Y2
 	SHLQ         $0x04, R8
-	MOVQ         R8, R9
-	SUBQ         $0x10, R9
-	XORQ         R10, R10
+	MOVQ         R8, R10
+	SUBQ         $0x10, R10
+	XORQ         R11, R11
 	PCALIGN      $0x20
 
 gather_loop:
-	CMPQ       R10, R9
+	CMPQ       R11, R10
 	JG         gather_tail
-	VMOVUPS    (DI)(R10*1), Y3
+	VMOVUPS    (DI)(R11*1), Y3
 	VMULPS     Y0, Y3, Y3
 	VCVTTPS2DQ Y3, Y3
 	VPMAXSD    Y2, Y3, Y3
 	VPMINSD    Y1, Y3, Y3
 	VPSLLD     $0x04, Y3, Y3
-	VPCMPEQD   Y12, Y12, Y12
-	VGATHERDPS Y12, (SI)(Y3*1), Y4
-	VMOVUPS    Y4, (AX)(R10*1)
-	VPCMPEQD   Y12, Y12, Y12
-	VGATHERDPS Y12, 4(SI)(Y3*1), Y5
-	VMOVUPS    Y5, (CX)(R10*1)
-	VPCMPEQD   Y12, Y12, Y12
-	VGATHERDPS Y12, 8(SI)(Y3*1), Y6
-	VMOVUPS    Y6, (DX)(R10*1)
-	VPCMPEQD   Y12, Y12, Y12
-	VGATHERDPS Y12, 12(SI)(Y3*1), Y7
-	VMOVUPS    Y7, (BX)(R10*1)
-	ADDQ       $0x20, R10
+	VMOVUPS    (R9)(R11*1), Y12
+	VPCMPEQD   Y13, Y13, Y13
+	VGATHERDPS Y13, (SI)(Y3*1), Y4
+	VMASKMOVPS Y4, Y12, (AX)(R11*1)
+	VPCMPEQD   Y13, Y13, Y13
+	VGATHERDPS Y13, 4(SI)(Y3*1), Y5
+	VMASKMOVPS Y5, Y12, (CX)(R11*1)
+	VPCMPEQD   Y13, Y13, Y13
+	VGATHERDPS Y13, 8(SI)(Y3*1), Y6
+	VMASKMOVPS Y6, Y12, (DX)(R11*1)
+	VPCMPEQD   Y13, Y13, Y13
+	VGATHERDPS Y13, 12(SI)(Y3*1), Y7
+	VMASKMOVPS Y7, Y12, (BX)(R11*1)
+	ADDQ       $0x20, R11
 	JMP        gather_loop
 
 gather_tail:
-	CMPQ         R10, R8
+	CMPQ         R11, R8
 	JGE          gather_done
-	VMOVUPS      (DI)(R10*1), X0
+	VMOVUPS      (DI)(R11*1), X0
 	VBROADCASTSS lutScale+40(FP), X1
 	VMULPS       X1, X0, X0
 	VCVTTPS2DQ   X0, X0
@@ -636,18 +638,19 @@ gather_tail:
 	VPMAXSD      X1, X0, X0
 	VPMINSD      X2, X0, X0
 	VPSLLD       $0x04, X0, X0
-	VPCMPEQD     X1, X1, X1
-	VGATHERDPS   X1, (SI)(X0*1), X8
-	VMOVUPS      X8, (AX)(R10*1)
-	VPCMPEQD     X1, X1, X1
-	VGATHERDPS   X1, 4(SI)(X0*1), X9
-	VMOVUPS      X9, (CX)(R10*1)
-	VPCMPEQD     X1, X1, X1
-	VGATHERDPS   X1, 8(SI)(X0*1), X10
-	VMOVUPS      X10, (DX)(R10*1)
-	VPCMPEQD     X1, X1, X1
-	VGATHERDPS   X1, 12(SI)(X0*1), X11
-	VMOVUPS      X11, (BX)(R10*1)
+	VMOVUPS      (R9)(R11*1), X1
+	VPCMPEQD     X2, X2, X2
+	VGATHERDPS   X2, (SI)(X0*1), X8
+	VMASKMOVPS   X8, X1, (AX)(R11*1)
+	VPCMPEQD     X2, X2, X2
+	VGATHERDPS   X2, 4(SI)(X0*1), X9
+	VMASKMOVPS   X9, X1, (CX)(R11*1)
+	VPCMPEQD     X2, X2, X2
+	VGATHERDPS   X2, 8(SI)(X0*1), X10
+	VMASKMOVPS   X10, X1, (DX)(R11*1)
+	VPCMPEQD     X2, X2, X2
+	VGATHERDPS   X2, 12(SI)(X0*1), X11
+	VMASKMOVPS   X11, X1, (BX)(R11*1)
 
 gather_done:
 	VZEROUPPER
@@ -656,22 +659,23 @@ gather_done:
 DATA d_000007ff<>+0(SB)/4, $0x000007ff
 GLOBL d_000007ff<>(SB), RODATA|NOPTR, $4
 
-// func gradientCascadeMergeAVX2(dst0 *[4]float32, dst1 *[4]float32, dst2 *[4]float32, dst3 *[4]float32, tBuf *[4]float32, sr *simdGradientRanges, width int)
+// func gradientCascadeMergeAVX2(dst0 *[4]float32, dst1 *[4]float32, dst2 *[4]float32, dst3 *[4]float32, tBuf *[4]float32, sr *simdGradientRanges, masks *[4]int32, width int)
 // Requires: AVX, AVX2, FMA3
-TEXT ·gradientCascadeMergeAVX2(SB), $0-56
+TEXT ·gradientCascadeMergeAVX2(SB), $0-64
 	MOVQ    dst0+0(FP), AX
 	MOVQ    dst1+8(FP), CX
 	MOVQ    dst2+16(FP), DX
 	MOVQ    dst3+24(FP), BX
 	MOVQ    tBuf+32(FP), SI
 	MOVQ    sr+40(FP), DI
-	MOVQ    width+48(FP), R8
-	MOVQ    (DI), R9
-	DECQ    R9
+	MOVQ    width+56(FP), R8
+	MOVQ    masks+48(FP), R9
+	MOVQ    (DI), R10
+	DECQ    R10
 	SHLQ    $0x04, R8
-	MOVQ    R8, R10
-	SUBQ    $0x10, R10
-	XORQ    R11, R11
+	MOVQ    R8, R11
+	SUBQ    $0x10, R11
+	XORQ    R12, R12
 	VMOVUPS 24(DI), Y0
 	VMOVUPS 88(DI), Y4
 	VMOVUPS 40(DI), Y1
@@ -683,54 +687,55 @@ TEXT ·gradientCascadeMergeAVX2(SB), $0-56
 	PCALIGN $0x20
 
 cascade_loop:
-	CMPQ         R11, R10
+	CMPQ         R12, R11
 	JG           cascade_tail
-	VMOVUPS      (SI)(R11*1), Y8
+	VMOVUPS      (SI)(R12*1), Y8
 	VBROADCASTSS f_3f800000<>+0(SB), Y9
 	VXORPS       Y10, Y10, Y10
-	XORQ         R12, R12
+	XORQ         R13, R13
 
 thresh_loop:
-	CMPQ         R12, R9
+	CMPQ         R13, R10
 	JGE          thresh_done
-	VBROADCASTSS 8(DI)(R12*4), Y11
+	VBROADCASTSS 8(DI)(R13*4), Y11
 	VCMPPS       $0x0d, Y11, Y8, Y11
 	VANDPS       Y11, Y9, Y11
 	VADDPS       Y11, Y10, Y10
-	INCQ         R12
+	INCQ         R13
 	JMP          thresh_loop
 
 thresh_done:
 	VCVTTPS2DQ  Y10, Y10
-	VPERMPS     Y0, Y10, Y9
-	VPERMPS     Y4, Y10, Y11
-	VFMADD132PS Y8, Y11, Y9
-	VMOVUPS     Y9, (AX)(R11*1)
-	VPERMPS     Y1, Y10, Y9
-	VPERMPS     Y5, Y10, Y11
-	VFMADD132PS Y8, Y11, Y9
-	VMOVUPS     Y9, (CX)(R11*1)
-	VPERMPS     Y2, Y10, Y9
-	VPERMPS     Y6, Y10, Y11
-	VFMADD132PS Y8, Y11, Y9
-	VMOVUPS     Y9, (DX)(R11*1)
-	VPERMPS     Y3, Y10, Y9
+	VMOVUPS     (R9)(R12*1), Y9
+	VPERMPS     Y0, Y10, Y11
+	VPERMPS     Y4, Y10, Y13
+	VFMADD132PS Y8, Y13, Y11
+	VMASKMOVPS  Y11, Y9, (AX)(R12*1)
+	VPERMPS     Y1, Y10, Y11
+	VPERMPS     Y5, Y10, Y13
+	VFMADD132PS Y8, Y13, Y11
+	VMASKMOVPS  Y11, Y9, (CX)(R12*1)
+	VPERMPS     Y2, Y10, Y11
+	VPERMPS     Y6, Y10, Y13
+	VFMADD132PS Y8, Y13, Y11
+	VMASKMOVPS  Y11, Y9, (DX)(R12*1)
+	VPERMPS     Y3, Y10, Y11
 	VPERMPS     Y7, Y10, Y10
-	VFMADD132PS Y8, Y10, Y9
-	VMOVUPS     Y9, (BX)(R11*1)
-	ADDQ        $0x20, R11
+	VFMADD132PS Y8, Y10, Y11
+	VMASKMOVPS  Y11, Y9, (BX)(R12*1)
+	ADDQ        $0x20, R12
 	JMP         cascade_loop
 
 cascade_tail:
-	CMPQ         R11, R8
+	CMPQ         R12, R8
 	JGE          cascade_done
-	VMOVUPS      (SI)(R11*1), X12
+	VMOVUPS      (SI)(R12*1), X12
 	VBROADCASTSS f_3f800000<>+0(SB), Y8
 	VXORPS       Y9, Y9, Y9
 	XORQ         SI, SI
 
 thresh_loop_tail:
-	CMPQ         SI, R9
+	CMPQ         SI, R10
 	JGE          thresh_done_tail
 	VBROADCASTSS 8(DI)(SI*4), Y10
 	VCMPPS       $0x0d, Y10, Y12, Y10
@@ -741,22 +746,23 @@ thresh_loop_tail:
 
 thresh_done_tail:
 	VCVTTPS2DQ  Y9, Y9
+	VMOVUPS     (R9)(R12*1), X8
 	VPERMPS     Y0, Y9, Y0
 	VPERMPS     Y4, Y9, Y4
 	VFMADD132PS Y12, Y4, Y0
-	VMOVUPS     X0, (AX)(R11*1)
+	VMASKMOVPS  X0, X8, (AX)(R12*1)
 	VPERMPS     Y1, Y9, Y0
 	VPERMPS     Y5, Y9, Y1
 	VFMADD132PS Y12, Y1, Y0
-	VMOVUPS     X0, (CX)(R11*1)
+	VMASKMOVPS  X0, X8, (CX)(R12*1)
 	VPERMPS     Y2, Y9, Y0
 	VPERMPS     Y6, Y9, Y1
 	VFMADD132PS Y12, Y1, Y0
-	VMOVUPS     X0, (DX)(R11*1)
+	VMASKMOVPS  X0, X8, (DX)(R12*1)
 	VPERMPS     Y3, Y9, Y0
 	VPERMPS     Y7, Y9, Y1
 	VFMADD132PS Y12, Y1, Y0
-	VMOVUPS     X0, (BX)(R11*1)
+	VMASKMOVPS  X0, X8, (BX)(R12*1)
 
 cascade_done:
 	VZEROUPPER
