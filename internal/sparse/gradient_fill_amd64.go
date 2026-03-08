@@ -53,7 +53,11 @@ func applyExtendSIMD(
 	extend gfx.GradientExtend,
 ) Float32x4 {
 	zero := BroadcastFloat32x4(0)
+	// OPT(dh): this function gets called once per column, we really don't want
+	// to broadcast this over and over.
 	one := BroadcastFloat32x4(1)
+	// OPT(dh): the extend is constant for all iterations of a gradient, it'd be
+	// nice to avoid this branch.
 	switch extend {
 	case gfx.GradientExtendPad:
 		return t.Max(zero).Min(one)
@@ -101,6 +105,7 @@ func (gf *gradientFiller) fillLinearSIMD(
 	var tBuf [wideTileWidth][stripHeight]float32
 
 	curPos := gf.curPos
+	// OPT(dh): we should really work on two columns at a time
 	for x := range width {
 		yAdv := gf.gradient.yAdvance
 		var arrX [stripHeight]float32
@@ -140,6 +145,7 @@ func (gf *gradientFiller) fillRadialSIMD(
 	width := len(dst[0])
 
 	var tBuf [wideTileWidth][stripHeight]float32
+	// OPT(dh): we should really work on two columns at a time
 	for x := range width {
 		dist := posX.Mul(posX).Add(posY.Mul(posY)).Sqrt()
 		t := scaleVec.MulAdd(dist, biasVec)
@@ -175,6 +181,7 @@ func (gf *gradientFiller) fillStripSIMD(
 	// Pass 1: compute t values and defined masks.
 	var tBuf [wideTileWidth][stripHeight]float32
 	var maskBuf [wideTileWidth][stripHeight]int32
+	// OPT(dh): we should really work on two columns at a time
 	for x := range width {
 		inner := r0sq.Sub(posY.Mul(posY))
 		// OPT(dh): should we convert the mask to bits, to save on storage? but
@@ -223,6 +230,10 @@ func (gf *gradientFiller) fillFocalSIMD(
 	// Pass 1: compute t values and defined masks.
 	var tBuf [wideTileWidth][stripHeight]float32
 	var maskBuf [wideTileWidth][stripHeight]int32
+	// OPT(dh): we should really work on two columns at a time
+
+	// OPT(dh): it'd be great to be able to pull all conditions out of the loop,
+	// but there are 18 unique combinations.
 	for x := range width {
 		var t Float32x4
 		if focalOnCircle {
