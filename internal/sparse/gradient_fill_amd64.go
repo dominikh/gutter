@@ -52,7 +52,7 @@ func applyExtendSIMD(
 	t Float32x4,
 	extend gfx.GradientExtend,
 ) Float32x4 {
-	zero := BroadcastFloat32x4(0)
+	zero := Float32x4{}
 	// OPT(dh): this function gets called once per column, we really don't want
 	// to broadcast this over and over.
 	one := BroadcastFloat32x4(1)
@@ -280,51 +280,6 @@ func (gf *gradientFiller) fillFocalSIMD(
 	}
 }
 
-// atan2SIMD computes atan2(y, x) for Float32x4 vectors using a
-// 5th-order polynomial approximation with |error| < 1e-5.
-func atan2SIMD(y, x Float32x4) Float32x4 {
-	signBitMask := BroadcastInt32x4(0x7FFFFFFF)
-	absX := x.AsInt32x4().And(signBitMask).AsFloat32x4()
-	absY := y.AsInt32x4().And(signBitMask).AsFloat32x4()
-
-	zero := BroadcastFloat32x4(0)
-	piOver2 := BroadcastFloat32x4(math.Pi / 2)
-	pi := BroadcastFloat32x4(math.Pi)
-
-	swapMask := absY.Greater(absX)
-	minV := absX.Min(absY)
-	maxV := absX.Max(absY)
-
-	r := minV.Div(maxV)
-	r2 := r.Mul(r)
-
-	c0 := BroadcastFloat32x4(0.99997726)
-	c1 := BroadcastFloat32x4(-0.33262347)
-	c2 := BroadcastFloat32x4(0.19354346)
-	c3 := BroadcastFloat32x4(-0.11643287)
-	c4 := BroadcastFloat32x4(0.05265332)
-	c5 := BroadcastFloat32x4(-0.01172120)
-
-	p := c5
-	p = p.MulAdd(r2, c4)
-	p = p.MulAdd(r2, c3)
-	p = p.MulAdd(r2, c2)
-	p = p.MulAdd(r2, c1)
-	p = p.MulAdd(r2, c0)
-	result := p.Mul(r)
-
-	result = piOver2.Sub(result).Merge(result, swapMask)
-
-	xNeg := x.Less(zero)
-	result = pi.Sub(result).Merge(result, xNeg)
-
-	ySignBit := y.AsInt32x4().
-		And(BroadcastInt32x4(math.MinInt32))
-	result = result.AsInt32x4().Xor(ySignBit).AsFloat32x4()
-
-	return result
-}
-
 func (gf *gradientFiller) fillSweepSIMD(
 	dst Pixels,
 	kind encodedSweepGradient,
@@ -340,17 +295,54 @@ func (gf *gradientFiller) fillSweepSIMD(
 	xAdvXVec := BroadcastFloat32x4(xAdvX)
 	xAdvYVec := BroadcastFloat32x4(xAdvY)
 
-	zero := BroadcastFloat32x4(0)
+	zero := Float32x4{}
 	twoPi := BroadcastFloat32x4(float32(2 * math.Pi))
 	startAngleVec := BroadcastFloat32x4(kind.startAngle)
 	invAngleDeltaVec := BroadcastFloat32x4(kind.invAngleDelta)
 
 	width := len(dst[0])
 
+	signBitMask := BroadcastInt32x4(0x7FFFFFFF)
+	piOver2 := BroadcastFloat32x4(math.Pi / 2)
+	pi := BroadcastFloat32x4(math.Pi)
+
+	c0 := BroadcastFloat32x4(0.99997726)
+	c1 := BroadcastFloat32x4(-0.33262347)
+	c2 := BroadcastFloat32x4(0.19354346)
+	c3 := BroadcastFloat32x4(-0.11643287)
+	c4 := BroadcastFloat32x4(0.05265332)
+	c5 := BroadcastFloat32x4(-0.01172120)
+
 	// Pass 1: compute t values.
 	var tBuf [wideTileWidth][stripHeight]float32
 	for x := range width {
-		angle := atan2SIMD(zero.Sub(posY), posX)
+		atanY, atanX := zero.Sub(posY), posX
+
+		absX := atanX.AsInt32x4().And(signBitMask).AsFloat32x4()
+		absY := atanY.AsInt32x4().And(signBitMask).AsFloat32x4()
+
+		swapMask := absY.Greater(absX)
+		minV := absX.Min(absY)
+		maxV := absX.Max(absY)
+
+		r := minV.Div(maxV)
+		r2 := r.Mul(r)
+
+		p := c5
+		p = p.MulAdd(r2, c4)
+		p = p.MulAdd(r2, c3)
+		p = p.MulAdd(r2, c2)
+		p = p.MulAdd(r2, c1)
+		p = p.MulAdd(r2, c0)
+		angle := p.Mul(r)
+
+		angle = piOver2.Sub(angle).Merge(angle, swapMask)
+
+		xNeg := atanX.Less(zero)
+		angle = pi.Sub(angle).Merge(angle, xNeg)
+
+		ySignBit := atanY.AsInt32x4().And(BroadcastInt32x4(math.MinInt32))
+		angle = angle.AsInt32x4().Xor(ySignBit).AsFloat32x4()
 
 		nonNeg := angle.GreaterEqual(zero)
 		adj := angle.Merge(angle.Add(twoPi), nonNeg)
