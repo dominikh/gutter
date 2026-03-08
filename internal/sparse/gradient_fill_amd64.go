@@ -116,7 +116,7 @@ func (gf *gradientFiller) fillLinearSIMD(
 		curPos = curPos.Translate(gf.gradient.xAdvance)
 	}
 
-	runGradientSIMD(gf.gradient, dst, &tBuf, &allOnesMasks)
+	runGradientSIMD(gf.gradient, dst, &tBuf, nil)
 }
 
 func (gf *gradientFiller) fillRadialSIMD(
@@ -149,7 +149,7 @@ func (gf *gradientFiller) fillRadialSIMD(
 		posY = posY.Add(xAdvYVec)
 	}
 
-	runGradientSIMD(gf.gradient, dst, &tBuf, &allOnesMasks)
+	runGradientSIMD(gf.gradient, dst, &tBuf, nil)
 }
 
 func (gf *gradientFiller) fillStripSIMD(
@@ -263,10 +263,10 @@ func (gf *gradientFiller) fillFocalSIMD(
 	}
 
 	if wellBehaved {
-		maskBuf = allOnesMasks
+		runGradientSIMD(gf.gradient, dst, &tBuf, nil)
+	} else {
+		runGradientSIMD(gf.gradient, dst, &tBuf, &maskBuf)
 	}
-
-	runGradientSIMD(gf.gradient, dst, &tBuf, &maskBuf)
 }
 
 // atan2SIMD computes atan2(y, x) for Float32x4 vectors using a
@@ -347,34 +347,59 @@ func (gf *gradientFiller) fillSweepSIMD(
 		posY = posY.Add(xAdvYVec)
 	}
 
-	runGradientSIMD(gf.gradient, dst, &tBuf, &allOnesMasks)
+	runGradientSIMD(gf.gradient, dst, &tBuf, nil)
 }
 
 func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][stripHeight]float32, masks *[wideTileWidth][stripHeight]int32) {
 	width := len(dst[0])
 	if len(g.ranges) <= 4 {
-		gradientCascadeMergeAVX2(
-			&dst[0][0],
-			&dst[1][0],
-			&dst[2][0],
-			&dst[3][0],
-			&tBuf[0],
-			&g.simdRanges,
-			&masks[0],
-			width,
-		)
+		if masks != nil {
+			gradientCascadeMergeMaskedAVX2(
+				&dst[0][0],
+				&dst[1][0],
+				&dst[2][0],
+				&dst[3][0],
+				&tBuf[0],
+				&g.simdRanges,
+				&masks[0],
+				width,
+			)
+		} else {
+			gradientCascadeMergeAVX2(
+				&dst[0][0],
+				&dst[1][0],
+				&dst[2][0],
+				&dst[3][0],
+				&tBuf[0],
+				&g.simdRanges,
+				width,
+			)
+		}
 	} else {
 		lut := &g.lut
-		gradientLUTGatherAVX2(
-			&dst[0][0],
-			&dst[1][0],
-			&dst[2][0],
-			&dst[3][0],
-			(*[4]float32)(&lut.lut[0]),
-			lut.scale,
-			&tBuf[0],
-			&masks[0],
-			width,
-		)
+		if masks != nil {
+			gradientLUTGatherMaskedAVX2(
+				&dst[0][0],
+				&dst[1][0],
+				&dst[2][0],
+				&dst[3][0],
+				(*[4]float32)(&lut.lut[0]),
+				lut.scale,
+				&tBuf[0],
+				&masks[0],
+				width,
+			)
+		} else {
+			gradientLUTGatherAVX2(
+				&dst[0][0],
+				&dst[1][0],
+				&dst[2][0],
+				&dst[3][0],
+				(*[4]float32)(&lut.lut[0]),
+				lut.scale,
+				&tBuf[0],
+				width,
+			)
+		}
 	}
 }

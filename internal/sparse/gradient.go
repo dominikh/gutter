@@ -332,8 +332,7 @@ func (r encodedRadialGradient) hasUndefined() bool {
 
 // isDefined implements GradientKind.
 func (r encodedRadialGradient) isDefined(pos curve.Point) bool {
-	_, ok := r.posInner(pos)
-	return ok
+	return true
 }
 
 func (r encodedRadialGradient) posInner(pos curve.Point) (float32, bool) {

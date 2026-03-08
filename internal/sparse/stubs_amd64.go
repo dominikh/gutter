@@ -40,12 +40,35 @@ func gradientLUTGatherAVX2(
 	lut *[4]float32,
 	lutScale float32,
 	tBuf *[stripHeight]float32,
-	masks *[stripHeight]int32,
 	width int,
 )
 
 //go:noescape
 func gradientCascadeMergeAVX2(
+	dst0 *[stripHeight]float32,
+	dst1 *[stripHeight]float32,
+	dst2 *[stripHeight]float32,
+	dst3 *[stripHeight]float32,
+	tBuf *[stripHeight]float32,
+	sr *simdGradientRanges,
+	width int,
+)
+
+//go:noescape
+func gradientLUTGatherMaskedAVX2(
+	dst0 *[stripHeight]float32,
+	dst1 *[stripHeight]float32,
+	dst2 *[stripHeight]float32,
+	dst3 *[stripHeight]float32,
+	lut *[4]float32,
+	lutScale float32,
+	tBuf *[stripHeight]float32,
+	masks *[stripHeight]int32,
+	width int,
+)
+
+//go:noescape
+func gradientCascadeMergeMaskedAVX2(
 	dst0 *[stripHeight]float32,
 	dst1 *[stripHeight]float32,
 	dst2 *[stripHeight]float32,
