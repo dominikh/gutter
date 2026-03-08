@@ -474,7 +474,7 @@ func (g encodedFocalGradient) posInner(pos curve.Point) (float32, bool) {
 	return t, true
 }
 
-const maxCascadeMergeRanges = 4
+const maxCascadeMergeRanges = 8
 
 // simdGradientRanges is a SoA (Structure of Arrays) representation of
 // gradient ranges, optimized for VPERMPS-based lookup. Instead of

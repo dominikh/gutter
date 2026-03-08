@@ -852,7 +852,7 @@ func BenchmarkGradientFill(b *testing.B) {
 	}
 
 	for _, tt := range tests {
-		for _, n := range []int{2, 5, 6, 32} {
+		for _, n := range []int{2, maxCascadeMergeRanges + 1, maxCascadeMergeRanges + 2, 32} {
 			b.Run(fmt.Sprintf("kind=%s/stops=%d", tt.name, n), func(b *testing.B) {
 				grad := tt.make(n)
 				filler := grad.filler(0, 0).(*gradientFiller)

@@ -49,45 +49,8 @@ func (gf *gradientFiller) fillSIMD(dst Pixels) bool {
 	return true
 }
 
-// applyExtendSIMD applies the gradient extend mode to a vector of t values.
+// applyExtendSIMD applies the gradient extend mode to a wide vector of t values.
 func applyExtendSIMD(
-	t Float32x4,
-	extend gfx.GradientExtend,
-) Float32x4 {
-	zero := Float32x4{}
-	// OPT(dh): this function gets called once per column, we really don't want
-	// to broadcast this over and over.
-	one := BroadcastFloat32x4(1)
-	// OPT(dh): the extend is constant for all iterations of a gradient, it'd be
-	// nice to avoid this branch.
-	switch extend {
-	case gfx.GradientExtendPad:
-		return t.Max(zero).Min(one)
-	case gfx.GradientExtendRepeat:
-		// t - floor(t), with correction for the edge case where the
-		// subtraction produces exactly 1.0 (must map to 0.0 to match
-		// the scalar path's math.Modf behavior).
-		result := t.Sub(t.Floor())
-		return result.Sub(result.Floor())
-	case gfx.GradientExtendReflect:
-		// min(max(abs((t-1) - 2*floor((t-1)*0.5) - 1), 0), 1)
-		half := BroadcastFloat32x4(0.5)
-		two := BroadcastFloat32x4(2)
-		tMinus1 := t.Sub(one)
-		floored := tMinus1.Mul(half).Floor()
-		reflected := tMinus1.Sub(two.Mul(floored)).Sub(one)
-		// abs via clearing sign bit
-		signMask := BroadcastInt32x4(0x7FFFFFFF)
-		absReflected := reflected.AsInt32x4().
-			And(signMask).
-			AsFloat32x4()
-		return absReflected.Max(zero).Min(one)
-	}
-	panic("unreachable")
-}
-
-// applyExtendSIMD8 applies the gradient extend mode to a wide vector of t values.
-func applyExtendSIMD8(
 	t Float32x8,
 	extend gfx.GradientExtend,
 ) Float32x8 {
@@ -114,21 +77,10 @@ func applyExtendSIMD8(
 	panic("unreachable")
 }
 
-// initPosVectors constructs the initial posX and posY vectors for a
-// column, with 4 rows offset by yAdvX / yAdvY respectively.
-func initPosVectors(
-	startX, startY, yAdvX, yAdvY float32,
-) (posX, posY Float32x4) {
-	idx := LoadFloat32x4((*[4]float32)(_01230123[:]))
-	posX = BroadcastFloat32x4(yAdvX).MulAdd(idx, BroadcastFloat32x4(startX))
-	posY = BroadcastFloat32x4(yAdvY).MulAdd(idx, BroadcastFloat32x4(startY))
-	return posX, posY
-}
-
-// initPosVectors8 constructs initial posX and posY vectors for two
+// initPosVectors constructs initial posX and posY vectors for two
 // columns at once, using YMM registers. The lower 4 elements hold
 // column x (rows 0–3) and the upper 4 hold column x+1 (rows 0–3).
-func initPosVectors8(
+func initPosVectors(
 	startX, startY, yAdvX, yAdvY, xAdvX, xAdvY float32,
 ) (posX, posY Float32x8) {
 	idx := LoadFloat32x8(&_01230123)
@@ -167,7 +119,7 @@ func (gf *gradientFiller) fillLinearSIMD(
 	// wideTileWidth, so if width % 2 != 0, width + 1 is still <= wideTileWidth
 	// and storing one value too many is safe.
 	for x := 0; x < width; x += 2 {
-		t := applyExtendSIMD8(posX8, gf.gradient.extend)
+		t := applyExtendSIMD(posX8, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 	}
@@ -186,7 +138,7 @@ func (gf *gradientFiller) fillRadialSIMD(
 	xAdvX := float32(gf.gradient.xAdvance.X)
 	xAdvY := float32(gf.gradient.xAdvance.Y)
 
-	posX8, posY8 := initPosVectors8(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
+	posX8, posY8 := initPosVectors(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
 	twoXAdvXVec := BroadcastFloat32x8(2 * xAdvX)
 	twoXAdvYVec := BroadcastFloat32x8(2 * xAdvY)
 
@@ -202,7 +154,7 @@ func (gf *gradientFiller) fillRadialSIMD(
 	for x := 0; x < width; x += 2 {
 		dist := posX8.Mul(posX8).Add(posY8.Mul(posY8)).Sqrt()
 		t := scaleVec8.MulAdd(dist, biasVec8)
-		t = applyExtendSIMD8(t, gf.gradient.extend)
+		t = applyExtendSIMD(t, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
@@ -222,7 +174,7 @@ func (gf *gradientFiller) fillStripSIMD(
 	xAdvX := float32(gf.gradient.xAdvance.X)
 	xAdvY := float32(gf.gradient.xAdvance.Y)
 
-	posX8, posY8 := initPosVectors8(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
+	posX8, posY8 := initPosVectors(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
 	twoXAdvXVec := BroadcastFloat32x8(2 * xAdvX)
 	twoXAdvYVec := BroadcastFloat32x8(2 * xAdvY)
 
@@ -240,7 +192,7 @@ func (gf *gradientFiller) fillStripSIMD(
 		inner := r0sq8.Sub(posY8.Mul(posY8))
 		maskBuf[x/2] = inner.GreaterEqual(Float32x8{}).ToBits()
 		t := posX8.Add(inner.Max(Float32x8{}).Sqrt())
-		t = applyExtendSIMD8(t, gf.gradient.extend)
+		t = applyExtendSIMD(t, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
@@ -260,7 +212,7 @@ func (gf *gradientFiller) fillFocalSIMD(
 	xAdvX := float32(gf.gradient.xAdvance.X)
 	xAdvY := float32(gf.gradient.xAdvance.Y)
 
-	posX8, posY8 := initPosVectors8(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
+	posX8, posY8 := initPosVectors(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
 	twoXAdvXVec := BroadcastFloat32x8(2 * xAdvX)
 	twoXAdvYVec := BroadcastFloat32x8(2 * xAdvY)
 
@@ -322,7 +274,7 @@ func (gf *gradientFiller) fillFocalSIMD(
 			t = one8.Sub(t)
 		}
 
-		t = applyExtendSIMD8(t, gf.gradient.extend)
+		t = applyExtendSIMD(t, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
@@ -346,7 +298,7 @@ func (gf *gradientFiller) fillSweepSIMD(
 	xAdvX := float32(gf.gradient.xAdvance.X)
 	xAdvY := float32(gf.gradient.xAdvance.Y)
 
-	posX8, posY8 := initPosVectors8(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
+	posX8, posY8 := initPosVectors(startX, startY, yAdvX, yAdvY, xAdvX, xAdvY)
 	twoXAdvXVec := BroadcastFloat32x8(2 * xAdvX)
 	twoXAdvYVec := BroadcastFloat32x8(2 * xAdvY)
 
@@ -407,7 +359,7 @@ func (gf *gradientFiller) fillSweepSIMD(
 		adj := angle.Merge(angle.Add(twoPi8), nonNeg)
 
 		t := adj.Sub(startAngleVec8).Mul(invAngleDeltaVec8)
-		t = applyExtendSIMD8(t, gf.gradient.extend)
+		t = applyExtendSIMD(t, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
@@ -417,9 +369,6 @@ func (gf *gradientFiller) fillSweepSIMD(
 }
 
 func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][stripHeight]float32, masks *[wideTileWidth / 2]uint8) {
-	// OPT(dh): if only a few mask bits aren't set, would it be better to do a
-	// non-masked operation, then clear the destination where the mask is 0?
-
 	width := len(dst[0])
 	if masks != nil {
 		masksSlice := masks[:]
