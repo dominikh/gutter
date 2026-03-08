@@ -795,13 +795,27 @@ func BenchmarkGradientFill(b *testing.B) {
 			},
 		},
 		{
-			"focal",
+			"focal-nomasked",
 			func(numStops int) *encodedGradient {
 				paint := encodeRadialGradient(&gfx.RadialGradient{
 					StartCenter: curve.Pt(0, 2),
 					StartRadius: 5,
 					EndCenter:   curve.Pt(128, 2),
 					EndRadius:   128,
+					Stops:       makeStops(numStops),
+					Extend:      gfx.GradientExtendPad,
+				}, curve.Identity)
+				return paint.(*encodedGradient)
+			},
+		},
+		{
+			"focal-masked",
+			func(numStops int) *encodedGradient {
+				paint := encodeRadialGradient(&gfx.RadialGradient{
+					StartCenter: curve.Pt(0, 2),
+					StartRadius: 128,
+					EndCenter:   curve.Pt(128, 2),
+					EndRadius:   50,
 					Stops:       makeStops(numStops),
 					Extend:      gfx.GradientExtendPad,
 				}, curve.Identity)

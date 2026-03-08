@@ -63,7 +63,7 @@ func gradientLUTGatherMaskedAVX2(
 	lut *[4]float32,
 	lutScale float32,
 	tBuf *[stripHeight]float32,
-	masks *[stripHeight]int32,
+	masks *uint8,
 	width int,
 )
 
@@ -75,7 +75,7 @@ func gradientCascadeMergeMaskedAVX2(
 	dst3 *[stripHeight]float32,
 	tBuf *[stripHeight]float32,
 	sr *simdGradientRanges,
-	masks *[stripHeight]int32,
+	masks *uint8,
 	width int,
 )
 

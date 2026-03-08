@@ -14,6 +14,7 @@ import (
 	. "github.com/mmcloughlin/avo/build"
 	"github.com/mmcloughlin/avo/gotypes"
 	"github.com/mmcloughlin/avo/ir"
+	"github.com/mmcloughlin/avo/operand"
 	. "github.com/mmcloughlin/avo/operand"
 	"github.com/mmcloughlin/avo/reg"
 )
@@ -69,7 +70,7 @@ func PCALIGN(im Op) {
 	})
 }
 
-var zeroToFour, absMask Mem
+var zeroToFour, absMask, bitIsolateMask Mem
 
 func init() {
 	zeroToFour = GLOBL("zeroToFour", RODATA|NOPTR)
@@ -84,6 +85,16 @@ func init() {
 	DATA(4, U32(1<<31))
 	DATA(8, U32(1<<31))
 	DATA(12, U32(1<<31))
+
+	bitIsolateMask = GLOBL("bitIsolateMask", RODATA|NOPTR)
+	DATA(0, U32(1<<0))
+	DATA(4, U32(1<<1))
+	DATA(8, U32(1<<2))
+	DATA(12, U32(1<<3))
+	DATA(16, U32(1<<4))
+	DATA(20, U32(1<<5))
+	DATA(24, U32(1<<6))
+	DATA(28, U32(1<<7))
 }
 
 func main() {
@@ -444,6 +455,23 @@ func planarRgbaU32ToPackedRgbaU8(in [4]reg.VecVirtual, out reg.VecVirtual) {
 	VPOR(rg, ba, out)
 }
 
+func bitsToMask4(bits operand.Op, mask reg.Vec) reg.Vec {
+	mask = mask.AsX().(reg.Vec)
+	VMOVD(bits, mask)
+	VPBROADCASTD(bits, mask)
+	VPAND(bitIsolateMask, mask, mask)
+	VPCMPEQD(bitIsolateMask, mask, mask)
+	return mask
+}
+
+func bitsToMask8(bits operand.Op, mask reg.Vec) reg.Vec {
+	VMOVD(bits, mask.AsX())
+	VPBROADCASTD(mask.AsX(), mask.AsY())
+	VPAND(bitIsolateMask, mask, mask)
+	VPCMPEQD(bitIsolateMask, mask, mask)
+	return mask
+}
+
 // gradientLUTGatherAVX2Impl generates the gradient LUT gather function.
 // It reads pre-computed t values (already extended) from a buffer,
 // converts them to LUT indices, gathers 4 color channels via VGATHERDPS,
@@ -496,6 +524,9 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 	offset := GP64()
 	XORQ(offset, offset)
 
+	maskOffset := GP64()
+	XORQ(maskOffset, maskOffset)
+
 	PCALIGN(Imm(32))
 	Label("gather_loop")
 	CMPQ(offset, threshold)
@@ -521,9 +552,9 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 	VPSLLD(Imm(4), indices, indices)
 
 	// Gather 4 channels from LUT and store to planar buffers.
-	storeMask := YMM()
+	storeMask := reg.Vec(YMM())
 	if masked {
-		VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
+		bitsToMask8(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, storeMask)
 	}
 	for ch := range 4 {
 		gatherMask := YMM()
@@ -538,6 +569,8 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 	}
 
 	ADDQ(Imm(32), offset) // advance 2 columns = 32 bytes
+	// TODO(dh): we probably only need one offset and some adjusted scales
+	ADDQ(Imm(1), maskOffset)
 	JMP(LabelRef("gather_loop"))
 
 	Label("gather_tail")
@@ -571,8 +604,7 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 
 	// Gather 4 channels (XMM = 4 elements)
 	if masked {
-		storeMask = XMM()
-		VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
+		storeMask = bitsToMask4(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, XMM())
 	}
 	for ch := range 4 {
 		maskX := XMM()
@@ -656,6 +688,9 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 	offset := GP64()
 	XORQ(offset, offset)
 
+	maskOffset := GP64()
+	XORQ(maskOffset, maskOffset)
+
 	// OPT(dh): measure if these registers are worth their weight, or if we can
 	// use memory operands.
 	scaleRegs := [4]reg.VecVirtual{YMM(), YMM(), YMM(), YMM()}
@@ -705,7 +740,7 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 	// VPERMPS lookup for all 4 channels: scale[idx] * t + bias[idx]
 	storeMask := YMM()
 	if masked {
-		VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
+		bitsToMask8(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, storeMask)
 	}
 	for ch := range 4 {
 		s := YMM()
@@ -721,6 +756,8 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 	}
 
 	ADDQ(Imm(32), offset)
+	// TODO(dh): combine offsets
+	ADDQ(Imm(1), maskOffset)
 	JMP(LabelRef("cascade_loop"))
 
 	// Tail: 1 remaining column (4 t values in low XMM, zero-extended to YMM)
@@ -761,7 +798,7 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 
 	storeMask = XMM()
 	if masked {
-		VMOVUPS(Mem{Base: maskBase, Index: offset, Scale: 1}, storeMask)
+		bitsToMask4(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, storeMask)
 	}
 	for ch := range 4 {
 		s := YMM()

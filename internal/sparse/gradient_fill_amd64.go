@@ -231,13 +231,13 @@ func (gf *gradientFiller) fillStripSIMD(
 
 	// Pass 1: compute t values and defined masks.
 	var tBuf [wideTileWidth][stripHeight]float32
-	var maskBuf [wideTileWidth][stripHeight]int32
+	var maskBuf [wideTileWidth / 2]uint8
 	// We check for x < width, not x < width - 1, because width is always <=
 	// wideTileWidth, so if width % 2 != 0, width + 1 is still <= wideTileWidth
 	// and storing one value too many is safe.
 	for x := 0; x < width; x += 2 {
 		inner := r0sq8.Sub(posY8.Mul(posY8))
-		inner.GreaterEqual(Float32x8{}).ToInt32x8().Store((*[8]int32)(unsafe.Pointer(&maskBuf[x])))
+		maskBuf[x/2] = inner.GreaterEqual(Float32x8{}).ToBits()
 		t := posX8.Add(inner.Max(Float32x8{}).Sqrt())
 		t = applyExtendSIMD8(t, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
@@ -277,7 +277,8 @@ func (gf *gradientFiller) fillFocalSIMD(
 
 	// Pass 1: compute t values and defined masks.
 	var tBuf [wideTileWidth][stripHeight]float32
-	var maskBuf [wideTileWidth][stripHeight]int32
+	var maskBuf [wideTileWidth / 2]uint8
+	anyMasked := false
 
 	// OPT(dh): it'd be great to be able to pull all conditions out of the loop,
 	// but there are 18 unique combinations.
@@ -305,7 +306,9 @@ func (gf *gradientFiller) fillFocalSIMD(
 		if !wellBehaved {
 			tGreaterZero := t.Greater(Float32x8{})
 			tNotNaN := t.Equal(t)
-			tGreaterZero.And(tNotNaN).ToInt32x8().Store((*[8]int32)(unsafe.Pointer(&maskBuf[x])))
+			m := tGreaterZero.And(tNotNaN).ToBits()
+			anyMasked = anyMasked || m != 255
+			maskBuf[x/2] = m
 		}
 
 		if negFocalX {
@@ -324,10 +327,10 @@ func (gf *gradientFiller) fillFocalSIMD(
 		posY8 = posY8.Add(twoXAdvYVec)
 	}
 
-	if wellBehaved {
-		runGradientSIMD(gf.gradient, dst, &tBuf, nil)
-	} else {
+	if anyMasked {
 		runGradientSIMD(gf.gradient, dst, &tBuf, &maskBuf)
+	} else {
+		runGradientSIMD(gf.gradient, dst, &tBuf, nil)
 	}
 }
 
@@ -412,8 +415,32 @@ func (gf *gradientFiller) fillSweepSIMD(
 	runGradientSIMD(gf.gradient, dst, &tBuf, nil)
 }
 
-func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][stripHeight]float32, masks *[wideTileWidth][stripHeight]int32) {
+func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][stripHeight]float32, masks *[wideTileWidth / 2]uint8) {
+	// OPT(dh): if only a few mask bits aren't set, would it be better to do a
+	// non-masked operation, then clear the destination where the mask is 0?
+
 	width := len(dst[0])
+	if masks != nil {
+		masksSlice := masks[:]
+		for len(masksSlice) > 0 && masksSlice[len(masksSlice)-1] == 0 {
+			masksSlice = masksSlice[:len(masksSlice)-1]
+		}
+
+		any := false
+		// OPT(dh): we could check 8 bytes at a time, but then we have to handle
+		// the remainder
+		for _, b := range masksSlice {
+			if b != 255 {
+				any = true
+				break
+			}
+		}
+		if !any {
+			masks = nil
+		}
+
+		width = min(width, len(masksSlice)*2)
+	}
 	if len(g.ranges) <= maxCascadeMergeRanges {
 		if masks != nil {
 			gradientCascadeMergeMaskedAVX2(
