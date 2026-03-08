@@ -13,6 +13,7 @@ import (
 
 	"honnef.co/go/gutter/gfx"
 	"honnef.co/go/gutter/internal/arch"
+	"honnef.co/go/safeish"
 )
 
 var allOnesMasks [wideTileWidth][stripHeight]int32
@@ -442,53 +443,71 @@ func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][strip
 		width = min(width, len(masksSlice)*2)
 	}
 	if len(g.ranges) <= maxCascadeMergeRanges {
-		if masks != nil {
-			gradientCascadeMergeMaskedAVX2(
-				&dst[0][0],
-				&dst[1][0],
-				&dst[2][0],
-				&dst[3][0],
-				&tBuf[0],
-				&g.simdRanges,
-				&masks[0],
-				width,
-			)
-		} else {
-			gradientCascadeMergeAVX2(
-				&dst[0][0],
-				&dst[1][0],
-				&dst[2][0],
-				&dst[3][0],
-				&tBuf[0],
-				&g.simdRanges,
-				width,
-			)
-		}
+		gradientCascadeMergeAVX2(
+			&dst[0][0],
+			&dst[1][0],
+			&dst[2][0],
+			&dst[3][0],
+			&tBuf[0],
+			&g.simdRanges,
+			width,
+		)
 	} else {
 		lut := &g.lut
-		if masks != nil {
-			gradientLUTGatherMaskedAVX2(
-				&dst[0][0],
-				&dst[1][0],
-				&dst[2][0],
-				&dst[3][0],
-				(*[4]float32)(&lut.lut[0]),
-				lut.scale,
-				&tBuf[0],
-				&masks[0],
-				width,
-			)
-		} else {
-			gradientLUTGatherAVX2(
-				&dst[0][0],
-				&dst[1][0],
-				&dst[2][0],
-				&dst[3][0],
-				(*[4]float32)(&lut.lut[0]),
-				lut.scale,
-				&tBuf[0],
-				width,
-			)
+		gradientLUTGatherAVX2(
+			&dst[0][0],
+			&dst[1][0],
+			&dst[2][0],
+			&dst[3][0],
+			(*[4]float32)(&lut.lut[0]),
+			lut.scale,
+			&tBuf[0],
+			width,
+		)
+	}
+
+	if masks != nil {
+		// On average, it is faster to unconditionally draw the gradient, then
+		// delete the bits that were masked out. Most columns are either not
+		// masked at all or fully masked, which we can handle more efficiently
+		// than by doing masked stores for all columns.
+
+		bitIsolateMask := LoadInt32x8(&[8]int32{1, 2, 4, 8, 16, 32, 64, 128})
+		for i := range width / 2 {
+			// XXX make sure there is no bounds check here
+			b := masks[i]
+			switch b {
+			case 0:
+				for ch := range 4 {
+					dst[ch][i*2] = [4]float32{}
+					dst[ch][i*2+1] = [4]float32{}
+				}
+			case 255:
+				// Nothing to do
+			default:
+				expandedMask := Int32x4{}.SetElem(0, int32(b)).Broadcast1To8().And(bitIsolateMask).NotEqual(bitIsolateMask)
+				for ch := range 4 {
+					Float32x8{}.StoreMasked(safeish.Cast[*[8]float32](&dst[ch][i*2]), expandedMask)
+				}
+			}
+		}
+		if width%2 != 0 {
+			b := masks[width/2+1]
+			b &= 0b1111
+			switch b {
+			case 0:
+				dst[0][width-1] = [4]float32{}
+				dst[1][width-1] = [4]float32{}
+				dst[2][width-1] = [4]float32{}
+				dst[3][width-1] = [4]float32{}
+			case 15:
+				// Nothing to do
+			default:
+				expandedMask := Int32x4{}.SetElem(0, int32(b)).Broadcast1To4().And(bitIsolateMask.GetLo()).NotEqual(bitIsolateMask.GetLo())
+				for ch := range 4 {
+					Float32x4{}.StoreMasked(&dst[ch][width-1], expandedMask)
+				}
+			}
 		}
 	}
 }

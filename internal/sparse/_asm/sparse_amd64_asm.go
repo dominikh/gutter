@@ -14,7 +14,6 @@ import (
 	. "github.com/mmcloughlin/avo/build"
 	"github.com/mmcloughlin/avo/gotypes"
 	"github.com/mmcloughlin/avo/ir"
-	"github.com/mmcloughlin/avo/operand"
 	. "github.com/mmcloughlin/avo/operand"
 	"github.com/mmcloughlin/avo/reg"
 )
@@ -104,10 +103,8 @@ func main() {
 	processOutOfBoundsWindingSSE()
 	computeAlphasNonZeroAVX()
 	packUint8SRGB_AVX2()
-	gradientLUTGatherAVX2Impl(false)
-	gradientLUTGatherAVX2Impl(true)
-	gradientCascadeMergeAVX2Impl(false)
-	gradientCascadeMergeAVX2Impl(true)
+	gradientLUTGatherAVX2Impl()
+	gradientCascadeMergeAVX2Impl()
 
 	Generate()
 }
@@ -455,33 +452,12 @@ func planarRgbaU32ToPackedRgbaU8(in [4]reg.VecVirtual, out reg.VecVirtual) {
 	VPOR(rg, ba, out)
 }
 
-func bitsToMask4(bits operand.Op, mask reg.Vec) reg.Vec {
-	mask = mask.AsX().(reg.Vec)
-	VMOVD(bits, mask)
-	VPBROADCASTD(bits, mask)
-	VPAND(bitIsolateMask, mask, mask)
-	VPCMPEQD(bitIsolateMask, mask, mask)
-	return mask
-}
-
-func bitsToMask8(bits operand.Op, mask reg.Vec) reg.Vec {
-	VMOVD(bits, mask.AsX())
-	VPBROADCASTD(mask.AsX(), mask.AsY())
-	VPAND(bitIsolateMask, mask, mask)
-	VPCMPEQD(bitIsolateMask, mask, mask)
-	return mask
-}
-
 // gradientLUTGatherAVX2Impl generates the gradient LUT gather function.
 // It reads pre-computed t values (already extended) from a buffer,
 // converts them to LUT indices, gathers 4 color channels via VGATHERDPS,
 // and stores to 4 planar destination buffers.
-func gradientLUTGatherAVX2Impl(masked bool) {
-	if masked {
-		Implement("gradientLUTGatherMaskedAVX2")
-	} else {
-		Implement("gradientLUTGatherAVX2")
-	}
+func gradientLUTGatherAVX2Impl() {
+	Implement("gradientLUTGatherAVX2")
 
 	dst := [4]gotypes.Component{
 		Dereference(Param("dst0")),
@@ -492,11 +468,6 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 	lut := Dereference(Param("lut"))
 	tBuf := Dereference(Param("tBuf"))
 	width := Load(Param("width"), GP64())
-
-	var maskBase reg.Register
-	if masked {
-		maskBase = Load(Param("masks"), GP64())
-	}
 
 	// Broadcast lutScale (2047.0) to YMM
 	lutScaleParam, _ := Param("lutScale").Resolve()
@@ -524,9 +495,6 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 	offset := GP64()
 	XORQ(offset, offset)
 
-	maskOffset := GP64()
-	XORQ(maskOffset, maskOffset)
-
 	PCALIGN(Imm(32))
 	Label("gather_loop")
 	CMPQ(offset, threshold)
@@ -552,25 +520,15 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 	VPSLLD(Imm(4), indices, indices)
 
 	// Gather 4 channels from LUT and store to planar buffers.
-	storeMask := reg.Vec(YMM())
-	if masked {
-		bitsToMask8(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, storeMask)
-	}
 	for ch := range 4 {
 		gatherMask := YMM()
 		VPCMPEQD(gatherMask, gatherMask, gatherMask)
 		result := YMM()
 		VGATHERDPS(gatherMask, lut.Addr().Offset(ch*4).Idx(indices, 1), result)
-		if masked {
-			VMASKMOVPS(result, storeMask, dst[ch].Addr().Idx(offset, 1))
-		} else {
-			VMOVUPS(result, dst[ch].Addr().Idx(offset, 1))
-		}
+		VMOVUPS(result, dst[ch].Addr().Idx(offset, 1))
 	}
 
 	ADDQ(Imm(32), offset) // advance 2 columns = 32 bytes
-	// TODO(dh): we probably only need one offset and some adjusted scales
-	ADDQ(Imm(1), maskOffset)
 	JMP(LabelRef("gather_loop"))
 
 	Label("gather_tail")
@@ -603,9 +561,6 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 	VPSLLD(Imm(4), idxX, idxX)
 
 	// Gather 4 channels (XMM = 4 elements)
-	if masked {
-		storeMask = bitsToMask4(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, XMM())
-	}
 	for ch := range 4 {
 		maskX := XMM()
 		VPCMPEQD(maskX, maskX, maskX)
@@ -615,11 +570,7 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 		// Pointless store to prevent Avo from using the same register twice in
 		// VGATHERDPS. The store gets eliminated before assembly gets generated.
 		VMOVUPS(idxX, idxX)
-		if masked {
-			VMASKMOVPS(resultX, storeMask, dst[ch].Addr().Idx(offset, 1))
-		} else {
-			VMOVUPS(resultX, dst[ch].Addr().Idx(offset, 1))
-		}
+		VMOVUPS(resultX, dst[ch].Addr().Idx(offset, 1))
 	}
 
 	Label("gather_done")
@@ -631,12 +582,8 @@ func gradientLUTGatherAVX2Impl(masked bool) {
 // merge function. It processes pre-computed t values in a two-pass fashion:
 // threshold scan to find range indices, then VPERMPS lookup for scale/bias
 // per channel. Handles n <= 8 ranges only (caller must check).
-func gradientCascadeMergeAVX2Impl(masked bool) {
-	if masked {
-		Implement("gradientCascadeMergeMaskedAVX2")
-	} else {
-		Implement("gradientCascadeMergeAVX2")
-	}
+func gradientCascadeMergeAVX2Impl() {
+	Implement("gradientCascadeMergeAVX2")
 
 	dst := [4]gotypes.Component{
 		Dereference(Param("dst0")),
@@ -648,10 +595,6 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 	sr := Dereference(Param("sr"))
 
 	width := Load(Param("width"), GP64())
-	var maskBase reg.Register
-	if masked {
-		maskBase = Load(Param("masks"), GP64())
-	}
 
 	// Load n-1 (number of threshold scan iterations)
 	nMinus1 := Load(sr.Field("n"), GP64())
@@ -687,9 +630,6 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 
 	offset := GP64()
 	XORQ(offset, offset)
-
-	maskOffset := GP64()
-	XORQ(maskOffset, maskOffset)
 
 	// OPT(dh): measure if these registers are worth their weight, or if we can
 	// use memory operands.
@@ -738,26 +678,16 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 	VCVTTPS2DQ(idx, idx)
 
 	// VPERMPS lookup for all 4 channels: scale[idx] * t + bias[idx]
-	storeMask := YMM()
-	if masked {
-		bitsToMask8(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, storeMask)
-	}
 	for ch := range 4 {
 		s := YMM()
 		VPERMPS(scaleRegs[ch], idx, s)
 		b := YMM()
 		VPERMPS(biasRegs[ch], idx, b)
 		VFMADD132PS(t, b, s) // s = s * t + b
-		if masked {
-			VMASKMOVPS(s, storeMask, dst[ch].Addr().Idx(offset, 1))
-		} else {
-			VMOVUPS(s, dst[ch].Addr().Idx(offset, 1))
-		}
+		VMOVUPS(s, dst[ch].Addr().Idx(offset, 1))
 	}
 
 	ADDQ(Imm(32), offset)
-	// TODO(dh): combine offsets
-	ADDQ(Imm(1), maskOffset)
 	JMP(LabelRef("cascade_loop"))
 
 	// Tail: 1 remaining column (4 t values in low XMM, zero-extended to YMM)
@@ -796,10 +726,6 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 	Label("thresh_done_tail")
 	VCVTTPS2DQ(idxTail, idxTail)
 
-	storeMask = XMM()
-	if masked {
-		bitsToMask4(Mem{Base: maskBase, Index: maskOffset, Scale: 1}, storeMask)
-	}
 	for ch := range 4 {
 		s := YMM()
 		VPERMPS(scaleRegs[ch], idxTail, s)
@@ -807,11 +733,7 @@ func gradientCascadeMergeAVX2Impl(masked bool) {
 		VPERMPS(biasRegs[ch], idxTail, b)
 		VFMADD132PS(tTail, b, s)
 		// Store only the low XMM (4 values = 1 column)
-		if masked {
-			VMASKMOVPS(s.AsX(), storeMask, dst[ch].Addr().Idx(offset, 1))
-		} else {
-			VMOVUPS(s.AsX(), dst[ch].Addr().Idx(offset, 1))
-		}
+		VMOVUPS(s.AsX(), dst[ch].Addr().Idx(offset, 1))
 	}
 
 	Label("cascade_done")
