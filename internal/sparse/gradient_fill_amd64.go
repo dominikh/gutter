@@ -101,7 +101,7 @@ func (gf *gradientFiller) fillLinearSIMD(
 	dst Pixels,
 	_ encodedLinearGradient,
 ) {
-	width := len(dst[0])
+	width := dst.width()
 	var tBuf [wideTileWidth][stripHeight]float32
 
 	startX := float32(gf.curPos.X)
@@ -145,7 +145,7 @@ func (gf *gradientFiller) fillRadialSIMD(
 	biasVec8 := BroadcastFloat32x8(kind.bias)
 	scaleVec8 := BroadcastFloat32x8(kind.scale)
 
-	width := len(dst[0])
+	width := dst.width()
 
 	var tBuf [wideTileWidth][stripHeight]float32
 	// We check for x < width, not x < width - 1, because width is always <=
@@ -180,7 +180,7 @@ func (gf *gradientFiller) fillStripSIMD(
 
 	r0sq8 := BroadcastFloat32x8(kind.r0ScaledSquared)
 
-	width := len(dst[0])
+	width := dst.width()
 
 	// Pass 1: compute t values and defined masks.
 	var tBuf [wideTileWidth][stripHeight]float32
@@ -226,7 +226,7 @@ func (gf *gradientFiller) fillFocalSIMD(
 	negFocalX := 1.0-kind.focalData.fFocalX < 0.0
 	nativelyFocal := kind.focalData.nativelyFocal()
 
-	width := len(dst[0])
+	width := dst.width()
 
 	// Pass 1: compute t values and defined masks.
 	var tBuf [wideTileWidth][stripHeight]float32
@@ -307,7 +307,7 @@ func (gf *gradientFiller) fillSweepSIMD(
 	startAngleVec8 := BroadcastFloat32x8(kind.startAngle)
 	invAngleDeltaVec8 := BroadcastFloat32x8(kind.invAngleDelta)
 
-	width := len(dst[0])
+	width := dst.width()
 
 	signBitMask8 := BroadcastInt32x8(0x7FFFFFFF)
 	piOver2_8 := BroadcastFloat32x8(math.Pi / 2)
@@ -369,7 +369,7 @@ func (gf *gradientFiller) fillSweepSIMD(
 }
 
 func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][stripHeight]float32, masks *[wideTileWidth / 2]uint8) {
-	width := len(dst[0])
+	width := dst.width()
 	if masks != nil {
 		masksSlice := masks[:]
 		for len(masksSlice) > 0 && masksSlice[len(masksSlice)-1] == 0 {
@@ -393,10 +393,10 @@ func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][strip
 	}
 	if len(g.ranges) <= maxCascadeMergeRanges {
 		gradientCascadeMergeAVX2(
-			&dst[0][0],
-			&dst[1][0],
-			&dst[2][0],
-			&dst[3][0],
+			&dst.plane(0)[0],
+			&dst.plane(1)[0],
+			&dst.plane(2)[0],
+			&dst.plane(3)[0],
 			&tBuf[0],
 			&g.simdRanges,
 			width,
@@ -404,10 +404,10 @@ func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][strip
 	} else {
 		lut := &g.lut
 		gradientLUTGatherAVX2(
-			&dst[0][0],
-			&dst[1][0],
-			&dst[2][0],
-			&dst[3][0],
+			&dst.plane(0)[0],
+			&dst.plane(1)[0],
+			&dst.plane(2)[0],
+			&dst.plane(3)[0],
 			(*[4]float32)(&lut.lut[0]),
 			lut.scale,
 			&tBuf[0],
@@ -428,15 +428,15 @@ func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][strip
 			switch b {
 			case 0:
 				for ch := range 4 {
-					dst[ch][i*2] = [4]float32{}
-					dst[ch][i*2+1] = [4]float32{}
+					dst.plane(ch)[i*2] = [4]float32{}
+					dst.plane(ch)[i*2+1] = [4]float32{}
 				}
 			case 255:
 				// Nothing to do
 			default:
 				expandedMask := Int32x4{}.SetElem(0, int32(b)).Broadcast1To8().And(bitIsolateMask).NotEqual(bitIsolateMask)
 				for ch := range 4 {
-					Float32x8{}.StoreMasked(safeish.Cast[*[8]float32](&dst[ch][i*2]), expandedMask)
+					Float32x8{}.StoreMasked(safeish.Cast[*[8]float32](&dst.plane(ch)[i*2]), expandedMask)
 				}
 			}
 		}
@@ -445,16 +445,16 @@ func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][strip
 			b &= 0b1111
 			switch b {
 			case 0:
-				dst[0][width-1] = [4]float32{}
-				dst[1][width-1] = [4]float32{}
-				dst[2][width-1] = [4]float32{}
-				dst[3][width-1] = [4]float32{}
+				dst.plane(0)[width-1] = [4]float32{}
+				dst.plane(1)[width-1] = [4]float32{}
+				dst.plane(2)[width-1] = [4]float32{}
+				dst.plane(3)[width-1] = [4]float32{}
 			case 15:
 				// Nothing to do
 			default:
 				expandedMask := Int32x4{}.SetElem(0, int32(b)).Broadcast1To4().And(bitIsolateMask.GetLo()).NotEqual(bitIsolateMask.GetLo())
 				for ch := range 4 {
-					Float32x4{}.StoreMasked(&dst[ch][width-1], expandedMask)
+					Float32x4{}.StoreMasked(&dst.plane(ch)[width-1], expandedMask)
 				}
 			}
 		}

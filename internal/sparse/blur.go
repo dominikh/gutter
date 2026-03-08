@@ -121,7 +121,7 @@ func (f *blurredRoundedRectFiller) fill(dst Pixels) {
 	// variables that only depend on y.
 
 	rect := f.rect
-	width := len(dst[0])
+	width := dst.width()
 
 	for _x := range width {
 		colPos := f.curPos
@@ -151,10 +151,10 @@ func (f *blurredRoundedRectFiller) fill(dst Pixels) {
 					(erf7(rect.recipStdDev*(rect.minEdge+d)) - erf7(rect.recipStdDev*d))
 			}
 
-			dst[0][_x][_y] = f.rect.color[0] * alphaVal
-			dst[1][_x][_y] = f.rect.color[1] * alphaVal
-			dst[2][_x][_y] = f.rect.color[2] * alphaVal
-			dst[3][_x][_y] = f.rect.color[3] * alphaVal
+			dst.plane(0)[_x][_y] = f.rect.color[0] * alphaVal
+			dst.plane(1)[_x][_y] = f.rect.color[1] * alphaVal
+			dst.plane(2)[_x][_y] = f.rect.color[2] * alphaVal
+			dst.plane(3)[_x][_y] = f.rect.color[3] * alphaVal
 
 			colPos = colPos.Translate(f.rect.yAdvance)
 		}

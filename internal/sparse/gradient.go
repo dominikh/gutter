@@ -872,7 +872,7 @@ func (gf *gradientFiller) fill(dst Pixels) {
 
 	oldPos := gf.curPos
 
-	width := len(dst[0])
+	width := dst.width()
 	for x := range width {
 		gf.runColumn(dst, x, &gf.gradient.lut)
 		gf.curPos = gf.curPos.Translate(gf.gradient.xAdvance)
@@ -898,25 +898,25 @@ func (gf *gradientFiller) runColumn(dst Pixels, x int, lut *gradientLUT) {
 		t := gf.gradient.kind.curPos(pos)
 		t = applyExtend(t, gf.gradient.extend)
 		c := lut.lut[int(t*lut.scale)]
-		dst[0][x][y] = c[0]
-		dst[1][x][y] = c[1]
-		dst[2][x][y] = c[2]
-		dst[3][x][y] = c[3]
+		dst.plane(0)[x][y] = c[0]
+		dst.plane(1)[x][y] = c[1]
+		dst.plane(2)[x][y] = c[2]
+		dst.plane(3)[x][y] = c[3]
 
 		pos = pos.Translate(gf.gradient.yAdvance)
 	}
 }
 
 func (gf *gradientFiller) runUndefined(dst Pixels) {
-	width := len(dst[0])
+	width := dst.width()
 	for i := range width {
 		pos := gf.curPos
 		for y := range stripHeight {
 			if !gf.gradient.kind.isDefined(pos) {
-				dst[0][i][y] = 0
-				dst[1][i][y] = 0
-				dst[2][i][y] = 0
-				dst[3][i][y] = 0
+				dst.plane(0)[i][y] = 0
+				dst.plane(1)[i][y] = 0
+				dst.plane(2)[i][y] = 0
+				dst.plane(3)[i][y] = 0
 			}
 			pos = pos.Translate(gf.gradient.yAdvance)
 		}

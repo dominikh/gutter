@@ -18,15 +18,34 @@ import (
 // [plane][column][row].
 type WideTileBuffer [4][wideTileWidth][stripHeight]float32
 
-// Pixels is a slice-based view into a [WideTileBuffer]
-type Pixels [4][][stripHeight]float32
+type Pixels struct {
+	wide  *WideTileBuffer
+	start int
+	end   int
+}
+
+func (p *Pixels) width() int {
+	return p.end - p.start
+}
+
+func (p *Pixels) plane(n int) [][stripHeight]float32 {
+	return p.wide[n][p.start:p.end]
+}
 
 func (b *WideTileBuffer) pixels(x, width int) Pixels {
-	return Pixels{b[0][x : x+width], b[1][x : x+width], b[2][x : x+width], b[3][x : x+width]}
+	return Pixels{
+		wide:  b,
+		start: x,
+		end:   x + width,
+	}
 }
 
 func (b *WideTileBuffer) allPixels() Pixels {
-	return Pixels{b[0][:], b[1][:], b[2][:], b[3][:]}
+	return Pixels{
+		wide:  b,
+		start: 0,
+		end:   wideTileWidth,
+	}
 }
 
 type fine struct {
@@ -120,8 +139,8 @@ func memsetColumnsScalar(buf Pixels, c gfx.PlainColor) {
 		for i := range col {
 			col[i] = c[ch]
 		}
-		for x := range buf[ch] {
-			buf[ch][x] = col
+		for x := range buf.plane(ch) {
+			buf.plane(ch)[x] = col
 		}
 	}
 }
@@ -346,8 +365,8 @@ func fineFillComplexScalar(buf Pixels, color gfx.PlainColor) {
 	oneMinusAlpha := 1.0 - color[3]
 	for ch := range 4 {
 		c := color[ch]
-		for x := range buf[ch] {
-			col := &buf[ch][x]
+		for x := range buf.plane(ch) {
+			col := &buf.plane(ch)[x]
 			for y := range col {
 				col[y] = c + col[y]*oneMinusAlpha
 			}
@@ -381,8 +400,8 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 			for ch := range 4 {
 				c := color[ch]
 				ca := color[3]
-				for xi := range dst[ch] {
-					col := &dst[ch][xi]
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
 					a := &alphas[xi]
 					for y := range col {
 						maskAlpha := float32(a[y])
@@ -399,8 +418,8 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 				c := color[ch]
 				ca := color[3]
 				bgc := bg[ch]
-				for xi := range dst[ch] {
-					col := &dst[ch][xi]
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
 					a := &alphas[xi]
 					for y := range col {
 						maskAlpha := float32(a[y])
@@ -415,11 +434,11 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 	alphaFillInner := func(src Pixels) {
 		if l.complex {
 			for ch := range 4 {
-				for xi := range dst[ch] {
-					col := &dst[ch][xi]
-					srcCol := &src[ch][xi]
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
+					srcCol := &src.plane(ch)[xi]
 					a := &alphas[xi]
-					srcACol := &src[3][xi]
+					srcACol := &src.plane(3)[xi]
 					for y := range col {
 						color := srcCol[y] * (1.0 / 255.0)
 						ca := srcACol[y] * (1.0 / 255.0)
@@ -435,11 +454,11 @@ func (f *fine) alphaFill(x, width int, alphas [][stripHeight]uint8, paint encode
 
 			for ch := range 4 {
 				bgc := bg[ch]
-				for xi := range dst[ch] {
-					col := &dst[ch][xi]
-					srcCol := &src[ch][xi]
+				for xi := range dst.plane(ch) {
+					col := &dst.plane(ch)[xi]
+					srcCol := &src.plane(ch)[xi]
 					a := &alphas[xi]
-					srcACol := &src[3][xi]
+					srcACol := &src.plane(3)[xi]
 					for y := range col {
 						color := srcCol[y] * (1.0 / 255.0)
 						ca := srcACol[y] * (1.0 / 255.0)

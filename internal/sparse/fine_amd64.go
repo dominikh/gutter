@@ -18,7 +18,7 @@ func fineFillComplexAVX(buf Pixels, color gfx.PlainColor) {
 
 	for ch := range 4 {
 		c := BroadcastFloat32x8(color[ch])
-		plane := buf[ch]
+		plane := buf.plane(ch)
 		// Each column is [stripHeight]float32 = [4]float32 = 16 bytes.
 		// Two adjacent columns = 32 bytes = one YMM register.
 		for i := 0; i < len(plane)-1; i += 2 {
@@ -44,7 +44,7 @@ func fineFillComplexAVX(buf Pixels, color gfx.PlainColor) {
 func memsetColumnsAVX(buf Pixels, c gfx.PlainColor) {
 	for ch := range 4 {
 		v := BroadcastFloat32x8(c[ch])
-		plane := buf[ch]
+		plane := buf.plane(ch)
 		for i := 0; i < len(plane)-1; i += 2 {
 			v.Store((*[8]float32)(unsafe.Pointer(&plane[i])))
 		}

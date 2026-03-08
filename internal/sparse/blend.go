@@ -68,26 +68,26 @@ func blendComplexComplex(
 	switch blend.Compose {
 	case gfx.ComposeClear:
 		if alphas == nil {
-			clear(dst[0])
-			clear(dst[1])
-			clear(dst[2])
-			clear(dst[3])
+			clear(dst.plane(0))
+			clear(dst.plane(1))
+			clear(dst.plane(2))
+			clear(dst.plane(3))
 			return
 		}
 	case gfx.ComposeDest:
 		return
 	case gfx.ComposeCopy:
 		if blend.Mix == gfx.MixNormal && alphas == nil && opacity == 1 {
-			copy(dst[0], tos[0])
-			copy(dst[1], tos[1])
-			copy(dst[2], tos[2])
-			copy(dst[3], tos[3])
+			copy(dst.plane(0), tos.plane(0))
+			copy(dst.plane(1), tos.plane(1))
+			copy(dst.plane(2), tos.plane(2))
+			copy(dst.plane(3), tos.plane(3))
 			return
 		}
 	}
 
 	if alphas != nil {
-		_ = alphas[len(dst[0])-1]
+		_ = alphas[len(dst.plane(0))-1]
 	}
 	getAlpha := func(i, j int) float32 {
 		if alphas == nil {
@@ -97,10 +97,10 @@ func blendComplexComplex(
 		}
 	}
 
-	for i := range dst[0] {
+	for i := range dst.plane(0) {
 		for j := range stripHeight {
-			dstA := dst[3][i][j]
-			tosA := tos[3][i][j]
+			dstA := dst.plane(3)[i][j]
+			tosA := tos.plane(3)[i][j]
 
 			var fa, fb float32
 			switch blend.Compose {
@@ -149,12 +149,12 @@ func blendComplexComplex(
 			if fa != 0 && blend.Mix != gfx.MixNormal {
 				invas := 1.0 / max(tosA, 1e-10)
 				invad := 1.0 / max(dstA, 1e-10)
-				Cd0 := dst[0][i][j] * invad
-				Cd1 := dst[1][i][j] * invad
-				Cd2 := dst[2][i][j] * invad
-				Cs0 := tos[0][i][j] * invas
-				Cs1 := tos[1][i][j] * invas
-				Cs2 := tos[2][i][j] * invas
+				Cd0 := dst.plane(0)[i][j] * invad
+				Cd1 := dst.plane(1)[i][j] * invad
+				Cd2 := dst.plane(2)[i][j] * invad
+				Cs0 := tos.plane(0)[i][j] * invas
+				Cs1 := tos.plane(1)[i][j] * invas
+				Cs2 := tos.plane(2)[i][j] * invas
 
 				var Cm0, Cm1, Cm2 float32
 				switch blend.Mix {
@@ -240,20 +240,20 @@ func blendComplexComplex(
 			mb := a * fb
 			oneMinusAlpha := 1 - a
 			if ma == 0 {
-				dst[0][i][j] = dst[0][i][j]*mb + oneMinusAlpha*dst[0][i][j]
-				dst[1][i][j] = dst[1][i][j]*mb + oneMinusAlpha*dst[1][i][j]
-				dst[2][i][j] = dst[2][i][j]*mb + oneMinusAlpha*dst[2][i][j]
-				dst[3][i][j] = clamp(dstA*mb+oneMinusAlpha*dstA, 0, 1)
+				dst.plane(0)[i][j] = dst.plane(0)[i][j]*mb + oneMinusAlpha*dst.plane(0)[i][j]
+				dst.plane(1)[i][j] = dst.plane(1)[i][j]*mb + oneMinusAlpha*dst.plane(1)[i][j]
+				dst.plane(2)[i][j] = dst.plane(2)[i][j]*mb + oneMinusAlpha*dst.plane(2)[i][j]
+				dst.plane(3)[i][j] = clamp(dstA*mb+oneMinusAlpha*dstA, 0, 1)
 			} else if blend.Mix == gfx.MixNormal {
-				dst[0][i][j] = tos[0][i][j]*ma + dst[0][i][j]*mb + oneMinusAlpha*dst[0][i][j]
-				dst[1][i][j] = tos[1][i][j]*ma + dst[1][i][j]*mb + oneMinusAlpha*dst[1][i][j]
-				dst[2][i][j] = tos[2][i][j]*ma + dst[2][i][j]*mb + oneMinusAlpha*dst[2][i][j]
-				dst[3][i][j] = clamp(tosA*ma+dstA*mb+oneMinusAlpha*dstA, 0, 1)
+				dst.plane(0)[i][j] = tos.plane(0)[i][j]*ma + dst.plane(0)[i][j]*mb + oneMinusAlpha*dst.plane(0)[i][j]
+				dst.plane(1)[i][j] = tos.plane(1)[i][j]*ma + dst.plane(1)[i][j]*mb + oneMinusAlpha*dst.plane(1)[i][j]
+				dst.plane(2)[i][j] = tos.plane(2)[i][j]*ma + dst.plane(2)[i][j]*mb + oneMinusAlpha*dst.plane(2)[i][j]
+				dst.plane(3)[i][j] = clamp(tosA*ma+dstA*mb+oneMinusAlpha*dstA, 0, 1)
 			} else {
-				dst[0][i][j] = (Cr0*tosA)*ma + dst[0][i][j]*mb + oneMinusAlpha*dst[0][i][j]
-				dst[1][i][j] = (Cr1*tosA)*ma + dst[1][i][j]*mb + oneMinusAlpha*dst[1][i][j]
-				dst[2][i][j] = (Cr2*tosA)*ma + dst[2][i][j]*mb + oneMinusAlpha*dst[2][i][j]
-				dst[3][i][j] = clamp(tosA*ma+dstA*mb+oneMinusAlpha*dstA, 0, 1)
+				dst.plane(0)[i][j] = (Cr0*tosA)*ma + dst.plane(0)[i][j]*mb + oneMinusAlpha*dst.plane(0)[i][j]
+				dst.plane(1)[i][j] = (Cr1*tosA)*ma + dst.plane(1)[i][j]*mb + oneMinusAlpha*dst.plane(1)[i][j]
+				dst.plane(2)[i][j] = (Cr2*tosA)*ma + dst.plane(2)[i][j]*mb + oneMinusAlpha*dst.plane(2)[i][j]
+				dst.plane(3)[i][j] = clamp(tosA*ma+dstA*mb+oneMinusAlpha*dstA, 0, 1)
 			}
 		}
 	}
@@ -267,10 +267,10 @@ func blendSimpleSimple(
 ) {
 	switch blend.Compose {
 	case gfx.ComposeClear:
-		clear(dst[0])
-		clear(dst[1])
-		clear(dst[2])
-		clear(dst[3])
+		clear(dst.plane(0))
+		clear(dst.plane(1))
+		clear(dst.plane(2))
+		clear(dst.plane(3))
 		return
 	case gfx.ComposeDest:
 		return
