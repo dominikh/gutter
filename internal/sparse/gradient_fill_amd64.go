@@ -162,15 +162,13 @@ func (gf *gradientFiller) fillLinearSIMD(
 	posX8 := BroadcastFloat32x8(yAdvX).MulAdd(idx, baseX)
 	twoXAdvXVec := BroadcastFloat32x8(2 * xAdvX)
 
-	for x := 0; x < width-1; x += 2 {
+	// We check for x < width, not x < width - 1, because width is always <=
+	// wideTileWidth, so if width % 2 != 0, width + 1 is still <= wideTileWidth
+	// and storing one value too many is safe.
+	for x := 0; x < width; x += 2 {
 		t := applyExtendSIMD8(posX8, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
-	}
-
-	if width%2 != 0 {
-		t := applyExtendSIMD(posX8.GetLo(), gf.gradient.extend)
-		t.Store(&tBuf[width-1])
 	}
 
 	runGradientSIMD(gf.gradient, dst, &tBuf, nil)
@@ -197,24 +195,16 @@ func (gf *gradientFiller) fillRadialSIMD(
 	width := len(dst[0])
 
 	var tBuf [wideTileWidth][stripHeight]float32
-	for x := 0; x < width-1; x += 2 {
+	// We check for x < width, not x < width - 1, because width is always <=
+	// wideTileWidth, so if width % 2 != 0, width + 1 is still <= wideTileWidth
+	// and storing one value too many is safe.
+	for x := 0; x < width; x += 2 {
 		dist := posX8.Mul(posX8).Add(posY8.Mul(posY8)).Sqrt()
 		t := scaleVec8.MulAdd(dist, biasVec8)
 		t = applyExtendSIMD8(t, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
-	}
-
-	if width%2 != 0 {
-		posX := posX8.GetLo()
-		posY := posY8.GetLo()
-		biasVec := BroadcastFloat32x4(kind.bias)
-		scaleVec := BroadcastFloat32x4(kind.scale)
-		dist := posX.Mul(posX).Add(posY.Mul(posY)).Sqrt()
-		t := scaleVec.MulAdd(dist, biasVec)
-		t = applyExtendSIMD(t, gf.gradient.extend)
-		t.Store(&tBuf[width-1])
 	}
 
 	runGradientSIMD(gf.gradient, dst, &tBuf, nil)
@@ -236,33 +226,23 @@ func (gf *gradientFiller) fillStripSIMD(
 	twoXAdvYVec := BroadcastFloat32x8(2 * xAdvY)
 
 	r0sq8 := BroadcastFloat32x8(kind.r0ScaledSquared)
-	zero8 := BroadcastFloat32x8(0)
 
 	width := len(dst[0])
 
 	// Pass 1: compute t values and defined masks.
 	var tBuf [wideTileWidth][stripHeight]float32
 	var maskBuf [wideTileWidth][stripHeight]int32
-	for x := 0; x < width-1; x += 2 {
+	// We check for x < width, not x < width - 1, because width is always <=
+	// wideTileWidth, so if width % 2 != 0, width + 1 is still <= wideTileWidth
+	// and storing one value too many is safe.
+	for x := 0; x < width; x += 2 {
 		inner := r0sq8.Sub(posY8.Mul(posY8))
-		inner.GreaterEqual(zero8).ToInt32x8().Store((*[8]int32)(unsafe.Pointer(&maskBuf[x])))
-		t := posX8.Add(inner.Max(zero8).Sqrt())
+		inner.GreaterEqual(Float32x8{}).ToInt32x8().Store((*[8]int32)(unsafe.Pointer(&maskBuf[x])))
+		t := posX8.Add(inner.Max(Float32x8{}).Sqrt())
 		t = applyExtendSIMD8(t, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
-	}
-
-	if width%2 != 0 {
-		posX := posX8.GetLo()
-		posY := posY8.GetLo()
-		r0sq := BroadcastFloat32x4(kind.r0ScaledSquared)
-		zero := BroadcastFloat32x4(0)
-		inner := r0sq.Sub(posY.Mul(posY))
-		inner.GreaterEqual(zero).ToInt32x4().Store(&maskBuf[width-1])
-		t := posX.Add(inner.Max(zero).Sqrt())
-		t = applyExtendSIMD(t, gf.gradient.extend)
-		t.Store(&tBuf[width-1])
 	}
 
 	runGradientSIMD(gf.gradient, dst, &tBuf, &maskBuf)
@@ -285,7 +265,6 @@ func (gf *gradientFiller) fillFocalSIMD(
 
 	fp0Vec8 := BroadcastFloat32x8(kind.fp0)
 	fp1Vec8 := BroadcastFloat32x8(kind.fp1)
-	zero8 := BroadcastFloat32x8(0)
 	one8 := BroadcastFloat32x8(1)
 
 	focalOnCircle := kind.focalData.focalOnCircle()
@@ -302,7 +281,11 @@ func (gf *gradientFiller) fillFocalSIMD(
 
 	// OPT(dh): it'd be great to be able to pull all conditions out of the loop,
 	// but there are 18 unique combinations.
-	for x := 0; x < width-1; x += 2 {
+
+	// We check for x < width, not x < width - 1, because width is always <=
+	// wideTileWidth, so if width % 2 != 0, width + 1 is still <= wideTileWidth
+	// and storing one value too many is safe.
+	for x := 0; x < width; x += 2 {
 		var t Float32x8
 		if focalOnCircle {
 			t = posX8.Add(posY8.Mul(posY8).Div(posX8))
@@ -313,20 +296,20 @@ func (gf *gradientFiller) fillFocalSIMD(
 				Sub(posX8.Mul(fp0Vec8))
 		} else if swapped || negFocalX {
 			inner := posX8.Mul(posX8).Sub(posY8.Mul(posY8))
-			t = zero8.Sub(inner.Sqrt()).Sub(posX8.Mul(fp0Vec8))
+			t = Float32x8{}.Sub(inner.Sqrt()).Sub(posX8.Mul(fp0Vec8))
 		} else {
 			inner := posX8.Mul(posX8).Sub(posY8.Mul(posY8))
 			t = inner.Sqrt().Sub(posX8.Mul(fp0Vec8))
 		}
 
 		if !wellBehaved {
-			tGreaterZero := t.Greater(zero8)
+			tGreaterZero := t.Greater(Float32x8{})
 			tNotNaN := t.Equal(t)
 			tGreaterZero.And(tNotNaN).ToInt32x8().Store((*[8]int32)(unsafe.Pointer(&maskBuf[x])))
 		}
 
 		if negFocalX {
-			t = zero8.Sub(t)
+			t = Float32x8{}.Sub(t)
 		}
 		if !nativelyFocal {
 			t = t.Add(fp1Vec8)
@@ -339,50 +322,6 @@ func (gf *gradientFiller) fillFocalSIMD(
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
-	}
-
-	if width%2 != 0 {
-		posX := posX8.GetLo()
-		posY := posY8.GetLo()
-		fp0Vec := BroadcastFloat32x4(kind.fp0)
-		fp1Vec := BroadcastFloat32x4(kind.fp1)
-		zero := BroadcastFloat32x4(0)
-		one := BroadcastFloat32x4(1)
-
-		var t Float32x4
-		if focalOnCircle {
-			t = posX.Add(posY.Mul(posY).Div(posX))
-		} else if wellBehaved {
-			t = posX.Mul(posX).
-				Add(posY.Mul(posY)).
-				Sqrt().
-				Sub(posX.Mul(fp0Vec))
-		} else if swapped || negFocalX {
-			inner := posX.Mul(posX).Sub(posY.Mul(posY))
-			t = zero.Sub(inner.Sqrt()).Sub(posX.Mul(fp0Vec))
-		} else {
-			inner := posX.Mul(posX).Sub(posY.Mul(posY))
-			t = inner.Sqrt().Sub(posX.Mul(fp0Vec))
-		}
-
-		if !wellBehaved {
-			tGreaterZero := t.Greater(zero)
-			tNotNaN := t.Equal(t)
-			tGreaterZero.And(tNotNaN).ToInt32x4().Store(&maskBuf[width-1])
-		}
-
-		if negFocalX {
-			t = zero.Sub(t)
-		}
-		if !nativelyFocal {
-			t = t.Add(fp1Vec)
-		}
-		if swapped {
-			t = one.Sub(t)
-		}
-
-		t = applyExtendSIMD(t, gf.gradient.extend)
-		t.Store(&tBuf[width-1])
 	}
 
 	if wellBehaved {
@@ -428,7 +367,10 @@ func (gf *gradientFiller) fillSweepSIMD(
 
 	// Pass 1: compute t values.
 	var tBuf [wideTileWidth][stripHeight]float32
-	for x := 0; x < width-1; x += 2 {
+	// We check for x < width, not x < width - 1, because width is always <=
+	// wideTileWidth, so if width % 2 != 0, width + 1 is still <= wideTileWidth
+	// and storing one value too many is safe.
+	for x := 0; x < width; x += 2 {
 		atanY, atanX := zero8.Sub(posY8), posX8
 
 		absX := atanX.AsInt32x8().And(signBitMask8).AsFloat32x8()
@@ -465,62 +407,6 @@ func (gf *gradientFiller) fillSweepSIMD(
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
 		posX8 = posX8.Add(twoXAdvXVec)
 		posY8 = posY8.Add(twoXAdvYVec)
-	}
-
-	if width%2 != 0 {
-		posX := posX8.GetLo()
-		posY := posY8.GetLo()
-
-		zero := Float32x4{}
-		twoPi := BroadcastFloat32x4(float32(2 * math.Pi))
-		startAngleVec := BroadcastFloat32x4(kind.startAngle)
-		invAngleDeltaVec := BroadcastFloat32x4(kind.invAngleDelta)
-
-		signBitMask := BroadcastInt32x4(0x7FFFFFFF)
-		piOver2 := BroadcastFloat32x4(math.Pi / 2)
-		pi := BroadcastFloat32x4(math.Pi)
-
-		c0 := BroadcastFloat32x4(0.99997726)
-		c1 := BroadcastFloat32x4(-0.33262347)
-		c2 := BroadcastFloat32x4(0.19354346)
-		c3 := BroadcastFloat32x4(-0.11643287)
-		c4 := BroadcastFloat32x4(0.05265332)
-		c5 := BroadcastFloat32x4(-0.01172120)
-
-		atanY, atanX := zero.Sub(posY), posX
-
-		absX := atanX.AsInt32x4().And(signBitMask).AsFloat32x4()
-		absY := atanY.AsInt32x4().And(signBitMask).AsFloat32x4()
-
-		swapMask := absY.Greater(absX)
-		minV := absX.Min(absY)
-		maxV := absX.Max(absY)
-
-		r := minV.Div(maxV)
-		r2 := r.Mul(r)
-
-		p := c5
-		p = p.MulAdd(r2, c4)
-		p = p.MulAdd(r2, c3)
-		p = p.MulAdd(r2, c2)
-		p = p.MulAdd(r2, c1)
-		p = p.MulAdd(r2, c0)
-		angle := p.Mul(r)
-
-		angle = piOver2.Sub(angle).Merge(angle, swapMask)
-
-		xNeg := atanX.Less(zero)
-		angle = pi.Sub(angle).Merge(angle, xNeg)
-
-		ySignBit := atanY.AsInt32x4().And(BroadcastInt32x4(math.MinInt32))
-		angle = angle.AsInt32x4().Xor(ySignBit).AsFloat32x4()
-
-		nonNeg := angle.GreaterEqual(zero)
-		adj := angle.Merge(angle.Add(twoPi), nonNeg)
-
-		t := adj.Sub(startAngleVec).Mul(invAngleDeltaVec)
-		t = applyExtendSIMD(t, gf.gradient.extend)
-		t.Store(&tBuf[width-1])
 	}
 
 	runGradientSIMD(gf.gradient, dst, &tBuf, nil)
