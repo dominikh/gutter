@@ -151,27 +151,25 @@ func (gf *gradientFiller) fillLinearSIMD(
 	width := len(dst[0])
 	var tBuf [wideTileWidth][stripHeight]float32
 
-	curPos := gf.curPos.X
+	startX := float32(gf.curPos.X)
 	yAdvX := float32(gf.gradient.yAdvance.X)
-	xAdv := gf.gradient.xAdvance.X
+	xAdvX := float32(gf.gradient.xAdvance.X)
 
 	idx := LoadFloat32x8(&_01230123)
-	yAdvXVec := BroadcastFloat32x8(yAdvX)
+	var baseX Float32x8
+	baseX = baseX.SetLo(BroadcastFloat32x4(startX))
+	baseX = baseX.SetHi(BroadcastFloat32x4(startX + xAdvX))
+	posX8 := BroadcastFloat32x8(yAdvX).MulAdd(idx, baseX)
+	twoXAdvXVec := BroadcastFloat32x8(2 * xAdvX)
 
 	for x := 0; x < width-1; x += 2 {
-		var baseX Float32x8
-		baseX = baseX.SetLo(BroadcastFloat32x4(float32(curPos)))
-		baseX = baseX.SetHi(BroadcastFloat32x4(float32(curPos + xAdv)))
-		posX8 := yAdvXVec.MulAdd(idx, baseX)
 		t := applyExtendSIMD8(posX8, gf.gradient.extend)
 		t.Store((*[8]float32)(unsafe.Pointer(&tBuf[x])))
-		curPos += 2 * xAdv
+		posX8 = posX8.Add(twoXAdvXVec)
 	}
 
 	if width%2 != 0 {
-		idx4 := LoadFloat32x4((*[4]float32)(_01230123[:]))
-		posX := BroadcastFloat32x4(yAdvX).MulAdd(idx4, BroadcastFloat32x4(float32(curPos)))
-		t := applyExtendSIMD(posX, gf.gradient.extend)
+		t := applyExtendSIMD(posX8.GetLo(), gf.gradient.extend)
 		t.Store(&tBuf[width-1])
 	}
 
