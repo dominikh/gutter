@@ -451,3 +451,129 @@ func runGradientSIMD(g *encodedGradient, dst Pixels, tBuf *[wideTileWidth][strip
 		}
 	}
 }
+
+func gradientCascadeMergeAVX2(
+	dst0 *[stripHeight]float32,
+	dst1 *[stripHeight]float32,
+	dst2 *[stripHeight]float32,
+	dst3 *[stripHeight]float32,
+	tBuf *[stripHeight]float32,
+	sr *simdGradientRanges,
+	width int,
+) {
+	nMinus1 := uint(sr.n - 1)
+	widthBytes := width << 4
+	ymmThreshold := widthBytes - 16
+	offset := 0
+
+	scaleR := LoadFloat32x8(&sr.scaleR)
+	scaleG := LoadFloat32x8(&sr.scaleG)
+	scaleB := LoadFloat32x8(&sr.scaleB)
+	scaleA := LoadFloat32x8(&sr.scaleA)
+
+	biasR := LoadFloat32x8(&sr.biasR)
+	biasG := LoadFloat32x8(&sr.biasG)
+	biasB := LoadFloat32x8(&sr.biasB)
+	biasA := LoadFloat32x8(&sr.biasA)
+
+	one := BroadcastFloat32x8(1.0)
+
+	for offset <= ymmThreshold {
+		t := LoadFloat32x8((*[8]float32)(unsafe.Add(unsafe.Pointer(tBuf), offset)))
+
+		idx := Float32x8{}
+
+		threshIdx := uint(0)
+
+		for threshIdx < nMinus1 {
+			// OPT(dh): how do we eliminate the bounds check without using
+			// unsafe? we can't do sr.x1[nMinus1-1] before the loop, because
+			// nMinus1 might be zero. And we can't do it conditioned on nMinus1
+			// being > 0 because the prover doesn't pick up on that.
+			thresh := BroadcastFloat32x8(*safeish.Index(sr.x1[:], threshIdx))
+			cmpResult := t.GreaterEqual(thresh)
+			mask := cmpResult.And(Mask32x8(one.AsInt32x8())).ToInt32x8().AsFloat32x8()
+			idx = idx.Add(mask)
+
+			threshIdx++
+		}
+
+		idxi := idx.ConvertToInt32().AsUint32x8()
+
+		{
+			s := scaleR.Permute(idxi)
+			b := biasR.Permute(idxi)
+			s = s.MulAdd(t, b)
+			s.Store((*[8]float32)(unsafe.Add(unsafe.Pointer(dst0), offset)))
+		}
+		{
+			s := scaleG.Permute(idxi)
+			b := biasG.Permute(idxi)
+			s = s.MulAdd(t, b)
+			s.Store((*[8]float32)(unsafe.Add(unsafe.Pointer(dst1), offset)))
+		}
+		{
+			s := scaleB.Permute(idxi)
+			b := biasB.Permute(idxi)
+			s = s.MulAdd(t, b)
+			s.Store((*[8]float32)(unsafe.Add(unsafe.Pointer(dst2), offset)))
+		}
+		{
+			s := scaleA.Permute(idxi)
+			b := biasA.Permute(idxi)
+			s = s.MulAdd(t, b)
+			s.Store((*[8]float32)(unsafe.Add(unsafe.Pointer(dst3), offset)))
+		}
+
+		offset += 32
+	}
+	if offset < widthBytes {
+		var tTail Float32x8
+		tTail.SetLo(
+			LoadFloat32x4((*[4]float32)(unsafe.Add(unsafe.Pointer(tBuf), offset))),
+		)
+
+		idxTail := Float32x8{}
+
+		threshIdxTail := uint(0)
+
+		for threshIdxTail < nMinus1 {
+			// OPT(dh): same bounds check issue as above
+			threshTail := BroadcastFloat32x8(*safeish.Index(sr.x1[:], threshIdxTail))
+			cmpTail := tTail.GreaterEqual(threshTail)
+			maskedTail := cmpTail.And(Mask32x8(one.AsInt32x8())).ToInt32x8().AsFloat32x8()
+			idxTail = idxTail.Add(maskedTail)
+
+			threshIdxTail++
+		}
+
+		idxTaili := idxTail.ConvertToInt32().AsUint32x8()
+
+		{
+			s := scaleR.Permute(idxTaili)
+			b := biasR.Permute(idxTaili)
+			s = s.MulAdd(tTail, b)
+			s.GetLo().Store((*[4]float32)(unsafe.Add(unsafe.Pointer(dst0), offset)))
+		}
+		{
+			s := scaleG.Permute(idxTaili)
+			b := biasG.Permute(idxTaili)
+			s = s.MulAdd(tTail, b)
+			s.GetLo().Store((*[4]float32)(unsafe.Add(unsafe.Pointer(dst1), offset)))
+		}
+		{
+			s := scaleB.Permute(idxTaili)
+			b := biasB.Permute(idxTaili)
+			s = s.MulAdd(tTail, b)
+			s.GetLo().Store((*[4]float32)(unsafe.Add(unsafe.Pointer(dst2), offset)))
+		}
+		{
+			s := scaleA.Permute(idxTaili)
+			b := biasA.Permute(idxTaili)
+			s = s.MulAdd(tTail, b)
+			s.GetLo().Store((*[4]float32)(unsafe.Add(unsafe.Pointer(dst3), offset)))
+		}
+	}
+
+	ClearAVXUpperBits()
+}
