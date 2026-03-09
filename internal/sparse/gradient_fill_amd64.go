@@ -7,6 +7,7 @@
 package sparse
 
 import (
+	"fmt"
 	"math"
 	. "simd/archsimd"
 	"unsafe"
@@ -33,7 +34,7 @@ func (gf *gradientFiller) fillSIMD(dst Pixels) bool {
 	case encodedSweepGradient:
 		gf.fillSweepSIMD(dst, kind)
 	default:
-		return false
+		panic(fmt.Sprintf("internal error: unhandled type %T", kind))
 	}
 	ClearAVXUpperBits()
 	return true
