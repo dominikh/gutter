@@ -16,16 +16,6 @@ import (
 	"honnef.co/go/safeish"
 )
 
-var allOnesMasks [wideTileWidth][stripHeight]int32
-
-func init() {
-	for x := range wideTileWidth {
-		for y := range stripHeight {
-			allOnesMasks[x][y] = -1
-		}
-	}
-}
-
 func (gf *gradientFiller) fillSIMD(dst Pixels) bool {
 	if !arch.AVX2() || !arch.FMA() {
 		return false
