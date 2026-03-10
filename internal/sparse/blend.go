@@ -26,8 +26,6 @@ func mixColorDodge(dst, src float32) float32 {
 
 func mixColorBurn(dst, src float32) float32 {
 	switch {
-	case dst == 1:
-		return 1
 	case src == 0:
 		return 0
 	default:
