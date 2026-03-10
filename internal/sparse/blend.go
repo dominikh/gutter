@@ -15,8 +15,6 @@ import (
 
 func mixColorDodge(dst, src float32) float32 {
 	switch {
-	case dst == 0:
-		return 0
 	case src == 1:
 		return 1
 	default:
