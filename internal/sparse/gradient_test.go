@@ -104,13 +104,13 @@ func TestLinearGradientsDirections(t *testing.T) {
 		start curve.Point
 		end   curve.Point
 	}{
-		{"negative_direction", curve.Pt(90.0, 0.0), curve.Pt(10.0, 0.0)},
-		{"with_downward_y", curve.Pt(20.0, 20.0), curve.Pt(80.0, 80.0)},
-		{"with_upward_y", curve.Pt(20.0, 80.0), curve.Pt(80.0, 20.0)},
-		{"vertical", curve.Pt(0.0, 10.0), curve.Pt(0.0, 90.0)},
+		{"gradient_linear_negative_direction", curve.Pt(90.0, 0.0), curve.Pt(10.0, 0.0)},
+		{"gradient_linear_with_downward_y", curve.Pt(20.0, 20.0), curve.Pt(80.0, 80.0)},
+		{"gradient_linear_with_upward_y", curve.Pt(20.0, 80.0), curve.Pt(80.0, 20.0)},
+		{"gradient_linear_vertical", curve.Pt(0.0, 10.0), curve.Pt(0.0, 90.0)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.LinearGradient{
 					Start:      tt.start,
@@ -130,12 +130,12 @@ func TestLinearGradientsExtends(t *testing.T) {
 		name   string
 		extend gfx.GradientExtend
 	}{
-		{"with_pad", gfx.GradientExtendPad},
-		{"with_repeat", gfx.GradientExtendRepeat},
-		{"with_reflect", gfx.GradientExtendReflect},
+		{"gradient_linear_with_pad", gfx.GradientExtendPad},
+		{"gradient_linear_with_repeat", gfx.GradientExtendRepeat},
+		{"gradient_linear_with_reflect", gfx.GradientExtendReflect},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.LinearGradient{
 					Start:      curve.Pt(40, 40),
@@ -215,35 +215,35 @@ func TestLinearGradientsWithTransform(t *testing.T) {
 		end       curve.Point
 	}{
 		{
-			"with_transform_identity",
+			"gradient_linear_with_transform_identity",
 			curve.Identity,
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 
 		{
-			"with_transform_translate",
+			"gradient_linear_with_transform_translate",
 			curve.Translate(curve.Vec(25.0, 25.0)),
 			curve.Pt(0.0, 0.0),
 			curve.Pt(50.0, 50.0),
 		},
 
 		{
-			"with_transform_scale",
+			"gradient_linear_with_transform_scale",
 			curve.Scale(2.0, 2.0),
 			curve.Pt(12.5, 12.5),
 			curve.Pt(37.5, 37.5),
 		},
 
 		{
-			"with_transform_negative_scale",
+			"gradient_linear_with_transform_negative_scale",
 			curve.Translate(curve.Vec(100.0, 100.0)).Mul(curve.Scale(-2.0, -2.0)),
 			curve.Pt(12.5, 12.5),
 			curve.Pt(37.5, 37.5),
 		},
 
 		{
-			"with_transform_scale_and_translate",
+			"gradient_linear_with_transform_scale_and_translate",
 			curve.NewAffine([6]float64{
 				2.0, 0.0, 0.0,
 				2.0, 25.0, 25.0,
@@ -253,56 +253,56 @@ func TestLinearGradientsWithTransform(t *testing.T) {
 		},
 
 		{
-			"with_transform_rotate_1",
+			"gradient_linear_with_transform_rotate_1",
 			curve.RotateAbout(math.Pi/4.0, curve.Pt(50.0, 50.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 
 		{
-			"with_transform_rotate_2",
+			"gradient_linear_with_transform_rotate_2",
 			curve.RotateAbout(-math.Pi/4.0, curve.Pt(50.0, 50.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 
 		{
-			"with_transform_scaling_non_uniform",
+			"gradient_linear_with_transform_scaling_non_uniform",
 			curve.Scale(1.0, 2.0),
 			curve.Pt(25.0, 12.5),
 			curve.Pt(75.0, 37.5),
 		},
 
 		{
-			"with_transform_skew_x_1",
+			"gradient_linear_with_transform_skew_x_1",
 			curve.Translate(curve.Vec(-50.0, 0.0)).Mul(curve.Skew(1, 0.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 
 		{
-			"with_transform_skew_x_2",
+			"gradient_linear_with_transform_skew_x_2",
 			curve.Translate(curve.Vec(50.0, 0.0)).Mul(curve.Skew(-1, 0.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 
 		{
-			"with_transform_skew_y_1",
+			"gradient_linear_with_transform_skew_y_1",
 			curve.Translate(curve.Vec(0.0, 50.0)).Mul(curve.Skew(0.0, -1)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 
 		{
-			"with_transform_skew_y_2",
+			"gradient_linear_with_transform_skew_y_2",
 			curve.Translate(curve.Vec(0.0, -50.0)).Mul(curve.Skew(0.0, 1)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_linear_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(tt.start, tt.end)
 				gradient := &gfx.LinearGradient{
 					Start:      tt.start,
@@ -322,12 +322,12 @@ func TestRadialGradientsSimple(t *testing.T) {
 		name  string
 		stops []gfx.GradientStop
 	}{
-		{"2_stops", stopsGreenBlue},
-		{"4_stops", stopsBlueGreenRedYellow},
-		{"2_stops_with_alpha", stopsGreenBlueWithAlpha},
+		{"gradient_radial_2_stops", stopsGreenBlue},
+		{"gradient_radial_4_stops", stopsBlueGreenRedYellow},
+		{"gradient_radial_2_stops_with_alpha", stopsGreenBlueWithAlpha},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.RadialGradient{
 					StartCenter: curve.Pt(50, 50),
@@ -349,13 +349,13 @@ func TestRadialGradientsWithOffsets(t *testing.T) {
 		name  string
 		point curve.Point
 	}{
-		{"center_offset_top_left", curve.Pt(30.0, 30.0)},
-		{"center_offset_top_right", curve.Pt(70.0, 30.0)},
-		{"center_offset_bottom_left", curve.Pt(30.0, 70.0)},
-		{"center_offset_bottom_right", curve.Pt(70.0, 70.0)},
+		{"gradient_radial_center_offset_top_left", curve.Pt(30.0, 30.0)},
+		{"gradient_radial_center_offset_top_right", curve.Pt(70.0, 30.0)},
+		{"gradient_radial_center_offset_bottom_left", curve.Pt(30.0, 70.0)},
+		{"gradient_radial_center_offset_bottom_right", curve.Pt(70.0, 70.0)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.RadialGradient{
 					StartCenter: tt.point,
@@ -378,12 +378,12 @@ func TestRadialGradientsWithExtends(t *testing.T) {
 		extend gfx.GradientExtend
 	}{
 		// FIXME rename from spread_method to extend
-		{"spread_method_pad", gfx.GradientExtendPad},
-		{"spread_method_reflect", gfx.GradientExtendReflect},
-		{"spread_method_repeat", gfx.GradientExtendRepeat},
+		{"gradient_radial_spread_method_pad", gfx.GradientExtendPad},
+		{"gradient_radial_spread_method_reflect", gfx.GradientExtendReflect},
+		{"gradient_radial_spread_method_repeat", gfx.GradientExtendRepeat},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.RadialGradient{
 					StartCenter: curve.Pt(50, 50),
@@ -421,13 +421,13 @@ func TestRadialGradientsNonOverlapping(t *testing.T) {
 		name   string
 		radius float32
 	}{
-		{"same_size", 20},
-		{"c0_smaller", 15},
-		{"c0_larger", 25},
-		{"cone", 5},
+		{"gradient_radial_non_overlapping_same_size", 20},
+		{"gradient_radial_non_overlapping_c0_smaller", 15},
+		{"gradient_radial_non_overlapping_c0_larger", 25},
+		{"gradient_radial_non_overlapping_cone", 5},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_non_overlapping_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.RadialGradient{
 					StartCenter: curve.Pt(30, 50),
@@ -468,80 +468,80 @@ func TestRadialGradientsWithTransforms(t *testing.T) {
 		p1        curve.Point
 	}{
 		{
-			"identity",
+			"gradient_radial_with_transform_identity",
 			curve.Identity,
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 		{
-			"translate",
+			"gradient_radial_with_transform_translate",
 			curve.Translate(curve.Vec(25.0, 25.0)),
 			curve.Pt(0.0, 0.0),
 			curve.Pt(50.0, 50.0),
 		},
 		{
-			"scale",
+			"gradient_radial_with_transform_scale",
 			curve.Scale(2.0, 2.0),
 			curve.Pt(12.5, 12.5),
 			curve.Pt(37.5, 37.5),
 		},
 		{
-			"negative_scale",
+			"gradient_radial_with_transform_negative_scale",
 			curve.Translate(curve.Vec(100.0, 100.0)).Mul(curve.Scale(-2.0, -2.0)),
 			curve.Pt(12.5, 12.5),
 			curve.Pt(37.5, 37.5),
 		},
 		{
-			"scale_and_translate",
+			"gradient_radial_with_transform_scale_and_translate",
 			curve.NewAffine([6]float64{2.0, 0.0, 0.0, 2.0, 25.0, 25.0}),
 			curve.Pt(0.0, 0.0),
 			curve.Pt(25.0, 25.0),
 		},
 		{
-			"rotate_1",
+			"gradient_radial_with_transform_rotate_1",
 			curve.RotateAbout(math.Pi/4.0, curve.Pt(50.0, 50.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 		{
-			"rotate_2",
+			"gradient_radial_with_transform_rotate_2",
 			curve.RotateAbout(-math.Pi/4.0, curve.Pt(50.0, 50.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 		{
-			"scale_non_uniform",
+			"gradient_radial_with_transform_scale_non_uniform",
 			curve.Scale(1.0, 2.0),
 			curve.Pt(25.0, 12.5),
 			curve.Pt(75.0, 37.5),
 		},
 		{
-			"skew_x_1",
+			"gradient_radial_with_transform_skew_x_1",
 			curve.Translate(curve.Vec(-50.0, 0.0)).Mul(curve.Skew(1, 0.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 		{
-			"skew_x_2",
+			"gradient_radial_with_transform_skew_x_2",
 			curve.Translate(curve.Vec(50.0, 0.0)).Mul(curve.Skew(-1, 0.0)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 		{
-			"skew_y_1",
+			"gradient_radial_with_transform_skew_y_1",
 			curve.Translate(curve.Vec(0.0, 50.0)).Mul(curve.Skew(0.0, -1)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 		{
-			"skew_y_2",
+			"gradient_radial_with_transform_skew_y_2",
 			curve.Translate(curve.Vec(0.0, -50.0)).Mul(curve.Skew(0.0, 1)),
 			curve.Pt(25.0, 25.0),
 			curve.Pt(75.0, 75.0),
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_radial_with_transform_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(tt.p0, tt.p1)
 				point := curve.Pt((tt.p0.X+tt.p1.X)/2, (tt.p0.Y+tt.p1.Y)/2)
 				gradient := &gfx.RadialGradient{
@@ -565,13 +565,13 @@ func TestSweepGradientsBasic(t *testing.T) {
 		stops  []gfx.GradientStop
 		center curve.Point
 	}{
-		{"2_stops", stopsGreenBlue, curve.Pt(50, 50)},
-		{"2_stops_with_alpha", stopsGreenBlueWithAlpha, curve.Pt(50, 50)},
-		{"4_stops", stopsBlueGreenRedYellow, curve.Pt(50, 50)},
-		{"not_in_center", stopsGreenBlue, curve.Pt(30, 30)},
+		{"gradient_sweep_2_stops", stopsGreenBlue, curve.Pt(50, 50)},
+		{"gradient_sweep_2_stops_with_alpha", stopsGreenBlueWithAlpha, curve.Pt(50, 50)},
+		{"gradient_sweep_4_stops", stopsBlueGreenRedYellow, curve.Pt(50, 50)},
+		{"gradient_sweep_not_in_center", stopsGreenBlue, curve.Pt(30, 30)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_sweep_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.SweepGradient{
 					Center:     tt.center,
@@ -592,12 +592,12 @@ func TestSweepGradientsWithExtends(t *testing.T) {
 		name   string
 		extend gfx.GradientExtend
 	}{
-		{"pad", gfx.GradientExtendPad},
-		{"repeat", gfx.GradientExtendRepeat},
-		{"reflect", gfx.GradientExtendReflect},
+		{"gradient_sweep_extend_pad", gfx.GradientExtendPad},
+		{"gradient_sweep_extend_repeat", gfx.GradientExtendRepeat},
+		{"gradient_sweep_extend_reflect", gfx.GradientExtendReflect},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_sweep_extend_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.SweepGradient{
 					Center:     curve.Pt(50, 50),
@@ -621,80 +621,80 @@ func TestSweepGradientsWithTransforms(t *testing.T) {
 		p1        curve.Point
 	}{
 		{
-			"identity",
+			"gradient_sweep_with_transform_identity",
 			curve.Identity,
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 		{
-			"translate",
+			"gradient_sweep_with_transform_translate",
 			curve.Translate(curve.Vec(25, 25)),
 			curve.Pt(0, 0),
 			curve.Pt(50, 50),
 		},
 		{
-			"scale",
+			"gradient_sweep_with_transform_scale",
 			curve.Scale(2, 2),
 			curve.Pt(12.5, 12.5),
 			curve.Pt(37.5, 37.5),
 		},
 		{
-			"negative_scale",
+			"gradient_sweep_with_transform_negative_scale",
 			curve.Translate(curve.Vec(100, 100)).Mul(curve.Scale(-2, -2)),
 			curve.Pt(12.5, 12.5),
 			curve.Pt(37.5, 37.5),
 		},
 		{
-			"scale_and_translate",
+			"gradient_sweep_with_transform_scale_and_translate",
 			curve.NewAffine([6]float64{2, 0, 0, 2, 25, 25}),
 			curve.Pt(0, 0),
 			curve.Pt(25, 25),
 		},
 		{
-			"rotate_1",
+			"gradient_sweep_with_transform_rotate_1",
 			curve.RotateAbout(math.Pi/4, curve.Pt(50, 50)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 		{
-			"rotate_2",
+			"gradient_sweep_with_transform_rotate_2",
 			curve.RotateAbout(-math.Pi/4, curve.Pt(50, 50)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 		{
-			"scale_non_uniform",
+			"gradient_sweep_with_transform_scale_non_uniform",
 			curve.Scale(1, 2),
 			curve.Pt(25, 12.5),
 			curve.Pt(75, 37.5),
 		},
 		{
-			"skew_x_1",
+			"gradient_sweep_with_transform_skew_x_1",
 			curve.Translate(curve.Vec(-50, 0)).Mul(curve.Skew(1, 0)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 		{
-			"skew_x_2",
+			"gradient_sweep_with_transform_skew_x_2",
 			curve.Translate(curve.Vec(50, 0)).Mul(curve.Skew(-1, 0)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 		{
-			"skew_y_1",
+			"gradient_sweep_with_transform_skew_y_1",
 			curve.Translate(curve.Vec(0, 50)).Mul(curve.Skew(0, -1)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 		{
-			"skew_y_2",
+			"gradient_sweep_with_transform_skew_y_2",
 			curve.Translate(curve.Vec(0, -50)).Mul(curve.Skew(0, 1)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			renderAndCompare(t, defaultSize, defaultSize, false, "gradient_sweep_with_transform_"+tt.name, func(ctx *Renderer) {
+			renderAndCompare(t, defaultSize, defaultSize, false, tt.name, func(ctx *Renderer) {
 				rect := curve.NewRectFromPoints(tt.p0, tt.p1)
 				point := curve.Pt((tt.p0.X+tt.p1.X)/2, (tt.p0.Y+tt.p1.Y)/2)
 				gradient := &gfx.SweepGradient{
