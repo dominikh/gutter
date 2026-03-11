@@ -465,6 +465,13 @@ func TestRectangleLeftOfViewport(t *testing.T) {
 	})
 }
 
+func TestRectangleFlippedY(t *testing.T) {
+	renderAndCompare(t, 3, 2, true, "rectangle_flipped_y", func(ctx *Renderer) {
+		rect := curve.NewRectFromPoints(curve.Pt(-2, 3), curve.Pt(-1, -1))
+		ctx.Fill(rect, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 1, 0, 0, 1)))
+	})
+}
+
 func TestFilledAlignedRect(t *testing.T) {
 	renderAndCompare(t, 30, 20, false, "filled_aligned_rect", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(1, 1), curve.Pt(29, 19))

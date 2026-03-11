@@ -400,9 +400,8 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 	var stripBuf []strip
 	var alphaBuf [][stripHeight]uint8
 
-	// Note that we currently deal with negative-area rects as positive-area rects.
-	// Shouldn't be a problem for solid fill, but might need some tweaking for gradient
-	// and pattern fills.
+	// Note that we currently deal with negative-area rects by turning them into
+	// positive-area rects.
 
 	x0 := float32(max(0, rect.MinX()))
 	if x0 >= float32(width) {
@@ -414,6 +413,9 @@ func renderRect(rect curve.Rect, width, height uint16) ([]strip, [][stripHeight]
 		return nil, nil
 	}
 	y1 := float32(min(float64(height), rect.MaxY()))
+
+	x0, x1 = min(x0, x1), max(x0, x1)
+	y0, y1 = min(y0, y1), max(y0, y1)
 
 	topStripIdx := uint16(y0) / tileHeight
 	topStripY := topStripIdx * tileHeight
