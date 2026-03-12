@@ -139,7 +139,7 @@ func TestLinearGradientsExtends(t *testing.T) {
 				rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 				gradient := &gfx.LinearGradient{
 					Start:      curve.Pt(40, 40),
-					End:        curve.Pt(60, 60),
+					End:        curve.Pt(65, 95),
 					Stops:      stopsBlueGreenRedYellow,
 					Extend:     tt.extend,
 					ColorSpace: color.SRGB,
@@ -184,7 +184,7 @@ func TestLinearGradientWithYRepeat(t *testing.T) {
 		rect := curve.NewRectFromPoints(curve.Pt(10, 10), curve.Pt(90, 90))
 		gradient := &gfx.LinearGradient{
 			Start:      curve.Pt(47.5, 47.5),
-			End:        curve.Pt(50.5, 52.5),
+			End:        curve.Pt(55.5, 54.5),
 			Stops:      stopsBlueGreenRedYellow,
 			Extend:     gfx.GradientExtendRepeat,
 			ColorSpace: color.SRGB,
@@ -652,13 +652,13 @@ func TestSweepGradientsWithTransforms(t *testing.T) {
 		},
 		{
 			"gradient_sweep_with_transform_rotate_1",
-			curve.RotateAbout(math.Pi/4, curve.Pt(50, 50)),
+			curve.RotateAbout(math.Pi/3, curve.Pt(50, 50)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
 		{
 			"gradient_sweep_with_transform_rotate_2",
-			curve.RotateAbout(-math.Pi/4, curve.Pt(50, 50)),
+			curve.RotateAbout(-math.Pi/3, curve.Pt(50, 50)),
 			curve.Pt(25, 25),
 			curve.Pt(75, 75),
 		},
