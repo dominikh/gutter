@@ -32,6 +32,12 @@ type Packer interface {
 	PackComplex(x0, y0, x1, y1 uint16, tile *WideTileBuffer)
 }
 
+// DiscardPacker is a [Packer] that doesn't do anything.
+type DiscardPacker struct{}
+
+func (DiscardPacker) PackSimple(_, _, _, _ uint16, _ gfx.PlainColor)   {}
+func (DiscardPacker) PackComplex(_, _, _, _ uint16, _ *WideTileBuffer) {}
+
 type PackerUint8SRGB struct {
 	Out    [][4]uint8
 	Width  int
