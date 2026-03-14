@@ -15,6 +15,8 @@ import (
 // TestLazyLayerPanic tests that pushing a clipless, non-lazy layer on top of a
 // lazy layer works correctly.
 func TestLazyLayerPanic(t *testing.T) {
+	t.Parallel()
+
 	ctx := NewRenderer(100, 100)
 
 	// Lazy layer

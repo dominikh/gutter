@@ -13,6 +13,8 @@ import (
 )
 
 func Test_memsetUint8PixelsAVX(t *testing.T) {
+	t.Parallel()
+
 	if !arch.AVX() {
 		t.Skip("no AVX support")
 	}

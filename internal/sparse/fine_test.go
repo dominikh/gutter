@@ -137,6 +137,8 @@ func compareRendered(t *testing.T, ctx *Renderer, name string) {
 }
 
 func TestIncorrectFilling1(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 8, 8, false, "incorrect_filling_1", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -151,6 +153,8 @@ func TestIncorrectFilling1(t *testing.T) {
 }
 
 func TestIncorrectFilling2(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 64, 64, false, "incorrect_filling_2", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -165,6 +169,8 @@ func TestIncorrectFilling2(t *testing.T) {
 }
 
 func TestIncorrectFilling3(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 9, 9, false, "incorrect_filling_3", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -179,6 +185,8 @@ func TestIncorrectFilling3(t *testing.T) {
 }
 
 func TestIncorrectFilling4(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 64, 64, false, "incorrect_filling_4", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -199,6 +207,8 @@ func TestIncorrectFilling4(t *testing.T) {
 }
 
 func TestIncorrectFilling5(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 32, 32, false, "incorrect_filling_5", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -213,6 +223,8 @@ func TestIncorrectFilling5(t *testing.T) {
 }
 
 func TestIncorrectFilling6(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 32, 32, false, "incorrect_filling_6", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -227,6 +239,8 @@ func TestIncorrectFilling6(t *testing.T) {
 }
 
 func TestIncorrectFilling7(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 32, 32, false, "incorrect_filling_7", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -241,6 +255,8 @@ func TestIncorrectFilling7(t *testing.T) {
 }
 
 func TestIncorrectFilling8(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/2
 	renderAndCompare(t, 32, 32, false, "incorrect_filling_8", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -261,6 +277,8 @@ func TestIncorrectFilling8(t *testing.T) {
 }
 
 func TestOutOfBoundStrip(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/11
 	ctx := getCtx(256, 256, true)
 	var path curve.BezPath
@@ -283,6 +301,8 @@ func starPath() curve.BezPath {
 }
 
 func TestFillingNonZeroRule(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "filling_nonzero_rule", func(ctx *Renderer) {
 		star := starPath()
 		ctx.Fill(star, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 0.5, 0, 0, 1)))
@@ -290,6 +310,8 @@ func TestFillingNonZeroRule(t *testing.T) {
 }
 
 func TestFillingEvenOddRule(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "filling_evenodd_rule", func(ctx *Renderer) {
 		star := starPath()
 		ctx.Fill(star, curve.Identity, gfx.EvenOdd, gfx.Solid(color.Make(color.SRGB, 0.5, 0, 0, 1)))
@@ -297,6 +319,8 @@ func TestFillingEvenOddRule(t *testing.T) {
 }
 
 func TestFillingUnclosedPath1(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/12
 	renderAndCompare(t, 100, 100, false, "filling_unclosed_path_1", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -308,6 +332,8 @@ func TestFillingUnclosedPath1(t *testing.T) {
 }
 
 func TestFillingUnclosedPath2(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/12
 	renderAndCompare(t, 100, 100, false, "filling_unclosed_path_2", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -326,6 +352,8 @@ func TestFillingUnclosedPath2(t *testing.T) {
 }
 
 func TestTriangleExceedingViewport1(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/28
 	renderAndCompare(t, 15, 8, false, "triangle_exceeding_viewport_1", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -339,6 +367,8 @@ func TestTriangleExceedingViewport1(t *testing.T) {
 }
 
 func TestTriangleExceedingViewport2(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/28
 	renderAndCompare(t, 15, 8, false, "triangle_exceeding_viewport_2", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -352,6 +382,8 @@ func TestTriangleExceedingViewport2(t *testing.T) {
 }
 
 func TestShapeAtWideTileBoundary(t *testing.T) {
+	t.Parallel()
+
 	// https://github.com/LaurenzV/cpu-sparse-experiments/issues/30
 	ctx := getCtx(256, 4, false)
 	var path curve.BezPath
@@ -367,6 +399,8 @@ func TestShapeAtWideTileBoundary(t *testing.T) {
 }
 
 func TestFullCover1(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 8, 8, true, "full_cover_1", func(ctx *Renderer) {
 		c := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(8, 8))
 		ctx.Fill(c, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 0.96, 0.96, 0.86, 1)))
@@ -374,6 +408,8 @@ func TestFullCover1(t *testing.T) {
 }
 
 func TestFilledTriangle(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "filled_triangle", func(ctx *Renderer) {
 		var path curve.BezPath
 		path.MoveTo(curve.Pt(5, 5))
@@ -386,6 +422,8 @@ func TestFilledTriangle(t *testing.T) {
 }
 
 func TestStrokedTriangle(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "stroked_triangle", func(ctx *Renderer) {
 		var path curve.BezPath
 		path.MoveTo(curve.Pt(5, 5))
@@ -398,6 +436,8 @@ func TestStrokedTriangle(t *testing.T) {
 }
 
 func TestFilledCircle(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "filled_circle", func(ctx *Renderer) {
 		c := curve.Circle{
 			Center: curve.Pt(50, 50),
@@ -408,6 +448,8 @@ func TestFilledCircle(t *testing.T) {
 }
 
 func TestFilledCircleWithOpacity(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "filled_circle_with_opacity", func(ctx *Renderer) {
 		c := curve.Circle{
 			Center: curve.Pt(50, 50),
@@ -418,6 +460,8 @@ func TestFilledCircleWithOpacity(t *testing.T) {
 }
 
 func TestFilledOverlappingCircles(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "filled_overlapping_circles", func(ctx *Renderer) {
 		for _, e := range []struct {
 			x     float64
@@ -435,6 +479,8 @@ func TestFilledOverlappingCircles(t *testing.T) {
 }
 
 func TestStrokedCircle(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 100, 100, false, "stroked_circle", func(ctx *Renderer) {
 		circle := curve.Circle{Center: curve.Pt(50, 50), Radius: 45}
 		stroke := curve.DefaultStroke.WithWidth(3)
@@ -444,6 +490,8 @@ func TestStrokedCircle(t *testing.T) {
 }
 
 func TestTriangleAboveAndWiderThanViewport(t *testing.T) {
+	t.Parallel()
+
 	// Requires winding of the first row of tiles to be calculcated correctly for sloped lines.
 	renderAndCompare(t, 10, 10, false, "triangle_above_and_wider_than_viewport", func(ctx *Renderer) {
 		var path curve.BezPath
@@ -457,6 +505,8 @@ func TestTriangleAboveAndWiderThanViewport(t *testing.T) {
 }
 
 func TestRectangleLeftOfViewport(t *testing.T) {
+	t.Parallel()
+
 	// Requires winding and pixel coverage to be calculcated correctly for tiles preceding the
 	// viewport in scan direction.
 	renderAndCompare(t, 10, 10, false, "rectangle_left_of_viewport", func(ctx *Renderer) {
@@ -466,6 +516,8 @@ func TestRectangleLeftOfViewport(t *testing.T) {
 }
 
 func TestRectangleFlippedY(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 3, 2, true, "rectangle_flipped_y", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(-2, 3), curve.Pt(-1, -1))
 		ctx.Fill(rect, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 1, 0, 0, 1)))
@@ -473,6 +525,8 @@ func TestRectangleFlippedY(t *testing.T) {
 }
 
 func TestFilledAlignedRect(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 30, 20, false, "filled_aligned_rect", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(1, 1), curve.Pt(29, 19))
 		ctx.Fill(rect, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 0.7, 0.6, 0.8, 1)))
@@ -480,6 +534,8 @@ func TestFilledAlignedRect(t *testing.T) {
 }
 
 func TestStrokedUnalignedRect(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 30, 30, false, "stroked_unaligned_rect", func(ctx *Renderer) {
 		rect := curve.NewRectFromPoints(curve.Pt(5, 5), curve.Pt(25, 25))
 		stroke := curve.DefaultStroke.WithWidth(1).WithJoin(curve.MiterJoin)
@@ -488,6 +544,8 @@ func TestStrokedUnalignedRect(t *testing.T) {
 }
 
 func TestClipping(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 64, 64, true, "clipping", func(ctx *Renderer) {
 		var triangle curve.BezPath
 		triangle.MoveTo(curve.Pt(2.0, 2.0))
@@ -511,6 +569,8 @@ func TestClipping(t *testing.T) {
 }
 
 func TestLinearAntiAliasing(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 32, 32, true, "linear_anti_aliasing", func(ctx *Renderer) {
 		r := curve.NewRectFromOrigin(curve.Pt(16.5, 0), curve.Sz(1, 32))
 		// We expect pixels 16 and 17 to be 50% transparent red.
@@ -519,6 +579,8 @@ func TestLinearAntiAliasing(t *testing.T) {
 }
 
 func Test50pctGrey(t *testing.T) {
+	t.Parallel()
+
 	renderAndCompare(t, 32, 32, false, "50pct_grey", func(ctx *Renderer) {
 		r := curve.NewRectFromOrigin(curve.Pt(0, 0), curve.Sz(32, 32))
 		ctx.Fill(r, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.LinearSRGB, 0.5, 0.5, 0.5, 1)))
@@ -529,6 +591,8 @@ func Test50pctGrey(t *testing.T) {
 // an end value that exceeds the sub-slice's width, even if it doesn't
 // exceed p.end (the absolute end).
 func TestPixelsSliceBoundsCheck(t *testing.T) {
+	t.Parallel()
+
 	var buf WideTileBuffer
 	// Create a sub-slice: start=128, end=256, width=128
 	p := buf.pixels(128, 128)

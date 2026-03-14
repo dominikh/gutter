@@ -82,6 +82,8 @@ func TestCompose(t *testing.T) {
 
 	for _, op := range gfx.ComposeOps {
 		t.Run("op="+op.String(), func(t *testing.T) {
+			t.Parallel()
+
 			renderAndCompare(t, 64, 64, true, "compose_"+op.String(), func(ctx *Renderer) {
 				ctx.Fill(dst, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
 				ctx.PushLayer(Layer{
@@ -102,6 +104,8 @@ func TestMix(t *testing.T) {
 
 	for _, op := range gfx.MixOps {
 		t.Run("op="+op.String(), func(t *testing.T) {
+			t.Parallel()
+
 			renderAndCompare(t, 64, 64, true, "mix_"+op.String(), func(ctx *Renderer) {
 				ctx.Fill(dst, curve.Identity, gfx.NonZero, gfx.Solid(color.Make(color.SRGB, 1, 0.86, 0, 1)))
 				ctx.PushLayer(Layer{
