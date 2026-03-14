@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/mmcloughlin/avo/attr"
-	. "github.com/mmcloughlin/avo/build"
-	"github.com/mmcloughlin/avo/gotypes"
-	"github.com/mmcloughlin/avo/ir"
-	. "github.com/mmcloughlin/avo/operand"
-	"github.com/mmcloughlin/avo/reg"
+	"honnef.co/go/avo/attr"
+	. "honnef.co/go/avo/build"
+	"honnef.co/go/avo/gotypes"
+	"honnef.co/go/avo/ir"
+	. "honnef.co/go/avo/operand"
+	"honnef.co/go/avo/reg"
 )
 
 var uint64Consts = map[uint64]Mem{}
