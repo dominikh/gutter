@@ -675,6 +675,8 @@ func (p *Paragraph) Paint(rec gfx.Recorder) {
 		for _, run := range line.runs {
 			hz, ok := run.font.hb.HorizontalExtents()
 			if !ok {
+				// Silence SA4006 while we think about what to do here
+				_ = ok
 				// TODO what would we even do if the font doesn't have valid
 				// metrics?
 			}
