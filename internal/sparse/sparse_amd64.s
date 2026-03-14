@@ -11,22 +11,6 @@ DATA zeroToFour<>+12(SB)/4, $(3.0)
 DATA zeroToFour<>+16(SB)/4, $(4.0)
 GLOBL zeroToFour<>(SB), RODATA|NOPTR, $20
 
-DATA absMask<>+0(SB)/4, $0x80000000
-DATA absMask<>+4(SB)/4, $0x80000000
-DATA absMask<>+8(SB)/4, $0x80000000
-DATA absMask<>+12(SB)/4, $0x80000000
-GLOBL absMask<>(SB), RODATA|NOPTR, $16
-
-DATA bitIsolateMask<>+0(SB)/4, $0x00000001
-DATA bitIsolateMask<>+4(SB)/4, $0x00000002
-DATA bitIsolateMask<>+8(SB)/4, $0x00000004
-DATA bitIsolateMask<>+12(SB)/4, $0x00000008
-DATA bitIsolateMask<>+16(SB)/4, $0x00000010
-DATA bitIsolateMask<>+20(SB)/4, $0x00000020
-DATA bitIsolateMask<>+24(SB)/4, $0x00000040
-DATA bitIsolateMask<>+28(SB)/4, $0x00000080
-GLOBL bitIsolateMask<>(SB), RODATA|NOPTR, $32
-
 // func processOutOfBoundsWindingSSE(ymin float32, ymax float32, sign float32, locationWinding *[4][4]float32, accumulatedWinding *[4]float32)
 // Requires: SSE
 TEXT ·processOutOfBoundsWindingSSE(SB), $0-32

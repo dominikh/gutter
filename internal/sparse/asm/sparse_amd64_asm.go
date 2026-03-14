@@ -69,7 +69,7 @@ func PCALIGN(im Op) {
 	})
 }
 
-var zeroToFour, absMask, bitIsolateMask Mem
+var zeroToFour Mem
 
 func init() {
 	zeroToFour = GLOBL("zeroToFour", RODATA|NOPTR)
@@ -78,22 +78,6 @@ func init() {
 	DATA(8, F32(2))
 	DATA(12, F32(3))
 	DATA(16, F32(4))
-
-	absMask = GLOBL("absMask", RODATA|NOPTR)
-	DATA(0, U32(1<<31))
-	DATA(4, U32(1<<31))
-	DATA(8, U32(1<<31))
-	DATA(12, U32(1<<31))
-
-	bitIsolateMask = GLOBL("bitIsolateMask", RODATA|NOPTR)
-	DATA(0, U32(1<<0))
-	DATA(4, U32(1<<1))
-	DATA(8, U32(1<<2))
-	DATA(12, U32(1<<3))
-	DATA(16, U32(1<<4))
-	DATA(20, U32(1<<5))
-	DATA(24, U32(1<<6))
-	DATA(28, U32(1<<7))
 }
 
 func main() {
